@@ -1,7 +1,6 @@
-import { BarChart3, Brain, Calendar, ChevronRight, Clock, History, Moon, Scale, Settings, Swords, Sun, TrendingUp, Users } from 'lucide-react'
+import { BarChart3, Brain, Calendar, ChevronRight, Clock, Scale, Swords, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import useStore from '../../hooks/useStore'
 import { cn } from '../../lib/utils'
 
 const navTree = [
@@ -12,7 +11,6 @@ const navTree = [
     path: '/ufc',
     children: [
       { id: 'ufc-events', label: 'Events & Fights', icon: Calendar, path: '/ufc' },
-      { id: 'ufc-fighters', label: 'Fighters', icon: Users, path: '/ufc/fighters' },
       {
         id: 'model',
         label: 'Model',
@@ -21,7 +19,6 @@ const navTree = [
         children: [
           { id: 'model-upcoming', label: 'Upcoming', icon: Clock, path: '/model/upcoming' },
           { id: 'model-arbitrage', label: 'Arbitrage', icon: Scale, path: '/arbitrage' },
-          { id: 'model-past', label: 'Past Fights', icon: History, path: '/model/past' },
           { id: 'model-metrics', label: 'Metrics', icon: BarChart3, path: '/model/metrics' },
         ],
       },
@@ -100,7 +97,6 @@ function getInitialActiveId(pathname) {
 export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { theme, toggleTheme } = useStore()
   const [activeId, setActiveId] = useState(() => getInitialActiveId(location.pathname))
 
   return (
@@ -127,23 +123,6 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        {/* Bottom actions */}
-        <div className="mx-4 border-t border-blue-400/30" />
-        <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={toggleTheme}
-            className="rounded-md p-2 text-blue-100 hover:bg-white/10 transition-colors"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
-          <Link
-            to="/admin"
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-blue-100 hover:bg-white/10 transition-colors"
-          >
-            <Settings className="h-4 w-4" />
-            Admin
-          </Link>
-        </div>
       </div>
     </aside>
   )

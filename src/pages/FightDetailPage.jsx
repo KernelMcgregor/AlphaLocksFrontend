@@ -1,8 +1,10 @@
-import { ArrowLeft, Trophy } from 'lucide-react'
+import { ArrowLeft, Brain, Eye, Info, Trophy, X } from 'lucide-react'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Card, CardContent } from '../components/ui/card'
 import CountryFlag from '../components/CountryFlag'
 import WeightClassBadge from '../components/WeightClassBadge'
 import { fetchFight } from '../lib/api'
@@ -13,6 +15,11 @@ function formatCtrl(seconds) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function formatOdds(odds) {
+  if (odds == null) return '—'
+  return odds > 0 ? `+${odds}` : `${odds}`
 }
 
 function StatRow({ label, redVal, blueVal }) {
@@ -27,27 +34,165 @@ function StatRow({ label, redVal, blueVal }) {
 
 function FighterHeader({ fighter, corner, isWinner }) {
   const dotColor = corner === 'red' ? 'bg-red-500' : 'bg-blue-500'
+  return (
+    <div className="flex-1 flex items-center gap-3 min-w-0">
+      <div className="min-w-0 flex-1 py-4">
+        <div className="flex items-center gap-2 mb-1">
+          <span className={cn('h-3 w-3 rounded-full shrink-0', dotColor)} />
+          <CountryFlag countryCode={fighter.country_code} />
+          <h2 className={cn('text-2xl font-bold truncate', isWinner && 'text-emerald-500')}>
+            {fighter.first_name} {fighter.last_name}
+          </h2>
+          {isWinner && <Trophy className="h-5 w-5 text-emerald-500 shrink-0" />}
+        </div>
+        {fighter.nickname && (
+          <p className="text-sm text-muted-foreground ml-[22px]">"{fighter.nickname}"</p>
+        )}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 ml-[22px] text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">
+            {fighter.wins}-{fighter.losses}{fighter.draws > 0 ? `-${fighter.draws}` : ''}
+          </span>
+          {fighter.height && fighter.height !== '--' && <span>{fighter.height}</span>}
+          {fighter.reach && fighter.reach !== '--' && <span>{fighter.reach}" reach</span>}
+          {fighter.stance && fighter.stance !== '--' && <span>{fighter.stance}</span>}
+        </div>
+      </div>
+      {fighter.image_url && (
+        <img
+          src={fighter.image_url}
+          alt={`${fighter.first_name} ${fighter.last_name}`}
+          className="h-40 object-contain object-bottom shrink-0 translate-y-5"
+        />
+      )}
+    </div>
+  )
+}
+
+function RoundTabs({ stats, red_fighter, blue_fighter }) {
+  const rounds = [...new Set(stats.map(s => s.round_number))].sort((a, b) => a - b)
+  const [activeRound, setActiveRound] = useState(0)
+
+  const red = stats.find(s => s.corner === 'red' && s.round_number === activeRound)
+  const blue = stats.find(s => s.corner === 'blue' && s.round_number === activeRound)
+
+  if (!red || !blue) return null
+
+  const statRows = [
+    { label: 'Sig. Strikes', redVal: `${red.sig_str_landed}/${red.sig_str_attempted}`, blueVal: `${blue.sig_str_landed}/${blue.sig_str_attempted}` },
+    { label: 'Total Strikes', redVal: `${red.total_str_landed}/${red.total_str_attempted}`, blueVal: `${blue.total_str_landed}/${blue.total_str_attempted}` },
+    { label: 'Takedowns', redVal: `${red.td_landed}/${red.td_attempted}`, blueVal: `${blue.td_landed}/${blue.td_attempted}` },
+    { label: 'Sub. Attempts', redVal: red.sub_att, blueVal: blue.sub_att },
+    { label: 'Knockdowns', redVal: red.kd, blueVal: blue.kd },
+    { label: 'Control', redVal: formatCtrl(red.ctrl_seconds), blueVal: formatCtrl(blue.ctrl_seconds) },
+    { label: 'Head', redVal: `${red.head_landed}/${red.head_attempted}`, blueVal: `${blue.head_landed}/${blue.head_attempted}` },
+    { label: 'Body', redVal: `${red.body_landed}/${red.body_attempted}`, blueVal: `${blue.body_landed}/${blue.body_attempted}` },
+    { label: 'Leg', redVal: `${red.leg_landed}/${red.leg_attempted}`, blueVal: `${blue.leg_landed}/${blue.leg_attempted}` },
+    { label: 'Distance', redVal: `${red.distance_landed}/${red.distance_attempted}`, blueVal: `${blue.distance_landed}/${blue.distance_attempted}` },
+    { label: 'Clinch', redVal: `${red.clinch_landed}/${red.clinch_attempted}`, blueVal: `${blue.clinch_landed}/${blue.clinch_attempted}` },
+    { label: 'Ground', redVal: `${red.ground_landed}/${red.ground_attempted}`, blueVal: `${blue.ground_landed}/${blue.ground_attempted}` },
+  ]
 
   return (
-    <div className="flex-1">
-      <div className="flex items-center gap-2 mb-1">
-        <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', dotColor)} />
-        <CountryFlag countryCode={fighter.country_code} />
-        <h2 className={cn('text-lg font-bold', isWinner && 'text-emerald-500')}>
-          {fighter.first_name} {fighter.last_name}
-        </h2>
-        {isWinner && <Trophy className="h-4 w-4 text-emerald-500" />}
+    <div>
+      <div className="flex gap-1 mb-3">
+        {rounds.map(r => (
+          <button
+            key={r}
+            onClick={() => setActiveRound(r)}
+            className={cn(
+              'px-3 py-1 rounded-md text-xs font-medium transition-colors',
+              activeRound === r
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+            )}
+          >
+            {r === 0 ? 'Total' : `R${r}`}
+          </button>
+        ))}
       </div>
-      {fighter.nickname && (
-        <p className="text-sm text-muted-foreground ml-[18px]">"{fighter.nickname}"</p>
-      )}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 ml-[18px] text-sm text-muted-foreground">
-        <span className="font-semibold text-foreground">
-          {fighter.wins}-{fighter.losses}{fighter.draws > 0 ? `-${fighter.draws}` : ''}
-        </span>
-        {fighter.height && fighter.height !== '--' && <span>{fighter.height}</span>}
-        {fighter.reach && fighter.reach !== '--' && <span>{fighter.reach}" reach</span>}
-        {fighter.stance && fighter.stance !== '--' && <span>{fighter.stance}</span>}
+
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-2 mb-1 border-b border-border">
+        <div className="text-right text-xs font-semibold text-red-500 uppercase">{red_fighter.last_name}</div>
+        <div className="w-28" />
+        <div className="text-left text-xs font-semibold text-blue-500 uppercase">{blue_fighter.last_name}</div>
+      </div>
+      {statRows.map(row => <StatRow key={row.label} {...row} />)}
+    </div>
+  )
+}
+
+function ShapBar({ feature, maxAbs }) {
+  const width = maxAbs > 0 ? (Math.abs(feature.shap_value) / maxAbs) * 100 : 0
+  const favorsRed = feature.shap_value > 0
+  const label = feature.feature_name.replace(/_/g, ' ')
+
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <div className="w-40 text-xs text-right truncate text-muted-foreground" title={label}>
+        {label}
+      </div>
+      <div className="flex-1 flex items-center">
+        <div className="w-1/2 flex justify-end">
+          {favorsRed && (
+            <div className="h-5 rounded-l-sm bg-red-500/70" style={{ width: `${width}%` }} />
+          )}
+        </div>
+        <div className="w-px h-6 bg-border shrink-0" />
+        <div className="w-1/2">
+          {!favorsRed && (
+            <div className="h-5 rounded-r-sm bg-blue-500/70" style={{ width: `${width}%` }} />
+          )}
+        </div>
+      </div>
+      <div className="w-14 text-[11px] text-center tabular-nums text-muted-foreground">
+        {feature.feature_value != null ? feature.feature_value.toFixed(2) : ''}
+      </div>
+    </div>
+  )
+}
+
+function ShapModal({ shap_values, red_fighter, blue_fighter, onClose }) {
+  const top = shap_values.slice(0, 10)
+  const maxAbs = Math.max(...top.map(s => Math.abs(s.shap_value)), 0.001)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-background rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h2 className="text-lg font-bold">Prediction Reasoning</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Top features driving this prediction.
+              <span className="text-red-500 ml-1">{red_fighter.last_name}</span> favored left,
+              <span className="text-blue-500 ml-1">{blue_fighter.last_name}</span> favored right
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1.5 hover:bg-accent transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 items-center text-[10px] font-semibold text-muted-foreground uppercase pb-2 border-b border-border mb-1">
+            <div className="w-40 text-right">Feature</div>
+            <div className="flex items-center">
+              <div className="w-1/2 text-center text-red-500">{red_fighter.last_name}</div>
+              <div className="w-1/2 text-center text-blue-500">{blue_fighter.last_name}</div>
+            </div>
+            <div className="w-14 flex items-center justify-center gap-0.5">
+              <span className="normal-case">Value</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3 w-3 text-muted-foreground/50 cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Diff features show Red − Blue</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+          {top.map(s => <ShapBar key={s.feature_name} feature={s} maxAbs={maxAbs} />)}
+        </div>
       </div>
     </div>
   )
@@ -57,6 +202,7 @@ export default function FightDetailPage() {
   const { id } = useParams()
   const [fight, setFight] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showShap, setShowShap] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -83,82 +229,184 @@ export default function FightDetailPage() {
     )
   }
 
-  const { red_fighter, blue_fighter, winner, stats } = fight
+  const { red_fighter, blue_fighter, winner, stats, prediction, method_prediction, odds, shap_values } = fight
   const winnerId = String(winner?.id || '')
   const redWon = winnerId === String(red_fighter?.id || '')
   const blueWon = winnerId === String(blue_fighter?.id || '')
 
-  const red = stats?.find(s => s.corner === 'red' && s.round_number === 0)
-  const blue = stats?.find(s => s.corner === 'blue' && s.round_number === 0)
-
-  const statRows = red && blue ? [
-    { label: 'Sig. Strikes', redVal: `${red.sig_str_landed}/${red.sig_str_attempted}`, blueVal: `${blue.sig_str_landed}/${blue.sig_str_attempted}` },
-    { label: 'Total Strikes', redVal: `${red.total_str_landed}/${red.total_str_attempted}`, blueVal: `${blue.total_str_landed}/${blue.total_str_attempted}` },
-    { label: 'Takedowns', redVal: `${red.td_landed}/${red.td_attempted}`, blueVal: `${blue.td_landed}/${blue.td_attempted}` },
-    { label: 'Sub. Attempts', redVal: red.sub_att, blueVal: blue.sub_att },
-    { label: 'Knockdowns', redVal: red.kd, blueVal: blue.kd },
-    { label: 'Control', redVal: formatCtrl(red.ctrl_seconds), blueVal: formatCtrl(blue.ctrl_seconds) },
-    { label: 'Head', redVal: `${red.head_landed}/${red.head_attempted}`, blueVal: `${blue.head_landed}/${blue.head_attempted}` },
-    { label: 'Body', redVal: `${red.body_landed}/${red.body_attempted}`, blueVal: `${blue.body_landed}/${blue.body_attempted}` },
-    { label: 'Leg', redVal: `${red.leg_landed}/${red.leg_attempted}`, blueVal: `${blue.leg_landed}/${blue.leg_attempted}` },
-  ] : []
-
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      <Link to="/ufc" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft className="h-4 w-4" />
-        Back to events
-      </Link>
+    <div className="h-full overflow-y-auto pb-6">
+      <div className="space-y-4">
+        <Link to="/ufc" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          Back to events
+        </Link>
 
-      {/* Fight header */}
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            {fight.weight_class && (
-              <WeightClassBadge weightClass={fight.weight_class} />
-            )}
-            {winner && fight.method && (
-              <Badge variant="secondary" className="text-xs">
-                {fight.method.trim()} {fight.finish_round ? `R${fight.finish_round}` : ''}
-                {fight.finish_time ? ` ${fight.finish_time}` : ''}
-              </Badge>
-            )}
-          </div>
-
-          <div className="flex gap-6">
-            <FighterHeader fighter={red_fighter} corner="red" isWinner={redWon} />
-            <FighterHeader fighter={blue_fighter} corner="blue" isWinner={blueWon} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Fight stats */}
-      {statRows.length > 0 && (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Fight Stats</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-2 mb-1 border-b border-border">
-              <div className="text-right text-xs font-semibold text-red-500 uppercase">Red</div>
-              <div className="w-28" />
-              <div className="text-left text-xs font-semibold text-blue-500 uppercase">Blue</div>
+          <CardContent className="p-6 space-y-6">
+            {/* Top row: fighters + fight info */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              {/* Fighters section */}
+              <div className="xl:col-span-2 rounded-lg border border-border overflow-hidden px-5 pt-2 pb-0">
+                <div className="flex gap-6">
+                  <FighterHeader fighter={red_fighter} corner="red" isWinner={redWon} />
+                  <FighterHeader fighter={blue_fighter} corner="blue" isWinner={blueWon} />
+                </div>
+              </div>
+
+              {/* Fight info section */}
+              <div className="rounded-lg border border-border p-4 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {fight.weight_class && <WeightClassBadge weightClass={fight.weight_class} />}
+                  {winner && fight.method && (
+                    <Badge variant="secondary" className="text-xs">
+                      {fight.method.trim()} {fight.finish_round ? `R${fight.finish_round}` : ''}
+                      {fight.finish_time ? ` ${fight.finish_time}` : ''}
+                    </Badge>
+                  )}
+                </div>
+                {(fight.details || fight.referee) && (
+                  <div className="space-y-1.5">
+                    {fight.details && <p className="text-sm text-muted-foreground">{fight.details.trim()}</p>}
+                    {fight.referee && <p className="text-sm text-muted-foreground">Referee: {fight.referee.trim()}</p>}
+                  </div>
+                )}
+                {fight.time_format && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Format</h3>
+                    <p className="text-sm">{fight.time_format}</p>
+                  </div>
+                )}
+              </div>
             </div>
-            {statRows.map(row => (
-              <StatRow key={row.label} {...row} />
-            ))}
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Fight details */}
-      {(fight.details || fight.referee) && (
-        <Card>
-          <CardContent className="p-5 text-sm text-muted-foreground space-y-1">
-            {fight.details && <p>{fight.details.trim()}</p>}
-            {fight.referee && <p>Referee: {fight.referee.trim()}</p>}
+            {/* Stats + prediction grid */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              {/* Fight Stats - takes 2 columns */}
+              <div className="xl:col-span-2">
+                <div className="rounded-lg border border-border p-4">
+                  <h3 className="text-sm font-semibold mb-3">Fight Stats</h3>
+                  {stats && stats.length > 0 && stats.some(s => s.round_number === 0) ? (
+                    <RoundTabs stats={stats.filter(s => s.round_number === 0 || (s.sig_str_attempted > 0 || s.total_str_attempted > 0 || s.td_attempted > 0 || s.ctrl_seconds > 0))} red_fighter={red_fighter} blue_fighter={blue_fighter} />
+                  ) : (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No stats yet — fight hasn't happened</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Right column - prediction, method, odds */}
+              <div className="space-y-4">
+                {/* Model Prediction */}
+                {prediction && (
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                        <Brain className="h-4 w-4 text-primary" />
+                        Prediction
+                      </h3>
+                      {shap_values && shap_values.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => setShowShap(true)}
+                        >
+                          <Eye className="h-3 w-3" />
+                          View Reasoning
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className={cn(
+                        'h-3 w-3 rounded-full',
+                        prediction.predicted_winner === 'red' ? 'bg-red-500' : 'bg-blue-500'
+                      )} />
+                      <span className="font-semibold text-sm">
+                        {prediction.predicted_winner === 'red'
+                          ? `${red_fighter.first_name} ${red_fighter.last_name}`
+                          : `${blue_fighter.first_name} ${blue_fighter.last_name}`}
+                      </span>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {((prediction.red_prob > 0.5 ? prediction.red_prob : 1 - prediction.red_prob) * 100).toFixed(1)}%
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <div className="h-2.5 rounded-l-full bg-red-500" style={{ width: `${prediction.red_prob * 100}%` }} />
+                      <div className="h-2.5 rounded-r-full bg-blue-500" style={{ width: `${(1 - prediction.red_prob) * 100}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                      <span>{red_fighter.last_name} {(prediction.red_prob * 100).toFixed(1)}%</span>
+                      <span>{((1 - prediction.red_prob) * 100).toFixed(1)}% {blue_fighter.last_name}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Method Prediction */}
+                {method_prediction && (
+                  <div className="rounded-lg border border-border p-4">
+                    <h3 className="text-sm font-semibold mb-3">Method</h3>
+                    <div className="space-y-2">
+                      {[
+                        { label: 'KO/TKO', prob: method_prediction.ko_prob },
+                        { label: 'Submission', prob: method_prediction.sub_prob },
+                        { label: 'Decision', prob: method_prediction.dec_prob },
+                      ].sort((a, b) => b.prob - a.prob).map(m => (
+                        <div key={m.label} className="flex items-center gap-2">
+                          <span className="w-16 text-xs">{m.label}</span>
+                          <div className="flex-1 h-5 bg-secondary rounded-md overflow-hidden relative">
+                            <div
+                              className={cn(
+                                'h-full rounded-md',
+                                m.label === method_prediction.predicted_method ? 'bg-primary' : 'bg-muted-foreground/30'
+                              )}
+                              style={{ width: `${m.prob * 100}%` }}
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold">
+                              {(m.prob * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Odds */}
+                {odds && odds.length > 0 && (
+                  <div className="rounded-lg border border-border p-4">
+                    <h3 className="text-sm font-semibold mb-3">Odds</h3>
+                    <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-muted-foreground pb-1 border-b border-border">
+                      <span>Book</span>
+                      <span className="text-center text-red-500">{red_fighter.last_name}</span>
+                      <span className="text-center text-blue-500">{blue_fighter.last_name}</span>
+                    </div>
+                    <div className="max-h-32 overflow-y-auto">
+                      {odds.map(o => (
+                        <div key={o.bookmaker} className="grid grid-cols-3 gap-2 text-xs py-0.5">
+                          <span className="text-muted-foreground">{o.bookmaker}</span>
+                          <span className="text-center font-mono tabular-nums">{formatOdds(o.red_odds)}</span>
+                          <span className="text-center font-mono tabular-nums">{formatOdds(o.blue_odds)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* SHAP Modal */}
+
+      {showShap && shap_values && (
+        <ShapModal
+          shap_values={shap_values}
+          red_fighter={red_fighter}
+          blue_fighter={blue_fighter}
+          onClose={() => setShowShap(false)}
+        />
       )}
     </div>
   )

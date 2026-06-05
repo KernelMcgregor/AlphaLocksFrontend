@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { Separator } from '../components/ui/separator'
-import { fetchEventDetail, fetchEvents } from '../lib/api'
+import { fetchEventDetail, fetchEventPredictions, fetchEvents } from '../lib/api'
 import { cn, formatDate } from '../lib/utils'
 
 function EventListItem({ event, isSelected, onClick }) {
@@ -49,11 +49,18 @@ function EventListItem({ event, isSelected, onClick }) {
   )
 }
 
-function CompactFightCard({ fight, onClick }) {
+function formatOdds(odds) {
+  if (odds == null) return null
+  return odds > 0 ? `+${odds}` : `${odds}`
+}
+
+function CompactFightCard({ fight, prediction, onClick }) {
   const { red_fighter, blue_fighter, winner } = fight
   const winnerId = String(winner?.id || '')
   const redWon = winnerId === String(red_fighter?.id || '')
   const blueWon = winnerId === String(blue_fighter?.id || '')
+  const pred = prediction || null
+  const predCorrect = pred && winner ? pred.predicted_winner === (redWon ? 'red' : 'blue') : null
 
   return (
     <button
@@ -81,8 +88,8 @@ function CompactFightCard({ fight, onClick }) {
             {redWon && <Trophy className="h-3 w-3 text-emerald-500 shrink-0" />}
           </div>
           <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
-            {red_fighter?.stance && red_fighter.stance !== '--' && (
-              <span>{red_fighter.stance}</span>
+            {fight.red_odds != null && (
+              <span className="font-mono tabular-nums">{formatOdds(fight.red_odds)}</span>
             )}
             <span className="font-semibold text-foreground tabular-nums">
               {red_fighter?.wins}-{red_fighter?.losses}{red_fighter?.draws > 0 ? `-${red_fighter.draws}` : ''}
@@ -104,8 +111,8 @@ function CompactFightCard({ fight, onClick }) {
             {blueWon && <Trophy className="h-3 w-3 text-emerald-500 shrink-0" />}
           </div>
           <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
-            {blue_fighter?.stance && blue_fighter.stance !== '--' && (
-              <span>{blue_fighter.stance}</span>
+            {fight.blue_odds != null && (
+              <span className="font-mono tabular-nums">{formatOdds(fight.blue_odds)}</span>
             )}
             <span className="font-semibold text-foreground tabular-nums">
               {blue_fighter?.wins}-{blue_fighter?.losses}{blue_fighter?.draws > 0 ? `-${blue_fighter.draws}` : ''}
@@ -113,6 +120,34 @@ function CompactFightCard({ fight, onClick }) {
           </div>
         </div>
       </div>
+
+      {pred && (
+        <div className="mt-2 pt-2 border-t border-border flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              'h-2 w-2 rounded-full',
+              pred.predicted_winner === 'red' ? 'bg-red-500' : 'bg-blue-500'
+            )} />
+            <span className="text-muted-foreground">Pick:</span>
+            <span className="font-semibold">
+              {pred.predicted_winner === 'red'
+                ? `${red_fighter?.first_name} ${red_fighter?.last_name}`
+                : `${blue_fighter?.first_name} ${blue_fighter?.last_name}`}
+            </span>
+            <span className="text-muted-foreground">({(pred.red_prob > 0.5 ? pred.red_prob : 1 - pred.red_prob) * 100 | 0}%)</span>
+          </div>
+          {winner && (
+            <Badge className={cn(
+              'text-[10px]',
+              predCorrect
+                ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
+                : 'bg-red-500/15 text-red-500 border-red-500/30'
+            )}>
+              {predCorrect ? 'Correct' : 'Wrong'}
+            </Badge>
+          )}
+        </div>
+      )}
     </button>
   )
 }
@@ -210,6 +245,7 @@ export default function UFCPage() {
   const [dateRange, setDateRange] = useState(defaultDateRange)
   const [selectedEventId, setSelectedEventId] = useState(null)
   const [eventDetail, setEventDetail] = useState(null)
+  const [predictions, setPredictions] = useState({})
   const [eventLoading, setEventLoading] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -243,9 +279,18 @@ export default function UFCPage() {
       return
     }
     setEventLoading(true)
-    fetchEventDetail(selectedEventId)
-      .then(setEventDetail)
-      .catch(() => setEventDetail(null))
+    Promise.all([
+      fetchEventDetail(selectedEventId),
+      fetchEventPredictions(selectedEventId).catch(() => ({})),
+    ])
+      .then(([detail, preds]) => {
+        setEventDetail(detail)
+        setPredictions(preds || {})
+      })
+      .catch(() => {
+        setEventDetail(null)
+        setPredictions({})
+      })
       .finally(() => setEventLoading(false))
   }, [selectedEventId])
 
@@ -320,6 +365,7 @@ export default function UFCPage() {
                   <CompactFightCard
                     key={fight.id}
                     fight={fight}
+                    prediction={predictions[String(fight.id)]}
                     onClick={() => navigate(`/ufc/fights/${fight.id}`)}
                   />
                 ))}

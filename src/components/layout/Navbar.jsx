@@ -1,6 +1,5 @@
-import { Moon, Sun, TrendingUp } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
-import useStore from '../../hooks/useStore'
 import { cn } from '../../lib/utils'
 
 const navLinks = [
@@ -9,7 +8,6 @@ const navLinks = [
 ]
 
 export default function Navbar() {
-  const { theme, toggleTheme } = useStore()
   const location = useLocation()
 
   return (
@@ -40,12 +38,6 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          >
-            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </button>
           <Link
             to="/admin"
             className="rounded-md bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"

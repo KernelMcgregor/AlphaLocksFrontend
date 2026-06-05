@@ -1,7 +1,7 @@
 import { ChevronsRight } from 'lucide-react'
 import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import useStore from '../../hooks/useStore'
+
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -66,11 +66,9 @@ function AppBreadcrumb() {
 }
 
 export default function Layout({ children }) {
-  const { theme } = useStore()
-
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-  }, [theme])
+    document.documentElement.classList.remove('dark')
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">

@@ -1,5 +1,6 @@
 import { Calendar, CalendarIcon, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
 import WeightClassBadge from '../components/WeightClassBadge'
 import { Button } from '../components/ui/button'
@@ -220,6 +221,7 @@ function DateRangeFilter({ dateRange, onApply }) {
 }
 
 export default function ModelPage({ tab = 'upcoming' }) {
+  const navigate = useNavigate()
   const [allEvents, setAllEvents] = useState([])
   const [dateRange, setDateRange] = useState(defaultDateRange)
   const [selectedEventId, setSelectedEventId] = useState(null)
@@ -344,7 +346,7 @@ export default function ModelPage({ tab = 'upcoming' }) {
                           const prob = pred ? (pickedRed ? pred.red_prob : 1 - pred.red_prob) : null
 
                           return (
-                            <div key={fight.id} className="rounded-lg border border-border bg-card p-3">
+                            <div key={fight.id} className="rounded-lg border border-border bg-card p-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate(`/ufc/fights/${fight.id}`)}>
                               {fight.weight_class && (
                                 <div className="mb-2">
                                   <WeightClassBadge weightClass={fight.weight_class} />
