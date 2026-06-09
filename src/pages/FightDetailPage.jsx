@@ -1,10 +1,17 @@
-import { ArrowLeft, Brain, Eye, Info, Trophy, X } from 'lucide-react'
+import { ArrowLeft, Brain, ChevronDown, ChevronRight, Eye, Info, Trophy, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
-import { useEffect, useState } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent } from '../components/ui/card'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getExpandedRowModel,
+  flexRender,
+} from '@tanstack/react-table'
 import CountryFlag from '../components/CountryFlag'
 import WeightClassBadge from '../components/WeightClassBadge'
 import { fetchFight } from '../lib/api'
@@ -22,14 +29,21 @@ function formatOdds(odds) {
   return odds > 0 ? `+${odds}` : `${odds}`
 }
 
-function StatRow({ label, redVal, blueVal }) {
-  return (
-    <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center py-1.5">
-      <div className="text-right font-mono text-sm tabular-nums">{redVal}</div>
-      <div className="text-center text-xs text-muted-foreground w-28">{label}</div>
-      <div className="text-left font-mono text-sm tabular-nums">{blueVal}</div>
-    </div>
-  )
+function buildStatRows(red, blue) {
+  return [
+    { stat: 'Sig. Strikes', red: `${red.sig_str_landed}/${red.sig_str_attempted}`, blue: `${blue.sig_str_landed}/${blue.sig_str_attempted}` },
+    { stat: 'Total Strikes', red: `${red.total_str_landed}/${red.total_str_attempted}`, blue: `${blue.total_str_landed}/${blue.total_str_attempted}` },
+    { stat: 'Takedowns', red: `${red.td_landed}/${red.td_attempted}`, blue: `${blue.td_landed}/${blue.td_attempted}` },
+    { stat: 'Sub. Attempts', red: red.sub_att, blue: blue.sub_att },
+    { stat: 'Knockdowns', red: red.kd, blue: blue.kd },
+    { stat: 'Control', red: formatCtrl(red.ctrl_seconds), blue: formatCtrl(blue.ctrl_seconds) },
+    { stat: 'Head', red: `${red.head_landed}/${red.head_attempted}`, blue: `${blue.head_landed}/${blue.head_attempted}` },
+    { stat: 'Body', red: `${red.body_landed}/${red.body_attempted}`, blue: `${blue.body_landed}/${blue.body_attempted}` },
+    { stat: 'Leg', red: `${red.leg_landed}/${red.leg_attempted}`, blue: `${blue.leg_landed}/${blue.leg_attempted}` },
+    { stat: 'Distance', red: `${red.distance_landed}/${red.distance_attempted}`, blue: `${blue.distance_landed}/${blue.distance_attempted}` },
+    { stat: 'Clinch', red: `${red.clinch_landed}/${red.clinch_attempted}`, blue: `${blue.clinch_landed}/${blue.clinch_attempted}` },
+    { stat: 'Ground', red: `${red.ground_landed}/${red.ground_attempted}`, blue: `${blue.ground_landed}/${blue.ground_attempted}` },
+  ]
 }
 
 function FighterHeader({ fighter, corner, isWinner }) {
@@ -40,7 +54,7 @@ function FighterHeader({ fighter, corner, isWinner }) {
         <div className="flex items-center gap-2 mb-1">
           <span className={cn('h-3 w-3 rounded-full shrink-0', dotColor)} />
           <CountryFlag countryCode={fighter.country_code} />
-          <h2 className={cn('text-2xl font-bold truncate', isWinner && 'text-emerald-500')}>
+          <h2 className={cn('text-2xl font-bold', isWinner && 'text-emerald-500')}>
             {fighter.first_name} {fighter.last_name}
           </h2>
           {isWinner && <Trophy className="h-5 w-5 text-emerald-500 shrink-0" />}
@@ -68,56 +82,109 @@ function FighterHeader({ fighter, corner, isWinner }) {
   )
 }
 
-function RoundTabs({ stats, red_fighter, blue_fighter }) {
-  const rounds = [...new Set(stats.map(s => s.round_number))].sort((a, b) => a - b)
-  const [activeRound, setActiveRound] = useState(0)
+function StatsTable({ stats, red_fighter, blue_fighter }) {
+  const rounds = useMemo(() => [...new Set(stats.map(s => s.round_number))].filter(r => r > 0).sort((a, b) => a - b), [stats])
+  const totalRed = useMemo(() => stats.find(s => s.corner === 'red' && s.round_number === 0), [stats])
+  const totalBlue = useMemo(() => stats.find(s => s.corner === 'blue' && s.round_number === 0), [stats])
 
-  const red = stats.find(s => s.corner === 'red' && s.round_number === activeRound)
-  const blue = stats.find(s => s.corner === 'blue' && s.round_number === activeRound)
+  if (!totalRed || !totalBlue) return null
 
-  if (!red || !blue) return null
+  const totalRows = useMemo(() => buildStatRows(totalRed, totalBlue).map((r, i) => ({
+    ...r,
+    id: `total-${i}`,
+    subRows: rounds.map(rnd => {
+      const rr = stats.find(s => s.corner === 'red' && s.round_number === rnd)
+      const rb = stats.find(s => s.corner === 'blue' && s.round_number === rnd)
+      if (!rr || !rb) return null
+      const roundRows = buildStatRows(rr, rb)
+      return { stat: `R${rnd}`, red: roundRows[i].red, blue: roundRows[i].blue, id: `r${rnd}-${i}`, subRows: [] }
+    }).filter(Boolean),
+  })), [stats, rounds, totalRed, totalBlue])
 
-  const statRows = [
-    { label: 'Sig. Strikes', redVal: `${red.sig_str_landed}/${red.sig_str_attempted}`, blueVal: `${blue.sig_str_landed}/${blue.sig_str_attempted}` },
-    { label: 'Total Strikes', redVal: `${red.total_str_landed}/${red.total_str_attempted}`, blueVal: `${blue.total_str_landed}/${blue.total_str_attempted}` },
-    { label: 'Takedowns', redVal: `${red.td_landed}/${red.td_attempted}`, blueVal: `${blue.td_landed}/${blue.td_attempted}` },
-    { label: 'Sub. Attempts', redVal: red.sub_att, blueVal: blue.sub_att },
-    { label: 'Knockdowns', redVal: red.kd, blueVal: blue.kd },
-    { label: 'Control', redVal: formatCtrl(red.ctrl_seconds), blueVal: formatCtrl(blue.ctrl_seconds) },
-    { label: 'Head', redVal: `${red.head_landed}/${red.head_attempted}`, blueVal: `${blue.head_landed}/${blue.head_attempted}` },
-    { label: 'Body', redVal: `${red.body_landed}/${red.body_attempted}`, blueVal: `${blue.body_landed}/${blue.body_attempted}` },
-    { label: 'Leg', redVal: `${red.leg_landed}/${red.leg_attempted}`, blueVal: `${blue.leg_landed}/${blue.leg_attempted}` },
-    { label: 'Distance', redVal: `${red.distance_landed}/${red.distance_attempted}`, blueVal: `${blue.distance_landed}/${blue.distance_attempted}` },
-    { label: 'Clinch', redVal: `${red.clinch_landed}/${red.clinch_attempted}`, blueVal: `${blue.clinch_landed}/${blue.clinch_attempted}` },
-    { label: 'Ground', redVal: `${red.ground_landed}/${red.ground_attempted}`, blueVal: `${blue.ground_landed}/${blue.ground_attempted}` },
-  ]
+  const columns = useMemo(() => [
+    {
+      id: 'expander',
+      header: () => null,
+      cell: ({ row }) => row.getCanExpand() ? (
+        <button onClick={row.getToggleExpandedHandler()} className="p-0.5 hover:bg-muted rounded">
+          {row.getIsExpanded() ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
+      ) : null,
+      size: 32,
+    },
+    {
+      accessorKey: 'stat',
+      header: 'Stat',
+      cell: ({ row, getValue }) => (
+        <span className={cn('text-xs', row.depth > 0 ? 'text-muted-foreground pl-2' : 'font-medium')}>
+          {getValue()}
+        </span>
+      ),
+      size: 140,
+    },
+    {
+      accessorKey: 'red',
+      header: () => <span className="text-red-500">{red_fighter.last_name}</span>,
+      cell: ({ getValue }) => <span className="font-mono text-sm tabular-nums">{getValue()}</span>,
+      size: 100,
+      meta: { align: 'center' },
+    },
+    {
+      accessorKey: 'blue',
+      header: () => <span className="text-blue-500">{blue_fighter.last_name}</span>,
+      cell: ({ getValue }) => <span className="font-mono text-sm tabular-nums">{getValue()}</span>,
+      size: 100,
+      meta: { align: 'center' },
+    },
+  ], [red_fighter, blue_fighter])
+
+  const [expanded, setExpanded] = useState({})
+
+  const table = useReactTable({
+    data: totalRows,
+    columns,
+    state: { expanded },
+    onExpandedChange: setExpanded,
+    getSubRows: row => row.subRows,
+    getCoreRowModel: getCoreRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    getRowId: row => row.id,
+    getRowCanExpand: row => Boolean(row.original.subRows && row.original.subRows.length > 0),
+  })
 
   return (
-    <div>
-      <div className="flex gap-1 mb-3">
-        {rounds.map(r => (
-          <button
-            key={r}
-            onClick={() => setActiveRound(r)}
-            className={cn(
-              'px-3 py-1 rounded-md text-xs font-medium transition-colors',
-              activeRound === r
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-            )}
-          >
-            {r === 0 ? 'Total' : `R${r}`}
-          </button>
+    <Table>
+      <TableHeader>
+        {table.getHeaderGroups().map(hg => (
+          <TableRow key={hg.id}>
+            {hg.headers.map(header => (
+              <TableHead
+                key={header.id}
+                className={cn('text-xs', header.column.columnDef.meta?.align === 'center' && 'text-center')}
+                style={{ width: header.getSize() }}
+              >
+                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
+            ))}
+          </TableRow>
         ))}
-      </div>
-
-      <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center pb-2 mb-1 border-b border-border">
-        <div className="text-right text-xs font-semibold text-red-500 uppercase">{red_fighter.last_name}</div>
-        <div className="w-28" />
-        <div className="text-left text-xs font-semibold text-blue-500 uppercase">{blue_fighter.last_name}</div>
-      </div>
-      {statRows.map(row => <StatRow key={row.label} {...row} />)}
-    </div>
+      </TableHeader>
+      <TableBody>
+        {table.getRowModel().rows.map(row => (
+          <TableRow key={row.id} className={cn(row.depth > 0 && 'bg-muted/30')}>
+            {row.getVisibleCells().map(cell => (
+              <TableCell
+                key={cell.id}
+                className={cn('py-1.5 px-3', cell.column.columnDef.meta?.align === 'center' && 'text-center')}
+                style={{ width: cell.column.getSize() }}
+              >
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   )
 }
 
@@ -287,7 +354,7 @@ export default function FightDetailPage() {
                 <div className="rounded-lg border border-border p-4">
                   <h3 className="text-sm font-semibold mb-3">Fight Stats</h3>
                   {stats && stats.length > 0 && stats.some(s => s.round_number === 0) ? (
-                    <RoundTabs stats={stats.filter(s => s.round_number === 0 || (s.sig_str_attempted > 0 || s.total_str_attempted > 0 || s.td_attempted > 0 || s.ctrl_seconds > 0))} red_fighter={red_fighter} blue_fighter={blue_fighter} />
+                    <StatsTable stats={stats.filter(s => s.round_number === 0 || (s.sig_str_attempted > 0 || s.total_str_attempted > 0 || s.td_attempted > 0 || s.ctrl_seconds > 0))} red_fighter={red_fighter} blue_fighter={blue_fighter} />
                   ) : (
                     <p className="py-8 text-center text-sm text-muted-foreground">No stats yet — fight hasn't happened</p>
                   )}
