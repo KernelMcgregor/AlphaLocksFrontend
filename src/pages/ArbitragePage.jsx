@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight, Scale } from 'lucide-react'
+import { Brain, ChevronDown, ChevronRight, Scale, TrendingUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   flexRender,
   getCoreRowModel,
@@ -18,31 +19,29 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table'
-import { fetchArbitrage } from '../lib/api'
+import { fetchPicks } from '../lib/api'
 import { cn } from '../lib/utils'
 
-const fmtOdds = (v) => (v > 0 ? `+${v}` : `${v}`)
+const fmtOdds = (v) => (v == null ? '—' : v > 0 ? `+${v}` : `${v}`)
 
 function BetCalculator({ row }) {
   const [stake, setStake] = useState(100)
-  const [side, setSide] = useState('red') // which side user is betting
+  const [side, setSide] = useState('red')
 
   const redOdds = row.best_red_odds
   const blueOdds = row.best_blue_odds
+  if (redOdds == null || blueOdds == null) return null
 
-  // Calculate payouts
   const toDecimal = (american) =>
     american > 0 ? american / 100 + 1 : 100 / Math.abs(american) + 1
 
   const redDec = toDecimal(redOdds)
   const blueDec = toDecimal(blueOdds)
 
-  // For arb: if you bet $stake on one side, how much on the other to guarantee profit?
   let redStake, blueStake, redPayout, bluePayout, guaranteedProfit
 
   if (side === 'red') {
     redStake = stake
-    // To arb: blueStake = redStake * redDec / blueDec
     blueStake = (redStake * redDec) / blueDec
     redPayout = redStake * redDec
     bluePayout = blueStake * blueDec
@@ -60,7 +59,7 @@ function BetCalculator({ row }) {
 
   return (
     <div className="p-4 bg-muted/30 border-t border-border">
-      <div className="grid grid-cols-[1fr_1fr_auto] gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-4 sm:gap-6">
         {/* Red side */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -77,10 +76,7 @@ function BetCalculator({ row }) {
               <input
                 type="number"
                 value={side === 'red' ? stake : redStake.toFixed(2)}
-                onChange={(e) => {
-                  setSide('red')
-                  setStake(parseFloat(e.target.value) || 0)
-                }}
+                onChange={(e) => { setSide('red'); setStake(parseFloat(e.target.value) || 0) }}
                 className="w-28 rounded-md border border-border bg-background pl-5 pr-2 py-1.5 text-sm tabular-nums outline-none focus:border-primary"
               />
             </div>
@@ -106,10 +102,7 @@ function BetCalculator({ row }) {
               <input
                 type="number"
                 value={side === 'blue' ? stake : blueStake.toFixed(2)}
-                onChange={(e) => {
-                  setSide('blue')
-                  setStake(parseFloat(e.target.value) || 0)
-                }}
+                onChange={(e) => { setSide('blue'); setStake(parseFloat(e.target.value) || 0) }}
                 className="w-28 rounded-md border border-border bg-background pl-5 pr-2 py-1.5 text-sm tabular-nums outline-none focus:border-primary"
               />
             </div>
@@ -120,20 +113,14 @@ function BetCalculator({ row }) {
         </div>
 
         {/* Summary */}
-        <div className="flex flex-col items-end justify-center gap-1 min-w-[140px]">
+        <div className="flex flex-col items-start sm:items-end justify-center gap-1 min-w-[140px]">
           <div className="text-xs text-muted-foreground">Total stake</div>
           <div className="text-sm font-semibold tabular-nums">${totalStake.toFixed(2)}</div>
           <div className="text-xs text-muted-foreground mt-1">Guaranteed profit</div>
-          <div className={cn(
-            'text-lg font-bold tabular-nums',
-            guaranteedProfit > 0 ? 'text-emerald-500' : 'text-red-500'
-          )}>
+          <div className={cn('text-lg font-bold tabular-nums', guaranteedProfit > 0 ? 'text-emerald-500' : 'text-red-500')}>
             {guaranteedProfit >= 0 ? '+' : ''}${guaranteedProfit.toFixed(2)}
           </div>
-          <div className={cn(
-            'text-xs font-semibold tabular-nums',
-            roi > 0 ? 'text-emerald-500' : 'text-red-500'
-          )}>
+          <div className={cn('text-xs font-semibold tabular-nums', roi > 0 ? 'text-emerald-500' : 'text-red-500')}>
             {roi >= 0 ? '+' : ''}{roi.toFixed(2)}% ROI
           </div>
         </div>
@@ -173,32 +160,32 @@ function BetCalculator({ row }) {
 }
 
 export default function ArbitragePage() {
+  const navigate = useNavigate()
   const [data, setData] = useState(null)
-  const [sorting, setSorting] = useState([{ id: 'margin', desc: true }])
+  const [filter, setFilter] = useState('all') // 'all', 'edge', 'arb'
+  const [sorting, setSorting] = useState([{ id: 'edge', desc: true }])
 
   useEffect(() => {
-    fetchArbitrage().then(setData).catch(() => setData([]))
+    fetchPicks().then(setData).catch(() => setData([]))
   }, [])
+
+  const filtered = useMemo(() => {
+    if (!data) return []
+    if (filter === 'edge') return data.filter((d) => d.edge != null && d.edge > 0)
+    if (filter === 'arb') return data.filter((d) => d.is_arb || (d.margin != null && d.margin > -2))
+    return data
+  }, [data, filter])
 
   const columns = useMemo(
     () => [
       {
         id: 'expand',
         header: () => null,
-        cell: ({ row }) => (
-          <Button
-            onClick={row.getToggleExpandedHandler()}
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6"
-          >
-            {row.getIsExpanded() ? (
-              <ChevronDown className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5" />
-            )}
+        cell: ({ row }) => row.original.all_odds?.length > 0 ? (
+          <Button onClick={row.getToggleExpandedHandler()} size="icon" variant="ghost" className="h-6 w-6">
+            {row.getIsExpanded() ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </Button>
-        ),
+        ) : null,
         size: 40,
         meta: { className: 'w-10' },
       },
@@ -206,18 +193,23 @@ export default function ArbitragePage() {
         accessorKey: 'red_fighter',
         header: 'Matchup',
         cell: ({ row }) => (
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
-              <span className="text-sm font-medium">{row.original.red_fighter}</span>
+          <button
+            onClick={() => navigate(`/ufc/fights/${row.original.fight_id}`)}
+            className="text-left hover:underline"
+          >
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                <span className="text-sm font-medium">{row.original.red_fighter}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
+                <span className="text-sm font-medium">{row.original.blue_fighter}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
-              <span className="text-sm font-medium">{row.original.blue_fighter}</span>
-            </div>
-          </div>
+          </button>
         ),
-        meta: { className: 'w-[25%]' },
+        meta: { className: 'w-[22%]' },
       },
       {
         accessorKey: 'event_name',
@@ -228,72 +220,103 @@ export default function ArbitragePage() {
             <div className="text-[10px] text-muted-foreground">{row.original.event_date}</div>
           </div>
         ),
-        meta: { className: 'w-[25%]' },
+        meta: { className: 'w-[18%]' },
       },
       {
-        id: 'best_odds',
-        header: 'Best Odds',
-        cell: ({ row }) => (
-          <div className="space-y-0.5 tabular-nums">
-            <div className="text-xs">
-              <span className="font-semibold">{fmtOdds(row.original.best_red_odds)}</span>
-              <span className="text-muted-foreground ml-1 text-[10px]">{row.original.best_red_book}</span>
+        id: 'pick',
+        header: 'Model Pick',
+        cell: ({ row }) => {
+          const d = row.original
+          if (!d.pick_side) return <span className="text-xs text-muted-foreground">—</span>
+          return (
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className={cn('h-2 w-2 rounded-full', d.pick_side === 'red' ? 'bg-red-500' : 'bg-blue-500')} />
+                <span className="text-sm font-semibold">{d.pick_fighter}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                {d.model_prob}% model · {d.method_prediction || ''}
+              </div>
             </div>
-            <div className="text-xs">
-              <span className="font-semibold">{fmtOdds(row.original.best_blue_odds)}</span>
-              <span className="text-muted-foreground ml-1 text-[10px]">{row.original.best_blue_book}</span>
-            </div>
-          </div>
-        ),
+          )
+        },
         meta: { className: 'w-[20%]' },
       },
       {
+        id: 'edge',
+        accessorKey: 'edge',
+        header: 'Edge',
+        cell: ({ row }) => {
+          const e = row.original.edge
+          if (e == null) return <span className="text-xs text-muted-foreground">—</span>
+          return (
+            <Badge className={cn(
+              'tabular-nums text-xs',
+              e > 5 ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
+                : e > 0 ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+                  : 'bg-secondary text-muted-foreground'
+            )}>
+              {e > 0 ? '+' : ''}{e}%
+            </Badge>
+          )
+        },
+        meta: { className: 'w-16' },
+        sortingFn: 'basic',
+      },
+      {
+        id: 'odds_info',
+        header: 'Best Odds',
+        cell: ({ row }) => {
+          const d = row.original
+          if (!d.best_red_odds) return <span className="text-xs text-muted-foreground">—</span>
+          return (
+            <div className="space-y-0.5 tabular-nums">
+              <div className="text-xs">
+                <span className="font-semibold">{fmtOdds(d.best_red_odds)}</span>
+                <span className="text-muted-foreground ml-1 text-[10px]">{d.best_red_book}</span>
+              </div>
+              <div className="text-xs">
+                <span className="font-semibold">{fmtOdds(d.best_blue_odds)}</span>
+                <span className="text-muted-foreground ml-1 text-[10px]">{d.best_blue_book}</span>
+              </div>
+            </div>
+          )
+        },
+        meta: { className: 'w-[16%]' },
+      },
+      {
         accessorKey: 'margin',
-        header: 'Margin',
+        header: 'Arb',
         cell: ({ row }) => {
           const m = row.original.margin
-          const isArb = row.original.is_arb
+          if (m == null) return <span className="text-xs text-muted-foreground">—</span>
           return (
-            <Badge
-              className={cn(
-                'tabular-nums text-xs',
-                isArb
-                  ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
-                  : m > -2
-                    ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
-                    : 'bg-secondary text-muted-foreground'
-              )}
-            >
+            <Badge className={cn(
+              'tabular-nums text-xs',
+              row.original.is_arb ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
+                : m > -2 ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+                  : 'bg-secondary text-muted-foreground'
+            )}>
               {m >= 0 ? '+' : ''}{m.toFixed(2)}%
             </Badge>
           )
         },
-        meta: { className: 'w-20' },
+        meta: { className: 'w-16' },
         sortingFn: 'basic',
       },
-      {
-        id: 'books',
-        header: 'Books',
-        cell: ({ row }) => (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {row.original.all_odds?.length || 0}
-          </span>
-        ),
-        meta: { className: 'w-16' },
-      },
     ],
-    [],
+    [navigate],
   )
 
   const table = useReactTable({
-    data: data || [],
+    data: filtered,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
-    getRowCanExpand: () => true,
+    getRowCanExpand: (row) => row.original.all_odds?.length > 0,
     getRowId: (row) => String(row.fight_id),
   })
 
@@ -305,23 +328,39 @@ export default function ArbitragePage() {
     )
   }
 
+  const edgeCount = data.filter((d) => d.edge != null && d.edge > 0).length
   const arbCount = data.filter((d) => d.is_arb).length
-  const nearArbCount = data.filter((d) => !d.is_arb && d.margin > -2).length
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-muted-foreground">
-            {arbCount > 0 ? (
-              <span className="text-emerald-500 font-semibold">{arbCount} arb{arbCount !== 1 ? 's' : ''} found</span>
-            ) : (
-              'No arbs right now'
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2 shrink-0">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFilter('all')}
+            className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+              filter === 'all' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             )}
-            {nearArbCount > 0 && (
-              <span className="ml-2">· {nearArbCount} near-arb{nearArbCount !== 1 ? 's' : ''} ({'<'}2%)</span>
+          >
+            All ({data.length})
+          </button>
+          <button
+            onClick={() => setFilter('edge')}
+            className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1',
+              filter === 'edge' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             )}
-          </div>
+          >
+            <TrendingUp className="h-3 w-3" />
+            Model Edge ({edgeCount})
+          </button>
+          <button
+            onClick={() => setFilter('arb')}
+            className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1',
+              filter === 'arb' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+            )}
+          >
+            <Scale className="h-3 w-3" />
+            Arb Opps ({arbCount})
+          </button>
         </div>
         {data[0]?.updated_at && (
           <span className="text-[10px] text-muted-foreground">
@@ -345,11 +384,9 @@ export default function ArbitragePage() {
                       )}
                       onClick={header.column.getToggleSortingHandler()}
                     >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                      {header.column.getIsSorted() === 'asc' && ' ^'}
-                      {header.column.getIsSorted() === 'desc' && ' v'}
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      {header.column.getIsSorted() === 'asc' && ' ↑'}
+                      {header.column.getIsSorted() === 'desc' && ' ↓'}
                     </TableHead>
                   ))}
                 </TableRow>
@@ -360,9 +397,9 @@ export default function ArbitragePage() {
                 <TableRow>
                   <TableCell colSpan={columns.length} className="text-center py-12">
                     <div className="flex flex-col items-center text-muted-foreground">
-                      <Scale className="h-10 w-10 mb-2 opacity-30" />
-                      <p className="text-sm">No odds data available</p>
-                      <p className="text-xs mt-1">Run the live odds scrape to fetch current lines</p>
+                      <Brain className="h-10 w-10 mb-2 opacity-30" />
+                      <p className="text-sm">No picks available</p>
+                      <p className="text-xs mt-1">Predictions or odds data needed</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -371,13 +408,13 @@ export default function ArbitragePage() {
                   <>
                     <TableRow
                       key={row.id}
-                      className={cn(row.original.is_arb && 'bg-emerald-500/5')}
+                      className={cn(
+                        row.original.is_arb && 'bg-emerald-500/5',
+                        row.original.edge > 5 && !row.original.is_arb && 'bg-primary/5',
+                      )}
                     >
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell
-                          key={cell.id}
-                          className={cell.column.columnDef.meta?.className}
-                        >
+                        <TableCell key={cell.id} className={cell.column.columnDef.meta?.className}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}

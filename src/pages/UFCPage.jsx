@@ -1,6 +1,6 @@
-import { Calendar, CalendarIcon, MapPin, Trophy } from 'lucide-react'
+import { Calendar, CalendarIcon, ChevronDown, MapPin, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
 import CountryFlag from '../components/CountryFlag'
 import WeightClassBadge from '../components/WeightClassBadge'
@@ -241,13 +241,18 @@ function DateRangeFilter({ dateRange, onApply }) {
 
 export default function UFCPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [allEvents, setAllEvents] = useState([])
   const [dateRange, setDateRange] = useState(defaultDateRange)
-  const [selectedEventId, setSelectedEventId] = useState(null)
+  const selectedEventId = searchParams.get('event') || null
+  const setSelectedEventId = (id) => {
+    setSearchParams(id ? { event: String(id) } : {}, { replace: true })
+  }
   const [eventDetail, setEventDetail] = useState(null)
   const [predictions, setPredictions] = useState({})
   const [eventLoading, setEventLoading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [eventsExpanded, setEventsExpanded] = useState(true)
 
   useEffect(() => {
     setLoading(true)
@@ -302,15 +307,34 @@ export default function UFCPage() {
     )
   }
 
+  const selectedEvent = events.find(e => e.id === selectedEventId)
+
   return (
-    <div className="flex gap-4 h-full">
+    <div className="flex flex-col md:flex-row gap-4 h-full overflow-auto md:overflow-hidden">
       {/* Events list card */}
-      <Card className="w-80 shrink-0 flex flex-col">
+      <Card className="md:w-80 shrink-0 flex flex-col md:max-h-full">
         <CardHeader className="pb-3 space-y-2">
-          <CardTitle className="text-base">Events</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Events</CardTitle>
+            <button
+              onClick={() => setEventsExpanded(!eventsExpanded)}
+              className="md:hidden rounded-md p-1 text-muted-foreground hover:bg-accent"
+            >
+              <ChevronDown className={cn('h-4 w-4 transition-transform', !eventsExpanded && '-rotate-90')} />
+            </button>
+          </div>
           <DateRangeFilter dateRange={dateRange} onApply={setDateRange} />
+          {/* Mobile: show selected event summary when collapsed */}
+          {!eventsExpanded && selectedEvent && (
+            <p className="text-xs text-muted-foreground md:hidden truncate">
+              Selected: {selectedEvent.name}
+            </p>
+          )}
         </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto space-y-1.5 pt-0">
+        <CardContent className={cn(
+          'flex-1 overflow-y-auto space-y-1.5 pt-0',
+          !eventsExpanded && 'hidden md:block'
+        )}>
           {events.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No events found.</p>
           ) : (
@@ -319,7 +343,10 @@ export default function UFCPage() {
                 key={event.id}
                 event={event}
                 isSelected={selectedEventId === event.id}
-                onClick={() => setSelectedEventId(event.id)}
+                onClick={() => {
+                  setSelectedEventId(event.id)
+                  setEventsExpanded(false)
+                }}
               />
             ))
           )}
@@ -327,16 +354,16 @@ export default function UFCPage() {
       </Card>
 
       {/* Fights card */}
-      <Card className="flex-1 flex flex-col">
+      <Card className="flex-1 flex flex-col min-h-0">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+            <CardTitle className="text-base truncate">
               {eventDetail ? eventDetail.name : 'Fights'}
             </CardTitle>
             {eventDetail && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
                 <span>{formatDate(eventDetail.date)}</span>
-                {eventDetail.location && <span>{eventDetail.location}</span>}
+                {eventDetail.location && <span className="hidden sm:inline">{eventDetail.location}</span>}
                 <Badge variant="secondary" className="text-[10px]">{eventDetail.fights.length} fights</Badge>
               </div>
             )}

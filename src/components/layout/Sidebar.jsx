@@ -18,7 +18,7 @@ const navTree = [
         path: '/model',
         children: [
           { id: 'model-upcoming', label: 'Upcoming', icon: Clock, path: '/model/upcoming' },
-          { id: 'model-arbitrage', label: 'Arbitrage', icon: Scale, path: '/arbitrage' },
+          { id: 'model-picks', label: 'Picks', icon: TrendingUp, path: '/arbitrage' },
           { id: 'model-metrics', label: 'Metrics', icon: BarChart3, path: '/model/metrics' },
         ],
       },
@@ -94,36 +94,57 @@ function getInitialActiveId(pathname) {
   return search(navTree)
 }
 
-export default function Sidebar() {
+export default function Sidebar({ open, onClose }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [activeId, setActiveId] = useState(() => getInitialActiveId(location.pathname))
 
+  const handleNavigate = (path) => {
+    navigate(path)
+    onClose?.()
+  }
+
+  const sidebarContent = (
+    <div className="flex h-full flex-col rounded-xl bg-gradient-to-b from-blue-600 to-blue-700 shadow-lg">
+      {/* Logo */}
+      <Link to="/" onClick={onClose} className="flex items-center gap-2.5 px-5 pt-5 pb-4">
+        <TrendingUp className="h-7 w-7 text-white" />
+        <span className="text-xl font-bold text-white tracking-tight">ALocks</span>
+      </Link>
+
+      <div className="mx-4 border-t border-blue-400/30" />
+
+      {/* Tree Navigation */}
+      <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+        {navTree.map((node) => (
+          <TreeBranch
+            key={node.id}
+            node={node}
+            navigate={handleNavigate}
+            activeId={activeId}
+            setActiveId={setActiveId}
+          />
+        ))}
+      </nav>
+    </div>
+  )
+
   return (
-    <aside className="w-64 shrink-0 p-3 h-screen sticky top-0">
-      <div className="flex h-full flex-col rounded-xl bg-gradient-to-b from-blue-600 to-blue-700 shadow-lg">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2.5 px-5 pt-5 pb-4">
-          <TrendingUp className="h-7 w-7 text-white" />
-          <span className="text-xl font-bold text-white tracking-tight">ALocks</span>
-        </Link>
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:block w-64 shrink-0 p-3 h-screen sticky top-0">
+        {sidebarContent}
+      </aside>
 
-        <div className="mx-4 border-t border-blue-400/30" />
-
-        {/* Tree Navigation */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
-          {navTree.map((node) => (
-            <TreeBranch
-              key={node.id}
-              node={node}
-              navigate={navigate}
-              activeId={activeId}
-              setActiveId={setActiveId}
-            />
-          ))}
-        </nav>
-
-      </div>
-    </aside>
+      {/* Mobile overlay */}
+      {open && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+          <aside className="relative w-64 h-full p-3">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   )
 }

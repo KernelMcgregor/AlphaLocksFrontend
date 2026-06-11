@@ -1,6 +1,8 @@
-import { ArrowLeft, Brain, ChevronDown, ChevronRight, Eye, Info, Trophy, X } from 'lucide-react'
+import { ArrowLeft, Brain, ChevronDown, ChevronRight, Eye, Info, TrendingUp, Trophy, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { useMemo, useEffect, useState } from 'react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Link, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -49,20 +51,27 @@ function buildStatRows(red, blue) {
 function FighterHeader({ fighter, corner, isWinner }) {
   const dotColor = corner === 'red' ? 'bg-red-500' : 'bg-blue-500'
   return (
-    <div className="flex-1 flex items-center gap-3 min-w-0">
-      <div className="min-w-0 flex-1 py-4">
-        <div className="flex items-center gap-2 mb-1">
+    <div className="flex-1 flex flex-col items-center text-center sm:text-left sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
+      {fighter.image_url && (
+        <img
+          src={fighter.image_url}
+          alt={`${fighter.first_name} ${fighter.last_name}`}
+          className="h-28 sm:h-40 object-contain object-bottom shrink-0 sm:translate-y-5 sm:order-last"
+        />
+      )}
+      <div className="min-w-0 flex-1 py-2 sm:py-4">
+        <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
           <span className={cn('h-3 w-3 rounded-full shrink-0', dotColor)} />
           <CountryFlag countryCode={fighter.country_code} />
-          <h2 className={cn('text-2xl font-bold', isWinner && 'text-emerald-500')}>
+          <h2 className={cn('text-lg sm:text-2xl font-bold truncate', isWinner && 'text-emerald-500')}>
             {fighter.first_name} {fighter.last_name}
           </h2>
           {isWinner && <Trophy className="h-5 w-5 text-emerald-500 shrink-0" />}
         </div>
         {fighter.nickname && (
-          <p className="text-sm text-muted-foreground ml-[22px]">"{fighter.nickname}"</p>
+          <p className="text-sm text-muted-foreground sm:ml-[22px]">"{fighter.nickname}"</p>
         )}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 ml-[22px] text-sm text-muted-foreground">
+        <div className="flex flex-wrap justify-center sm:justify-start gap-x-4 gap-y-1 mt-1 sm:ml-[22px] text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">
             {fighter.wins}-{fighter.losses}{fighter.draws > 0 ? `-${fighter.draws}` : ''}
           </span>
@@ -71,13 +80,6 @@ function FighterHeader({ fighter, corner, isWinner }) {
           {fighter.stance && fighter.stance !== '--' && <span>{fighter.stance}</span>}
         </div>
       </div>
-      {fighter.image_url && (
-        <img
-          src={fighter.image_url}
-          alt={`${fighter.first_name} ${fighter.last_name}`}
-          className="h-40 object-contain object-bottom shrink-0 translate-y-5"
-        />
-      )}
     </div>
   )
 }
@@ -296,73 +298,163 @@ export default function FightDetailPage() {
     )
   }
 
-  const { red_fighter, blue_fighter, winner, stats, prediction, method_prediction, odds, shap_values } = fight
+  const { red_fighter, blue_fighter, winner, stats, prediction, method_prediction, odds, shap_values, preview, event } = fight
   const winnerId = String(winner?.id || '')
   const redWon = winnerId === String(red_fighter?.id || '')
   const blueWon = winnerId === String(blue_fighter?.id || '')
 
   return (
-    <div className="h-full overflow-y-auto pb-6">
-      <div className="space-y-4">
+    <div className="h-full flex flex-col overflow-y-auto xl:overflow-hidden">
+      <div className="shrink-0 mb-4">
         <Link to="/ufc" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Back to events
         </Link>
+      </div>
 
-        <Card>
-          <CardContent className="p-6 space-y-6">
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <CardContent className="p-6 flex-1 min-h-0 flex flex-col gap-6 xl:overflow-hidden">
             {/* Top row: fighters + fight info */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 shrink-0">
               {/* Fighters section */}
-              <div className="xl:col-span-2 rounded-lg border border-border overflow-hidden px-5 pt-2 pb-0">
-                <div className="flex gap-6">
+              <div className="xl:col-span-2 rounded-lg border border-border overflow-hidden px-4 sm:px-5 pt-2 pb-0">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-6">
                   <FighterHeader fighter={red_fighter} corner="red" isWinner={redWon} />
+                  <div className="border-t sm:border-t-0 sm:border-l border-border" />
                   <FighterHeader fighter={blue_fighter} corner="blue" isWinner={blueWon} />
                 </div>
               </div>
 
               {/* Fight info section */}
-              <div className="rounded-lg border border-border p-4 space-y-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {fight.weight_class && <WeightClassBadge weightClass={fight.weight_class} />}
-                  {winner && fight.method && (
-                    <Badge variant="secondary" className="text-xs">
-                      {fight.method.trim()} {fight.finish_round ? `R${fight.finish_round}` : ''}
-                      {fight.finish_time ? ` ${fight.finish_time}` : ''}
-                    </Badge>
-                  )}
-                </div>
-                {(fight.details || fight.referee) && (
-                  <div className="space-y-1.5">
-                    {fight.details && <p className="text-sm text-muted-foreground">{fight.details.trim()}</p>}
-                    {fight.referee && <p className="text-sm text-muted-foreground">Referee: {fight.referee.trim()}</p>}
-                  </div>
-                )}
-                {fight.time_format && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Format</h3>
-                    <p className="text-sm">{fight.time_format}</p>
-                  </div>
+              <div className="rounded-lg border border-border p-4">
+                {!winner && prediction ? (() => {
+                  const pickProb = prediction.red_prob > 0.5 ? prediction.red_prob : 1 - prediction.red_prob
+                  const pickSide = prediction.predicted_winner
+                  const pickFighter = pickSide === 'red' ? red_fighter : blue_fighter
+                  const impliedProb = odds.length > 0 ? (() => {
+                    const bestOdds = pickSide === 'red'
+                      ? Math.max(...odds.map(o => o.red_odds))
+                      : Math.max(...odds.map(o => o.blue_odds))
+                    return bestOdds > 0 ? 100 / (bestOdds + 100) : Math.abs(bestOdds) / (Math.abs(bestOdds) + 100)
+                  })() : null
+                  const edge = impliedProb != null ? ((pickProb - impliedProb) * 100).toFixed(1) : null
+                  return (
+                    <div className="flex h-full gap-4">
+                      {/* Left: fight details */}
+                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-2">
+                        {fight.weight_class && <WeightClassBadge weightClass={fight.weight_class} />}
+                        {event && (
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-medium">{event.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(event.date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                            </p>
+                            {event.location && (
+                              <p className="text-xs text-muted-foreground">{event.location}</p>
+                            )}
+                          </div>
+                        )}
+                        {fight.time_format && (
+                          <div>
+                            <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Format</h4>
+                            <p className="text-xs">{fight.time_format}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Divider */}
+                      <div className="border-l border-border" />
+
+                      {/* Right: prediction */}
+                      <div className="flex-1 flex flex-col items-center justify-center text-center gap-1">
+                        <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Prediction</h3>
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn('h-2 w-2 rounded-full shrink-0', pickSide === 'red' ? 'bg-red-500' : 'bg-blue-500')} />
+                          <span className="text-sm font-bold">{pickFighter.last_name}</span>
+                        </div>
+                        <span className="text-2xl font-black text-foreground tabular-nums">{(pickProb * 100).toFixed(0)}%</span>
+                        {method_prediction && (
+                          <span className="text-[10px] text-muted-foreground">by {method_prediction.predicted_method}</span>
+                        )}
+                        {edge != null && parseFloat(edge) > 0 && (
+                          <div className="flex items-center gap-1 text-[10px] text-emerald-500 font-semibold">
+                            <TrendingUp className="h-2.5 w-2.5" />
+                            +{edge}% edge
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })() : (
+                  <>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {fight.weight_class && <WeightClassBadge weightClass={fight.weight_class} />}
+                      {winner && fight.method && (
+                        <Badge variant="secondary" className="text-xs">
+                          {fight.method.trim()} {fight.finish_round ? `R${fight.finish_round}` : ''}
+                          {fight.finish_time ? ` ${fight.finish_time}` : ''}
+                        </Badge>
+                      )}
+                    </div>
+                    {(fight.details || fight.referee) && (
+                      <div className="space-y-1.5">
+                        {fight.details && <p className="text-sm text-muted-foreground">{fight.details.trim()}</p>}
+                        {fight.referee && <p className="text-sm text-muted-foreground">Referee: {fight.referee.trim()}</p>}
+                      </div>
+                    )}
+                    {fight.time_format && (
+                      <div>
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Format</h3>
+                        <p className="text-sm">{fight.time_format}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
 
             {/* Stats + prediction grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 flex-1 min-h-0">
               {/* Fight Stats - takes 2 columns */}
-              <div className="xl:col-span-2">
-                <div className="rounded-lg border border-border p-4">
-                  <h3 className="text-sm font-semibold mb-3">Fight Stats</h3>
-                  {stats && stats.length > 0 && stats.some(s => s.round_number === 0) ? (
-                    <StatsTable stats={stats.filter(s => s.round_number === 0 || (s.sig_str_attempted > 0 || s.total_str_attempted > 0 || s.td_attempted > 0 || s.ctrl_seconds > 0))} red_fighter={red_fighter} blue_fighter={blue_fighter} />
+              <div className="xl:col-span-2 min-h-0 flex flex-col">
+                <div className="rounded-lg border border-border p-4 flex flex-col flex-1 min-h-0">
+                  {winner ? (
+                    <>
+                      <h3 className="text-sm font-semibold mb-3">Fight Stats</h3>
+                      {stats && stats.length > 0 && stats.some(s => s.round_number === 0) ? (
+                        <StatsTable stats={stats.filter(s => s.round_number === 0 || (s.sig_str_attempted > 0 || s.total_str_attempted > 0 || s.td_attempted > 0 || s.ctrl_seconds > 0))} red_fighter={red_fighter} blue_fighter={blue_fighter} />
+                      ) : (
+                        <p className="py-8 text-center text-sm text-muted-foreground">No stats available</p>
+                      )}
+                    </>
+                  ) : preview ? (
+                    <>
+                      <div className="flex items-center justify-between mb-3 shrink-0">
+                        <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                          <Brain className="h-4 w-4 text-primary" />
+                          Written by KernelMcGregor
+                        </h3>
+                        <span className="text-[10px] text-muted-foreground">
+                          {preview.generated_at && new Date(preview.generated_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="overflow-y-auto flex-1 min-h-0 max-h-full">
+                        <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-th:text-foreground prose-td:text-foreground prose-p:text-muted-foreground prose-li:text-muted-foreground prose-table:text-sm">
+                          <Markdown remarkPlugins={[remarkGfm]}>{preview.content}</Markdown>
+                        </div>
+                      </div>
+                    </>
                   ) : (
-                    <p className="py-8 text-center text-sm text-muted-foreground">No stats yet — fight hasn't happened</p>
+                    <>
+                      <h3 className="text-sm font-semibold mb-3">Fight Stats</h3>
+                      <p className="py-8 text-center text-sm text-muted-foreground">No stats yet — fight hasn't happened</p>
+                    </>
                   )}
                 </div>
               </div>
 
               {/* Right column - prediction, method, odds */}
-              <div className="space-y-4">
+              <div className="space-y-4 min-h-0 overflow-y-auto">
                 {/* Model Prediction */}
                 {prediction && (
                   <div className="rounded-lg border border-border p-4">
@@ -463,10 +555,8 @@ export default function FightDetailPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
       {/* SHAP Modal */}
-
       {showShap && shap_values && (
         <ShapModal
           shap_values={shap_values}
