@@ -25,7 +25,9 @@ function AppBreadcrumb() {
     crumbs.push({ label: 'Arbitrage', path: null })
   } else if (path.startsWith('/ufc') || path.startsWith('/model')) {
     crumbs.push({ label: 'UFC', path: '/ufc' })
-    if (path.startsWith('/ufc/fights/')) {
+    if (path.startsWith('/ufc/rankings')) {
+      crumbs.push({ label: 'Rankings', path: null })
+    } else if (path.startsWith('/ufc/fights/')) {
       crumbs.push({ label: 'Fight Details', path: null })
     } else if (path.startsWith('/model')) {
       crumbs.push({ label: 'Model', path: '/model/upcoming' })

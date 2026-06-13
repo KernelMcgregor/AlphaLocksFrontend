@@ -307,7 +307,15 @@ export default function UFCPage() {
   const selectedEvent = events.find(e => e.id === selectedEventId)
 
   return (
-    <div className="flex flex-col md:flex-row gap-4 h-full overflow-auto md:overflow-hidden">
+    <div className="flex flex-col gap-4 h-full overflow-auto md:overflow-hidden">
+      <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight shrink-0">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+          <Calendar className="h-5 w-5 text-white" />
+        </span>
+        Events & Fights
+        <span className="text-sm font-medium text-muted-foreground">— click any fight to view details</span>
+      </h1>
+      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 overflow-hidden">
       {/* Events list card */}
       <Card className="md:w-80 shrink-0 flex flex-col md:max-h-full min-h-0 overflow-hidden">
         <CardHeader className="pb-3 space-y-2">
@@ -402,6 +410,7 @@ export default function UFCPage() {
         </ScrollArea>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

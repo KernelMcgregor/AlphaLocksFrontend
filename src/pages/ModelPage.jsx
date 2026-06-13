@@ -1,4 +1,4 @@
-import { Calendar, CalendarIcon, Trophy } from 'lucide-react'
+import { Calendar, CalendarIcon, Clock, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
@@ -301,6 +301,15 @@ export default function ModelPage({ tab = 'upcoming' }) {
             </div>
           ) : (
             <div className="flex flex-col gap-4 h-full min-h-0">
+              <div className="shrink-0 space-y-3">
+                <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+                    <Clock className="h-5 w-5 text-white" />
+                  </span>
+                  Upcoming
+                  <span className="text-sm font-medium text-muted-foreground">— click any fight to view details</span>
+                </h1>
+              </div>
               <div className="flex flex-wrap gap-2 shrink-0">
                 <Button
                   variant={upcomingFilter === 'all' ? 'default' : 'outline'}
