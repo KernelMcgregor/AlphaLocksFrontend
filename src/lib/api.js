@@ -63,6 +63,7 @@ export const fetchModelMetrics = () => cachedRequest('/ufc/model/metrics')
 export const fetchMethodModelMetrics = () => cachedRequest('/ufc/method/metrics')
 export const fetchUpcomingEvents = () => cachedRequest('/ufc/upcoming', 10 * 60 * 1000) // 10 min
 
+export const fetchRankings = () => cachedRequest('/ufc/rankings', 30 * 60 * 1000) // 30 min
 export const fetchArbitrage = () => cachedRequest('/ufc/arbitrage')
 export const fetchPicks = () => cachedRequest('/ufc/picks')
 
