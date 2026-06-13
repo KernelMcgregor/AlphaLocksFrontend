@@ -1,4 +1,4 @@
-import { Brain, ChevronDown, ChevronRight, Scale, TrendingUp } from 'lucide-react'
+import { Brain, ChevronDown, ChevronRight, Scale } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -24,6 +24,9 @@ import { cn } from '../lib/utils'
 
 const fmtOdds = (v) => (v == null ? '—' : v > 0 ? `+${v}` : `${v}`)
 
+const toDecimal = (american) =>
+  american > 0 ? american / 100 + 1 : 100 / Math.abs(american) + 1
+
 function BetCalculator({ row }) {
   const [stake, setStake] = useState(100)
   const [side, setSide] = useState('red')
@@ -31,9 +34,6 @@ function BetCalculator({ row }) {
   const redOdds = row.best_red_odds
   const blueOdds = row.best_blue_odds
   if (redOdds == null || blueOdds == null) return null
-
-  const toDecimal = (american) =>
-    american > 0 ? american / 100 + 1 : 100 / Math.abs(american) + 1
 
   const redDec = toDecimal(redOdds)
   const blueDec = toDecimal(blueOdds)
@@ -162,8 +162,8 @@ function BetCalculator({ row }) {
 export default function ArbitragePage() {
   const navigate = useNavigate()
   const [data, setData] = useState(null)
-  const [filter, setFilter] = useState('all') // 'all', 'edge', 'arb'
-  const [sorting, setSorting] = useState([{ id: 'edge', desc: true }])
+  const [filter, setFilter] = useState('all') // 'all', 'edge', 'disagree', 'arb'
+  const [sorting, setSorting] = useState([])
 
   useEffect(() => {
     fetchPicks().then(setData).catch(() => setData([]))
@@ -171,7 +171,6 @@ export default function ArbitragePage() {
 
   const filtered = useMemo(() => {
     if (!data) return []
-    if (filter === 'edge') return data.filter((d) => d.edge != null && d.edge > 0)
     if (filter === 'arb') return data.filter((d) => d.is_arb || (d.margin != null && d.margin > -2))
     return data
   }, [data, filter])
@@ -209,7 +208,7 @@ export default function ArbitragePage() {
             </div>
           </button>
         ),
-        meta: { className: 'w-[22%]' },
+        meta: { className: 'w-[14%]' },
       },
       {
         accessorKey: 'event_name',
@@ -220,48 +219,38 @@ export default function ArbitragePage() {
             <div className="text-[10px] text-muted-foreground">{row.original.event_date}</div>
           </div>
         ),
-        meta: { className: 'w-[18%]' },
+        meta: { className: 'w-[14%]' },
       },
       {
-        id: 'pick',
+        id: 'model_pick',
         header: 'Model Pick',
         cell: ({ row }) => {
           const d = row.original
-          if (!d.pick_side) return <span className="text-xs text-muted-foreground">—</span>
+          if (!d.model_winner_side) return <span className="text-xs text-muted-foreground">—</span>
           return (
             <div className="space-y-0.5">
               <div className="flex items-center gap-1.5">
-                <span className={cn('h-2 w-2 rounded-full', d.pick_side === 'red' ? 'bg-red-500' : 'bg-blue-500')} />
-                <span className="text-sm font-semibold">{d.pick_fighter}</span>
+                <span className={cn('h-2 w-2 rounded-full', d.model_winner_side === 'red' ? 'bg-red-500' : 'bg-blue-500')} />
+                <span className="text-sm font-semibold">{d.model_winner_name}</span>
               </div>
               <div className="text-[10px] text-muted-foreground">
-                {d.model_prob}% model · {d.method_prediction || ''}
+                {d.model_winner_prob}% win prob
+                {d.method_prediction ? ` · ${d.method_prediction}` : ''}
               </div>
+              {d.confidence != null && (
+                <div className="text-[10px]">
+                  <span className={cn(
+                    'font-medium',
+                    d.confidence >= 70 ? 'text-emerald-500' : d.confidence >= 50 ? 'text-amber-500' : 'text-red-400'
+                  )}>
+                    {d.confidence >= 70 ? 'High' : d.confidence >= 50 ? 'Med' : 'Low'} confidence
+                  </span>
+                </div>
+              )}
             </div>
           )
         },
-        meta: { className: 'w-[20%]' },
-      },
-      {
-        id: 'edge',
-        accessorKey: 'edge',
-        header: 'Edge',
-        cell: ({ row }) => {
-          const e = row.original.edge
-          if (e == null) return <span className="text-xs text-muted-foreground">—</span>
-          return (
-            <Badge className={cn(
-              'tabular-nums text-xs',
-              e > 5 ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
-                : e > 0 ? 'bg-amber-500/15 text-amber-500 border-amber-500/30'
-                  : 'bg-secondary text-muted-foreground'
-            )}>
-              {e > 0 ? '+' : ''}{e}%
-            </Badge>
-          )
-        },
-        meta: { className: 'w-16' },
-        sortingFn: 'basic',
+        meta: { className: 'w-[16%]' },
       },
       {
         id: 'odds_info',
@@ -282,7 +271,7 @@ export default function ArbitragePage() {
             </div>
           )
         },
-        meta: { className: 'w-[16%]' },
+        meta: { className: 'w-[12%]' },
       },
       {
         accessorKey: 'margin',
@@ -328,7 +317,6 @@ export default function ArbitragePage() {
     )
   }
 
-  const edgeCount = data.filter((d) => d.edge != null && d.edge > 0).length
   const arbCount = data.filter((d) => d.is_arb).length
 
   return (
@@ -342,15 +330,6 @@ export default function ArbitragePage() {
             )}
           >
             All ({data.length})
-          </button>
-          <button
-            onClick={() => setFilter('edge')}
-            className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1',
-              filter === 'edge' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-            )}
-          >
-            <TrendingUp className="h-3 w-3" />
-            Model Edge ({edgeCount})
           </button>
           <button
             onClick={() => setFilter('arb')}
@@ -410,7 +389,6 @@ export default function ArbitragePage() {
                       key={row.id}
                       className={cn(
                         row.original.is_arb && 'bg-emerald-500/5',
-                        row.original.edge > 5 && !row.original.is_arb && 'bg-primary/5',
                       )}
                     >
                       {row.getVisibleCells().map((cell) => (

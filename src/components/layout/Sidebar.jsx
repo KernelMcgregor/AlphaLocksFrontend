@@ -1,4 +1,5 @@
-import { BarChart3, Brain, Calendar, ChevronRight, Clock, Scale, Swords, TrendingUp } from 'lucide-react'
+import { BarChart3, Brain, Calendar, ChevronRight, Clock, Swords, TrendingUp } from 'lucide-react'
+import logoSrc from '../../assets/alocks-logo.png'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '../../lib/utils'
@@ -108,8 +109,11 @@ export default function Sidebar({ open, onClose }) {
     <div className="flex h-full flex-col rounded-xl bg-gradient-to-b from-blue-600 to-blue-700 shadow-lg">
       {/* Logo */}
       <Link to="/" onClick={onClose} className="flex items-center gap-2.5 px-5 pt-5 pb-4">
-        <TrendingUp className="h-7 w-7 text-white" />
-        <span className="text-xl font-bold text-white tracking-tight">ALocks</span>
+        <img src={logoSrc} alt="Alpha Locks" className="h-10 w-10 rounded-full" />
+        <div>
+          <div className="text-xl font-bold text-white tracking-tight leading-tight">Alpha Locks</div>
+          <div className="text-[10px] text-blue-200 tracking-wide">Sports Intelligence Firm</div>
+        </div>
       </Link>
 
       <div className="mx-4 border-t border-blue-400/30" />

@@ -1,4 +1,4 @@
-import { ArrowLeft, Brain, ChevronDown, ChevronRight, Eye, Info, TrendingUp, Trophy, X } from 'lucide-react'
+import { ArrowLeft, Brain, ChevronDown, ChevronRight, Eye, Info, TrendingUp, Trophy, X, Zap } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip'
 import { useMemo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
@@ -331,13 +331,6 @@ export default function FightDetailPage() {
                   const pickProb = prediction.red_prob > 0.5 ? prediction.red_prob : 1 - prediction.red_prob
                   const pickSide = prediction.predicted_winner
                   const pickFighter = pickSide === 'red' ? red_fighter : blue_fighter
-                  const impliedProb = odds.length > 0 ? (() => {
-                    const bestOdds = pickSide === 'red'
-                      ? Math.max(...odds.map(o => o.red_odds))
-                      : Math.max(...odds.map(o => o.blue_odds))
-                    return bestOdds > 0 ? 100 / (bestOdds + 100) : Math.abs(bestOdds) / (Math.abs(bestOdds) + 100)
-                  })() : null
-                  const edge = impliedProb != null ? ((pickProb - impliedProb) * 100).toFixed(1) : null
                   return (
                     <div className="flex h-full gap-4">
                       {/* Left: fight details */}
@@ -375,12 +368,6 @@ export default function FightDetailPage() {
                         <span className="text-2xl font-black text-foreground tabular-nums">{(pickProb * 100).toFixed(0)}%</span>
                         {method_prediction && (
                           <span className="text-[10px] text-muted-foreground">by {method_prediction.predicted_method}</span>
-                        )}
-                        {edge != null && parseFloat(edge) > 0 && (
-                          <div className="flex items-center gap-1 text-[10px] text-emerald-500 font-semibold">
-                            <TrendingUp className="h-2.5 w-2.5" />
-                            +{edge}% edge
-                          </div>
                         )}
                       </div>
                     </div>
@@ -453,104 +440,160 @@ export default function FightDetailPage() {
                 </div>
               </div>
 
-              {/* Right column - prediction, method, odds */}
-              <div className="space-y-4 min-h-0 overflow-y-auto">
-                {/* Model Prediction */}
-                {prediction && (
-                  <div className="rounded-lg border border-border p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                        <Brain className="h-4 w-4 text-primary" />
-                        Prediction
-                      </h3>
-                      {shap_values && shap_values.length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1"
-                          onClick={() => setShowShap(true)}
-                        >
-                          <Eye className="h-3 w-3" />
-                          View Reasoning
-                        </Button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className={cn(
-                        'h-3 w-3 rounded-full',
-                        prediction.predicted_winner === 'red' ? 'bg-red-500' : 'bg-blue-500'
-                      )} />
-                      <span className="font-semibold text-sm">
-                        {prediction.predicted_winner === 'red'
-                          ? `${red_fighter.first_name} ${red_fighter.last_name}`
-                          : `${blue_fighter.first_name} ${blue_fighter.last_name}`}
-                      </span>
-                      <Badge variant="secondary" className="text-[10px]">
-                        {((prediction.red_prob > 0.5 ? prediction.red_prob : 1 - prediction.red_prob) * 100).toFixed(1)}%
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-0.5">
-                      <div className="h-2.5 rounded-l-full bg-red-500" style={{ width: `${prediction.red_prob * 100}%` }} />
-                      <div className="h-2.5 rounded-r-full bg-blue-500" style={{ width: `${(1 - prediction.red_prob) * 100}%` }} />
-                    </div>
-                    <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                      <span>{red_fighter.last_name} {(prediction.red_prob * 100).toFixed(1)}%</span>
-                      <span>{((1 - prediction.red_prob) * 100).toFixed(1)}% {blue_fighter.last_name}</span>
-                    </div>
-                  </div>
-                )}
+              {/* Right column — one scroll box through prediction / method / odds */}
+              <div className="rounded-lg border border-border flex flex-col min-h-0">
+                <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-border">
+                  {/* Model Prediction + Value Pick */}
+                  {prediction && (() => {
+                    // Value pick: side with the biggest gap between the model's probability and the
+                    // market-implied probability. May be a DIFFERENT fighter than the model pick
+                    // (often the underdog). It's the best price, not a winner prediction.
+                    const impliedFromOdds = (american) =>
+                      american > 0 ? 100 / (american + 100) : Math.abs(american) / (Math.abs(american) + 100)
+                    const hasOdds = odds && odds.length > 0
+                    const redModelProb = prediction.red_prob
+                    const blueModelProb = 1 - prediction.red_prob
+                    const bestRedOdds = hasOdds ? Math.max(...odds.map(o => o.red_odds)) : null
+                    const bestBlueOdds = hasOdds ? Math.max(...odds.map(o => o.blue_odds)) : null
+                    const redImplied = bestRedOdds != null ? impliedFromOdds(bestRedOdds) : null
+                    const blueImplied = bestBlueOdds != null ? impliedFromOdds(bestBlueOdds) : null
+                    const redEdge = redImplied != null ? (redModelProb - redImplied) * 100 : null
+                    const blueEdge = blueImplied != null ? (blueModelProb - blueImplied) * 100 : null
+                    let valueSide = null, valueEdge = null, valueModelProb = null, valueImplied = null
+                    if (redEdge != null && blueEdge != null) {
+                      if (redEdge >= blueEdge) { valueSide = 'red'; valueEdge = redEdge; valueModelProb = redModelProb; valueImplied = redImplied }
+                      else { valueSide = 'blue'; valueEdge = blueEdge; valueModelProb = blueModelProb; valueImplied = blueImplied }
+                    }
+                    const valueFighter = valueSide === 'red' ? red_fighter : blue_fighter
+                    const hasPositiveEdge = valueEdge != null && valueEdge > 0
+                    const valueIsUnderdog = valueImplied != null && valueImplied < 0.5
+                    return (
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                            <Brain className="h-4 w-4 text-primary" />
+                            Prediction
+                          </h3>
+                          {shap_values && shap_values.length > 0 && (
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setShowShap(true)}>
+                              <Eye className="h-3 w-3" />
+                              View Reasoning
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className={cn('h-3 w-3 rounded-full', prediction.predicted_winner === 'red' ? 'bg-red-500' : 'bg-blue-500')} />
+                          <span className="font-semibold text-sm">
+                            {prediction.predicted_winner === 'red'
+                              ? `${red_fighter.first_name} ${red_fighter.last_name}`
+                              : `${blue_fighter.first_name} ${blue_fighter.last_name}`}
+                          </span>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {((prediction.red_prob > 0.5 ? prediction.red_prob : 1 - prediction.red_prob) * 100).toFixed(1)}%
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <div className="h-2.5 rounded-l-full bg-red-500" style={{ width: `${prediction.red_prob * 100}%` }} />
+                          <div className="h-2.5 rounded-r-full bg-blue-500" style={{ width: `${(1 - prediction.red_prob) * 100}%` }} />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                          <span>{red_fighter.last_name} {(prediction.red_prob * 100).toFixed(1)}%</span>
+                          <span>{((1 - prediction.red_prob) * 100).toFixed(1)}% {blue_fighter.last_name}</span>
+                        </div>
 
-                {/* Method Prediction */}
-                {method_prediction && (
-                  <div className="rounded-lg border border-border p-4">
-                    <h3 className="text-sm font-semibold mb-3">Method</h3>
-                    <div className="space-y-2">
-                      {[
-                        { label: 'KO/TKO', prob: method_prediction.ko_prob },
-                        { label: 'Submission', prob: method_prediction.sub_prob },
-                        { label: 'Decision', prob: method_prediction.dec_prob },
-                      ].sort((a, b) => b.prob - a.prob).map(m => (
-                        <div key={m.label} className="flex items-center gap-2">
-                          <span className="w-16 text-xs">{m.label}</span>
-                          <div className="flex-1 h-5 bg-secondary rounded-md overflow-hidden relative">
-                            <div
-                              className={cn(
-                                'h-full rounded-md',
-                                m.label === method_prediction.predicted_method ? 'bg-primary' : 'bg-muted-foreground/30'
-                              )}
-                              style={{ width: `${m.prob * 100}%` }}
-                            />
-                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold">
-                              {(m.prob * 100).toFixed(1)}%
-                            </span>
+                        {/* Value Pick — best price, not a winner prediction. May differ from the model pick. */}
+                        {valueSide && (
+                          <div className="mt-4 pt-3 border-t border-border">
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <Zap className="h-3.5 w-3.5 text-sky-500" />
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Value Pick</span>
+                              <span className="text-[10px] text-muted-foreground">· best price, not a winner pick</span>
+                            </div>
+                            {hasPositiveEdge ? (
+                              <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', valueSide === 'red' ? 'bg-red-500' : 'bg-blue-500')} />
+                                    <span className="text-sm font-bold truncate">{valueFighter.first_name} {valueFighter.last_name}</span>
+                                    {valueIsUnderdog && (
+                                      <span className="text-[9px] font-bold text-sky-600 bg-background border border-sky-500/40 rounded px-1.5 py-0.5 leading-none shrink-0">UNDERDOG</span>
+                                    )}
+                                  </div>
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/30 rounded px-2 py-0.5 shrink-0">
+                                    <TrendingUp className="h-3 w-3" />
+                                    +{valueEdge.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <div className="mt-2.5">
+                                  <div className="relative h-1.5 bg-secondary rounded-full overflow-hidden">
+                                    <div className="absolute inset-y-0 left-0 bg-primary/40 rounded-full" style={{ width: `${valueImplied * 100}%` }} />
+                                    <div className="absolute inset-y-0 left-0 bg-primary rounded-full" style={{ width: `${valueModelProb * 100}%` }} />
+                                  </div>
+                                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                                    <span>Model {(valueModelProb * 100).toFixed(0)}%</span>
+                                    <span>Market {(valueImplied * 100).toFixed(0)}%</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                                <p className="text-xs text-muted-foreground">No positive edge — the market is efficient on this fight.</p>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                        )}
+                      </div>
+                    )
+                  })()}
 
-                {/* Odds */}
-                {odds && odds.length > 0 && (
-                  <div className="rounded-lg border border-border p-4">
-                    <h3 className="text-sm font-semibold mb-3">Odds</h3>
-                    <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-muted-foreground pb-1 border-b border-border">
-                      <span>Book</span>
-                      <span className="text-center text-red-500">{red_fighter.last_name}</span>
-                      <span className="text-center text-blue-500">{blue_fighter.last_name}</span>
+                  {/* Method Prediction */}
+                  {method_prediction && (
+                    <div className="p-4">
+                      <h3 className="text-sm font-semibold mb-3">Method</h3>
+                      <div className="space-y-2">
+                        {[
+                          { label: 'KO/TKO', prob: method_prediction.ko_prob },
+                          { label: 'Submission', prob: method_prediction.sub_prob },
+                          { label: 'Decision', prob: method_prediction.dec_prob },
+                        ].sort((a, b) => b.prob - a.prob).map(m => (
+                          <div key={m.label} className="flex items-center gap-2">
+                            <span className="w-16 text-xs">{m.label}</span>
+                            <div className="flex-1 h-5 bg-secondary rounded-md overflow-hidden relative">
+                              <div
+                                className={cn('h-full rounded-md', m.label === method_prediction.predicted_method ? 'bg-primary' : 'bg-muted-foreground/30')}
+                                style={{ width: `${m.prob * 100}%` }}
+                              />
+                              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold">
+                                {(m.prob * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="max-h-32 overflow-y-auto">
-                      {odds.map(o => (
-                        <div key={o.bookmaker} className="grid grid-cols-3 gap-2 text-xs py-0.5">
-                          <span className="text-muted-foreground">{o.bookmaker}</span>
-                          <span className="text-center font-mono tabular-nums">{formatOdds(o.red_odds)}</span>
-                          <span className="text-center font-mono tabular-nums">{formatOdds(o.blue_odds)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  )}
 
+                  {/* Odds */}
+                  {odds && odds.length > 0 && (
+                    <div className="p-4">
+                      <h3 className="text-sm font-semibold mb-3">Odds</h3>
+                      <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-muted-foreground pb-1 border-b border-border">
+                        <span>Book</span>
+                        <span className="text-center text-red-500">{red_fighter.last_name}</span>
+                        <span className="text-center text-blue-500">{blue_fighter.last_name}</span>
+                      </div>
+                      <div>
+                        {odds.map(o => (
+                          <div key={o.bookmaker} className="grid grid-cols-3 gap-2 text-xs py-0.5">
+                            <span className="text-muted-foreground">{o.bookmaker}</span>
+                            <span className="text-center font-mono tabular-nums">{formatOdds(o.red_odds)}</span>
+                            <span className="text-center font-mono tabular-nums">{formatOdds(o.blue_odds)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
