@@ -315,8 +315,8 @@ export default function FightDetailPage() {
         </button>
       </div>
 
-      <Card className="flex-1 min-h-0 flex flex-col">
-        <CardContent className="p-6 flex-1 min-h-0 flex flex-col gap-6 xl:overflow-hidden">
+      <Card className="xl:flex-1 xl:min-h-0 flex flex-col">
+        <CardContent className="p-6 xl:flex-1 xl:min-h-0 flex flex-col gap-6 xl:overflow-hidden">
             {/* Top row: fighters + fight info */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 shrink-0">
               {/* Fighters section */}
@@ -404,10 +404,10 @@ export default function FightDetailPage() {
             </div>
 
             {/* Stats + prediction grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 flex-1 min-h-0">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 xl:flex-1 xl:min-h-0">
               {/* Fight Stats - takes 2 columns */}
-              <div className="xl:col-span-2 min-h-0 flex flex-col">
-                <div className="rounded-lg border border-border p-4 flex flex-col flex-1 min-h-0">
+              <div className="xl:col-span-2 xl:min-h-0 flex flex-col min-w-0">
+                <div className="rounded-lg border border-border p-4 flex flex-col xl:flex-1 xl:min-h-0 min-w-0 overflow-hidden">
                   {winner ? (
                     <>
                       <h3 className="text-sm font-semibold mb-3">Fight Stats</h3>
@@ -428,11 +428,16 @@ export default function FightDetailPage() {
                           {preview.generated_at && new Date(preview.generated_at).toLocaleDateString()}
                         </span>
                       </div>
-                      <ScrollArea className="flex-1 min-h-0 max-h-full">
-                        <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-th:text-foreground prose-td:text-foreground prose-p:text-muted-foreground prose-li:text-muted-foreground prose-table:text-sm">
+                      <div className="xl:flex-1 xl:min-h-0 overflow-x-auto xl:overflow-hidden">
+                        <ScrollArea className="hidden xl:block h-full">
+                          <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-th:text-foreground prose-td:text-foreground prose-p:text-muted-foreground prose-li:text-muted-foreground prose-table:text-sm">
+                            <Markdown remarkPlugins={[remarkGfm]}>{preview.content}</Markdown>
+                          </div>
+                        </ScrollArea>
+                        <div className="xl:hidden prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-th:text-foreground prose-td:text-foreground prose-p:text-muted-foreground prose-li:text-muted-foreground prose-table:text-sm">
                           <Markdown remarkPlugins={[remarkGfm]}>{preview.content}</Markdown>
                         </div>
-                      </ScrollArea>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -444,8 +449,8 @@ export default function FightDetailPage() {
               </div>
 
               {/* Right column — one scroll box through prediction / method / odds */}
-              <div className="rounded-lg border border-border flex flex-col min-h-0">
-                <ScrollArea className="flex-1 min-h-0 divide-y divide-border">
+              <div className="rounded-lg border border-border flex flex-col xl:min-h-0">
+                <ScrollArea className="xl:flex-1 xl:min-h-0 divide-y divide-border">
                   {/* Model Prediction */}
                   {prediction && (() => {
                     return (
@@ -549,7 +554,7 @@ export default function FightDetailPage() {
                           <Zap className="h-3.5 w-3.5 text-sky-500" />
                           <h3 className="text-sm font-semibold">Value Picks</h3>
                         </div>
-                        <div className={cn('grid gap-2', methodBest ? 'grid-cols-2' : 'grid-cols-1')}>
+                        <div className={cn('grid gap-2', methodBest ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1')}>
                           {/* Winner value */}
                           <div className="flex flex-col">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600 mb-1.5">Winner</span>

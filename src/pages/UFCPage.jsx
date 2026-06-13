@@ -66,7 +66,7 @@ function CompactFightCard({ fight, prediction, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left rounded-lg border border-border bg-card p-3 hover:border-primary/30 hover:shadow-sm transition-all"
+      className="w-full min-w-0 text-left rounded-lg border border-border bg-card p-3 hover:border-primary/30 hover:shadow-sm transition-all"
     >
       {fight.weight_class && (
         <div className="mb-2">
@@ -76,16 +76,14 @@ function CompactFightCard({ fight, prediction, onClick }) {
 
       <div className="space-y-2">
         {/* Red fighter */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 overflow-hidden">
             <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
             <CountryFlag countryCode={red_fighter?.country_code} />
             <span className={cn('text-sm font-semibold truncate', redWon && 'text-emerald-500')}>
               {red_fighter?.first_name} {red_fighter?.last_name}
+              {red_fighter?.nickname && <span className="text-xs font-normal text-muted-foreground ml-1">"{red_fighter.nickname}"</span>}
             </span>
-            {red_fighter?.nickname && (
-              <span className="text-xs text-muted-foreground truncate">"{red_fighter.nickname}"</span>
-            )}
             {redWon && <Trophy className="h-3 w-3 text-emerald-500 shrink-0" />}
           </div>
           <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
@@ -99,16 +97,14 @@ function CompactFightCard({ fight, prediction, onClick }) {
         </div>
 
         {/* Blue fighter */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 overflow-hidden">
             <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
             <CountryFlag countryCode={blue_fighter?.country_code} />
             <span className={cn('text-sm font-semibold truncate', blueWon && 'text-emerald-500')}>
               {blue_fighter?.first_name} {blue_fighter?.last_name}
+              {blue_fighter?.nickname && <span className="text-xs font-normal text-muted-foreground ml-1">"{blue_fighter.nickname}"</span>}
             </span>
-            {blue_fighter?.nickname && (
-              <span className="text-xs text-muted-foreground truncate">"{blue_fighter.nickname}"</span>
-            )}
             {blueWon && <Trophy className="h-3 w-3 text-emerald-500 shrink-0" />}
           </div>
           <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
@@ -313,7 +309,7 @@ export default function UFCPage() {
   return (
     <div className="flex flex-col md:flex-row gap-4 h-full overflow-auto md:overflow-hidden">
       {/* Events list card */}
-      <Card className="md:w-80 shrink-0 flex flex-col md:max-h-full">
+      <Card className="md:w-80 shrink-0 flex flex-col md:max-h-full min-h-0 overflow-hidden">
         <CardHeader className="pb-3 space-y-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Events</CardTitle>
@@ -333,7 +329,7 @@ export default function UFCPage() {
           )}
         </CardHeader>
         <CardContent className={cn(
-          'flex-1 pt-0',
+          'flex-1 min-h-0 pt-0',
           !eventsExpanded && 'hidden md:block'
         )}>
         <ScrollArea className="h-full">
@@ -357,7 +353,7 @@ export default function UFCPage() {
       </Card>
 
       {/* Fights card */}
-      <Card className="flex-1 flex flex-col min-h-0">
+      <Card className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
             <CardTitle className="text-base truncate">
@@ -372,7 +368,7 @@ export default function UFCPage() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="flex-1 pt-0">
+        <CardContent className="flex-1 min-h-0 pt-0">
         <ScrollArea className="h-full">
           {!selectedEventId && (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -391,7 +387,7 @@ export default function UFCPage() {
             eventDetail.fights.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">No fights for this event.</p>
             ) : (
-              <div className="grid gap-2 grid-cols-1 xl:grid-cols-2">
+              <div className="grid gap-2 grid-cols-1 xl:grid-cols-2 overflow-hidden">
                 {eventDetail.fights.map(fight => (
                   <CompactFightCard
                     key={fight.id}
