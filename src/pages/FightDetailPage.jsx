@@ -3,7 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/toolti
 import { useMemo, useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent } from '../components/ui/card'
@@ -270,6 +270,7 @@ function ShapModal({ shap_values, red_fighter, blue_fighter, onClose }) {
 
 export default function FightDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [fight, setFight] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showShap, setShowShap] = useState(false)
@@ -307,10 +308,10 @@ export default function FightDetailPage() {
   return (
     <div className="h-full flex flex-col overflow-y-auto xl:overflow-hidden">
       <div className="shrink-0 mb-4">
-        <Link to="/ufc" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
-          Back to events
-        </Link>
+          Back
+        </button>
       </div>
 
       <Card className="flex-1 min-h-0 flex flex-col">
