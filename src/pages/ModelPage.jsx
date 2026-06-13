@@ -320,8 +320,8 @@ export default function ModelPage({ tab = 'upcoming' }) {
                   </Button>
                 ))}
               </div>
-              <Card className="flex flex-col flex-1 min-h-0">
-                <CardContent className="flex-1 pt-4">
+              <Card className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <CardContent className="flex-1 min-h-0 pt-4">
                 <ScrollArea className="h-full">
                   {upcoming.filter(e => upcomingFilter === 'all' || e.id === upcomingFilter).map((event, idx, arr) => (
                     <div key={event.id}>

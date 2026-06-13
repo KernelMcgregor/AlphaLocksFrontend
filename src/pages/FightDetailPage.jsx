@@ -274,6 +274,7 @@ export default function FightDetailPage() {
   const [fight, setFight] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showShap, setShowShap] = useState(false)
+  const [oddsView, setOddsView] = useState('winner')
 
   useEffect(() => {
     setLoading(true)
@@ -300,7 +301,7 @@ export default function FightDetailPage() {
     )
   }
 
-  const { red_fighter, blue_fighter, winner, stats, prediction, method_prediction, odds, shap_values, preview, event } = fight
+  const { red_fighter, blue_fighter, winner, stats, prediction, method_prediction, odds, method_odds, shap_values, preview, event } = fight
   const winnerId = String(winner?.id || '')
   const redWon = winnerId === String(red_fighter?.id || '')
   const blueWon = winnerId === String(blue_fighter?.id || '')
@@ -342,7 +343,7 @@ export default function FightDetailPage() {
                           <div className="space-y-0.5">
                             <p className="text-sm font-medium">{event.name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {new Date(event.date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                              {new Date(event.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
                             </p>
                             {event.location && (
                               <p className="text-xs text-muted-foreground">{event.location}</p>
@@ -445,30 +446,8 @@ export default function FightDetailPage() {
               {/* Right column — one scroll box through prediction / method / odds */}
               <div className="rounded-lg border border-border flex flex-col min-h-0">
                 <ScrollArea className="flex-1 min-h-0 divide-y divide-border">
-                  {/* Model Prediction + Value Pick */}
+                  {/* Model Prediction */}
                   {prediction && (() => {
-                    // Value pick: side with the biggest gap between the model's probability and the
-                    // market-implied probability. May be a DIFFERENT fighter than the model pick
-                    // (often the underdog). It's the best price, not a winner prediction.
-                    const impliedFromOdds = (american) =>
-                      american > 0 ? 100 / (american + 100) : Math.abs(american) / (Math.abs(american) + 100)
-                    const hasOdds = odds && odds.length > 0
-                    const redModelProb = prediction.red_prob
-                    const blueModelProb = 1 - prediction.red_prob
-                    const bestRedOdds = hasOdds ? Math.max(...odds.map(o => o.red_odds)) : null
-                    const bestBlueOdds = hasOdds ? Math.max(...odds.map(o => o.blue_odds)) : null
-                    const redImplied = bestRedOdds != null ? impliedFromOdds(bestRedOdds) : null
-                    const blueImplied = bestBlueOdds != null ? impliedFromOdds(bestBlueOdds) : null
-                    const redEdge = redImplied != null ? (redModelProb - redImplied) * 100 : null
-                    const blueEdge = blueImplied != null ? (blueModelProb - blueImplied) * 100 : null
-                    let valueSide = null, valueEdge = null, valueModelProb = null, valueImplied = null
-                    if (redEdge != null && blueEdge != null) {
-                      if (redEdge >= blueEdge) { valueSide = 'red'; valueEdge = redEdge; valueModelProb = redModelProb; valueImplied = redImplied }
-                      else { valueSide = 'blue'; valueEdge = blueEdge; valueModelProb = blueModelProb; valueImplied = blueImplied }
-                    }
-                    const valueFighter = valueSide === 'red' ? red_fighter : blue_fighter
-                    const hasPositiveEdge = valueEdge != null && valueEdge > 0
-                    const valueIsUnderdog = valueImplied != null && valueImplied < 0.5
                     return (
                       <div className="p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -502,47 +481,6 @@ export default function FightDetailPage() {
                           <span>{red_fighter.last_name} {(prediction.red_prob * 100).toFixed(1)}%</span>
                           <span>{((1 - prediction.red_prob) * 100).toFixed(1)}% {blue_fighter.last_name}</span>
                         </div>
-
-                        {/* Value Pick — best price, not a winner prediction. May differ from the model pick. */}
-                        {valueSide && (
-                          <div className="mt-4 pt-3 border-t border-border">
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <Zap className="h-3.5 w-3.5 text-sky-500" />
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Value Pick</span>
-                            </div>
-                            {hasPositiveEdge ? (
-                              <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', valueSide === 'red' ? 'bg-red-500' : 'bg-blue-500')} />
-                                    <span className="text-sm font-bold truncate">{valueFighter.first_name} {valueFighter.last_name}</span>
-                                    {valueIsUnderdog && (
-                                      <span className="text-[9px] font-bold text-sky-600 bg-background border border-sky-500/40 rounded px-1.5 py-0.5 leading-none shrink-0">UNDERDOG</span>
-                                    )}
-                                  </div>
-                                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-500/10 border border-emerald-500/30 rounded px-2 py-0.5 shrink-0">
-                                    <TrendingUp className="h-3 w-3" />
-                                    +{valueEdge.toFixed(1)}%
-                                  </span>
-                                </div>
-                                <div className="mt-2.5">
-                                  <div className="relative h-1.5 bg-secondary rounded-full overflow-hidden">
-                                    <div className="absolute inset-y-0 left-0 bg-primary/40 rounded-full" style={{ width: `${valueImplied * 100}%` }} />
-                                    <div className="absolute inset-y-0 left-0 bg-primary rounded-full" style={{ width: `${valueModelProb * 100}%` }} />
-                                  </div>
-                                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                                    <span>Model {(valueModelProb * 100).toFixed(0)}%</span>
-                                    <span>Market {(valueImplied * 100).toFixed(0)}%</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="rounded-lg border border-border bg-muted/30 p-3">
-                                <p className="text-xs text-muted-foreground">No positive edge — the market is efficient on this fight.</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     )
                   })()}
@@ -574,24 +512,180 @@ export default function FightDetailPage() {
                     </div>
                   )}
 
+                  {/* Value Picks */}
+                  {prediction && odds && odds.length > 0 && (() => {
+                    const impliedFromOdds = (american) =>
+                      american > 0 ? 100 / (american + 100) : Math.abs(american) / (Math.abs(american) + 100)
+                    const redModelProb = prediction.red_prob
+                    const blueModelProb = 1 - prediction.red_prob
+                    const bestRedOdds = Math.max(...odds.map(o => o.red_odds))
+                    const bestBlueOdds = Math.max(...odds.map(o => o.blue_odds))
+                    const redImplied = impliedFromOdds(bestRedOdds)
+                    const blueImplied = impliedFromOdds(bestBlueOdds)
+                    const redEdge = (redModelProb - redImplied) * 100
+                    const blueEdge = (blueModelProb - blueImplied) * 100
+                    let valueSide, valueEdge, valueModelProb, valueImplied
+                    if (redEdge >= blueEdge) { valueSide = 'red'; valueEdge = redEdge; valueModelProb = redModelProb; valueImplied = redImplied }
+                    else { valueSide = 'blue'; valueEdge = blueEdge; valueModelProb = blueModelProb; valueImplied = blueImplied }
+                    const valueFighter = valueSide === 'red' ? red_fighter : blue_fighter
+                    const hasPositiveEdge = valueEdge > 0
+                    const valueIsUnderdog = valueImplied < 0.5
+
+                    // Method value pick
+                    let methodBest = null, methodEdge = null
+                    if (method_prediction && method_odds && method_odds.ko_prob != null) {
+                      const methods = [
+                        { label: 'KO/TKO', modelProb: method_prediction.ko_prob, marketProb: method_odds.ko_prob },
+                        { label: 'Submission', modelProb: method_prediction.sub_prob, marketProb: method_odds.sub_prob },
+                        { label: 'Decision', modelProb: method_prediction.dec_prob, marketProb: method_odds.dec_prob },
+                      ]
+                      methodBest = methods.reduce((a, b) => (a.modelProb - a.marketProb) > (b.modelProb - b.marketProb) ? a : b)
+                      methodEdge = (methodBest.modelProb - methodBest.marketProb) * 100
+                    }
+
+                    return (
+                      <div className="p-4">
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <Zap className="h-3.5 w-3.5 text-sky-500" />
+                          <h3 className="text-sm font-semibold">Value Picks</h3>
+                        </div>
+                        <div className={cn('grid gap-2', methodBest ? 'grid-cols-2' : 'grid-cols-1')}>
+                          {/* Winner value */}
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600 mb-1.5">Winner</span>
+                            {hasPositiveEdge ? (
+                              <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-2.5 flex-1">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className={cn('h-2 w-2 rounded-full shrink-0', valueSide === 'red' ? 'bg-red-500' : 'bg-blue-500')} />
+                                    <span className="text-xs font-bold truncate">{valueFighter.last_name}</span>
+                                    {valueIsUnderdog && (
+                                      <span className="text-[8px] font-bold text-sky-600 bg-background border border-sky-500/40 rounded px-1 py-0.5 leading-none shrink-0">DOG</span>
+                                    )}
+                                  </div>
+                                  <span className="inline-flex items-center gap-0.5 text-xs font-bold text-emerald-600 shrink-0">
+                                    <TrendingUp className="h-3 w-3" />
+                                    +{valueEdge.toFixed(1)}%
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-[9px] text-muted-foreground mt-1.5">
+                                  <span>Model {(valueModelProb * 100).toFixed(0)}%</span>
+                                  <span>Market {(valueImplied * 100).toFixed(0)}%</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-border bg-muted/30 p-2.5 flex-1 flex items-center">
+                                <p className="text-[10px] text-muted-foreground">No edge found.</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Method value */}
+                          {methodBest && (
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600 mb-1.5">Method</span>
+                              {methodEdge > 0 ? (
+                                <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-2.5 flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold">{methodBest.label}</span>
+                                    <span className="inline-flex items-center gap-0.5 text-xs font-bold text-emerald-600 shrink-0">
+                                      <TrendingUp className="h-3 w-3" />
+                                      +{methodEdge.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between text-[9px] text-muted-foreground mt-1.5">
+                                    <span>Model {(methodBest.modelProb * 100).toFixed(0)}%</span>
+                                    <span>Market {(methodBest.marketProb * 100).toFixed(0)}%</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="rounded-lg border border-border bg-muted/30 p-2.5 flex-1 flex items-center">
+                                  <p className="text-[10px] text-muted-foreground">No edge found.</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
                   {/* Odds */}
                   {odds && odds.length > 0 && (
                     <div className="p-4">
-                      <h3 className="text-sm font-semibold mb-3">Odds</h3>
-                      <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-muted-foreground pb-1 border-b border-border">
-                        <span>Book</span>
-                        <span className="text-center text-red-500">{red_fighter.last_name}</span>
-                        <span className="text-center text-blue-500">{blue_fighter.last_name}</span>
-                      </div>
-                      <div>
-                        {odds.map(o => (
-                          <div key={o.bookmaker} className="grid grid-cols-3 gap-2 text-xs py-0.5">
-                            <span className="text-muted-foreground">{o.bookmaker}</span>
-                            <span className="text-center font-mono tabular-nums">{formatOdds(o.red_odds)}</span>
-                            <span className="text-center font-mono tabular-nums">{formatOdds(o.blue_odds)}</span>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold">Odds</h3>
+                        {method_odds && (
+                          <div className="flex rounded-md border border-border text-[10px] font-semibold overflow-hidden">
+                            <button
+                              onClick={() => setOddsView('winner')}
+                              className={cn('px-2.5 py-1 transition-colors', oddsView === 'winner' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+                            >
+                              Winner
+                            </button>
+                            <button
+                              onClick={() => setOddsView('method')}
+                              className={cn('px-2.5 py-1 transition-colors', oddsView === 'method' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+                            >
+                              Method
+                            </button>
                           </div>
-                        ))}
+                        )}
                       </div>
+
+                      {oddsView === 'winner' ? (
+                        <>
+                          <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-muted-foreground pb-1 border-b border-border">
+                            <span>Book</span>
+                            <span className="text-center text-red-500">{red_fighter.last_name}</span>
+                            <span className="text-center text-blue-500">{blue_fighter.last_name}</span>
+                          </div>
+                          <div>
+                            {odds.map(o => (
+                              <div key={o.bookmaker} className="grid grid-cols-3 gap-2 text-xs py-0.5">
+                                <span className="text-muted-foreground">{o.bookmaker}</span>
+                                <span className="text-center font-mono tabular-nums">{formatOdds(o.red_odds)}</span>
+                                <span className="text-center font-mono tabular-nums">{formatOdds(o.blue_odds)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : method_odds && (
+                        <>
+                          {/* How Will Fight End */}
+                          <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-muted-foreground pb-1 border-b border-border">
+                            <span>KO/TKO</span>
+                            <span className="text-center">Submission</span>
+                            <span className="text-center">Decision</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-sm font-mono tabular-nums py-1.5">
+                            <span className="text-center">{formatOdds(method_odds.ko_odds)}</span>
+                            <span className="text-center">{formatOdds(method_odds.sub_odds)}</span>
+                            <span className="text-center">{formatOdds(method_odds.dec_odds)}</span>
+                          </div>
+
+                          {/* Per-fighter method odds */}
+                          <div className="mt-3 grid grid-cols-4 gap-2 text-[10px] font-semibold text-muted-foreground pb-1 border-b border-border">
+                            <span></span>
+                            <span className="text-center">KO/TKO</span>
+                            <span className="text-center">Sub</span>
+                            <span className="text-center">Dec</span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 text-xs py-1">
+                            <span className="text-red-500 font-semibold truncate">{red_fighter.last_name}</span>
+                            <span className="text-center font-mono tabular-nums">{formatOdds(method_odds.red_ko_odds)}</span>
+                            <span className="text-center font-mono tabular-nums">{formatOdds(method_odds.red_sub_odds)}</span>
+                            <span className="text-center font-mono tabular-nums">{formatOdds(method_odds.red_dec_odds)}</span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 text-xs py-1">
+                            <span className="text-blue-500 font-semibold truncate">{blue_fighter.last_name}</span>
+                            <span className="text-center font-mono tabular-nums">{formatOdds(method_odds.blue_ko_odds)}</span>
+                            <span className="text-center font-mono tabular-nums">{formatOdds(method_odds.blue_sub_odds)}</span>
+                            <span className="text-center font-mono tabular-nums">{formatOdds(method_odds.blue_dec_odds)}</span>
+                          </div>
+                          <p className="text-[9px] text-muted-foreground/60 mt-2">Odds from Bovada</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </ScrollArea>

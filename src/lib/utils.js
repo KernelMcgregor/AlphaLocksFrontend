@@ -6,7 +6,7 @@ export function cn(...inputs) {
 }
 
 export function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
