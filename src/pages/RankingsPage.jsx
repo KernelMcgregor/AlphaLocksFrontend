@@ -91,6 +91,31 @@ function polar(cx, cy, r, i, n) {
 function RadarChart({ axes }) {
   const cx = 120, cy = 120, R = 92, n = axes.length
   const rings = [0.25, 0.5, 0.75, 1]
+  const [scale, setScale] = useState(0)
+
+  useEffect(() => {
+    let start = null
+    let raf
+    const duration = 600
+    const ease = (t) => {
+      // cubic-bezier overshoot approximation
+      const c4 = (2 * Math.PI) / 4.5
+      return t < 0.5
+        ? 8 * t * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 4) / 2 + Math.sin(t * c4) * 0.08
+    }
+    const step = (ts) => {
+      if (!start) start = ts
+      const elapsed = ts - start
+      const t = Math.min(elapsed / duration, 1)
+      setScale(ease(t))
+      if (t < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  const s = scale
   return (
     <svg viewBox="-30 -14 300 268" width={248} height={248} className="max-w-full">
       {rings.map((fr, gi) => (
@@ -107,21 +132,31 @@ function RadarChart({ axes }) {
         return <line key={i} x1={cx} y1={cy} x2={x} y2={y} className="stroke-border" strokeWidth={1} />
       })}
       <polygon
-        points={axes.map((a, i) => polar(cx, cy, (R * a.value) / 100, i, n).join(',')).join(' ')}
+        points={axes.map((a, i) => polar(cx, cy, (R * a.value * s) / 100, i, n).join(',')).join(' ')}
         className="fill-blue-500/20 stroke-blue-600"
         strokeWidth={2}
         strokeLinejoin="round"
       />
       {axes.map((a, i) => {
-        const [x, y] = polar(cx, cy, (R * a.value) / 100, i, n)
-        return <circle key={i} cx={x} cy={y} r={2.6} className="fill-background stroke-blue-600" strokeWidth={1.6} />
+        const [x, y] = polar(cx, cy, (R * a.value * s) / 100, i, n)
+        return (
+          <circle
+            key={i} cx={x} cy={y} r={2.6}
+            className="fill-background stroke-blue-600"
+            strokeWidth={1.6}
+          />
+        )
       })}
       {axes.map((a, i) => {
         const [x, y] = polar(cx, cy, R + 16, i, n)
         const dx = x - cx
         const anchor = Math.abs(dx) < 8 ? 'middle' : dx > 0 ? 'start' : 'end'
         return (
-          <text key={i} x={x} y={y + 3} fontSize={9} fontWeight={600} textAnchor={anchor} className="fill-muted-foreground">
+          <text
+            key={i} x={x} y={y + 3} fontSize={9} fontWeight={600} textAnchor={anchor}
+            className="fill-muted-foreground"
+            style={{ opacity: s, transition: `opacity 400ms ease ${200 + i * 30}ms` }}
+          >
             {a.label}
           </text>
         )
@@ -311,7 +346,7 @@ function DetailPanel({ fighter, profile, division }) {
                 {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
               </span>
               <span className="rounded-md border bg-background px-2.5 py-1 text-[11px] font-bold text-foreground/80">
-                Elo {fighter.score.toFixed(0)}
+                Power Score {fighter.score.toFixed(0)}
               </span>
             </div>
             {fighter.rank === 1 && (
