@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { Separator } from '../components/ui/separator'
 import { fetchEventDetail, fetchEventPredictions, fetchEvents } from '../lib/api'
+import { ScrollArea } from '../components/ui/scroll-area'
 import { cn, formatDate } from '../lib/utils'
 
 function EventListItem({ event, isSelected, onClick }) {
@@ -332,9 +333,10 @@ export default function UFCPage() {
           )}
         </CardHeader>
         <CardContent className={cn(
-          'flex-1 overflow-y-auto space-y-1.5 pt-0',
+          'flex-1 pt-0',
           !eventsExpanded && 'hidden md:block'
         )}>
+        <ScrollArea className="h-full">
           {events.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No events found.</p>
           ) : (
@@ -350,6 +352,7 @@ export default function UFCPage() {
               />
             ))
           )}
+        </ScrollArea>
         </CardContent>
       </Card>
 
@@ -369,7 +372,8 @@ export default function UFCPage() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto pt-0">
+        <CardContent className="flex-1 pt-0">
+        <ScrollArea className="h-full">
           {!selectedEventId && (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <Calendar className="h-10 w-10 mb-2 opacity-30" />
@@ -399,6 +403,7 @@ export default function UFCPage() {
               </div>
             )
           )}
+        </ScrollArea>
         </CardContent>
       </Card>
     </div>

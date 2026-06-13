@@ -1,4 +1,4 @@
-import { BarChart3, Brain, Calendar, ChevronRight, Clock, Swords, TrendingUp } from 'lucide-react'
+import { Calendar, ChevronRight, Clock, Swords } from 'lucide-react'
 import logoSrc from '../../assets/alocks-logo.png'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -11,18 +11,8 @@ const navTree = [
     icon: Swords,
     path: '/ufc',
     children: [
+      { id: 'model-upcoming', label: 'Upcoming', icon: Clock, path: '/model/upcoming' },
       { id: 'ufc-events', label: 'Events & Fights', icon: Calendar, path: '/ufc' },
-      {
-        id: 'model',
-        label: 'Model',
-        icon: Brain,
-        path: '/model',
-        children: [
-          { id: 'model-upcoming', label: 'Upcoming', icon: Clock, path: '/model/upcoming' },
-          { id: 'model-picks', label: 'Picks', icon: TrendingUp, path: '/arbitrage' },
-          { id: 'model-metrics', label: 'Metrics', icon: BarChart3, path: '/model/metrics' },
-        ],
-      },
     ],
   },
 ]

@@ -17,6 +17,7 @@ import {
 import CountryFlag from '../components/CountryFlag'
 import WeightClassBadge from '../components/WeightClassBadge'
 import { fetchFight } from '../lib/api'
+import { ScrollArea } from '../components/ui/scroll-area'
 import { cn } from '../lib/utils'
 
 function formatCtrl(seconds) {
@@ -241,7 +242,7 @@ function ShapModal({ shap_values, red_fighter, blue_fighter, onClose }) {
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <ScrollArea className="flex-1 px-6 py-4">
           <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 items-center text-[10px] font-semibold text-muted-foreground uppercase pb-2 border-b border-border mb-1">
             <div className="w-40 text-right">Feature</div>
             <div className="flex items-center">
@@ -261,7 +262,7 @@ function ShapModal({ shap_values, red_fighter, blue_fighter, onClose }) {
             </div>
           </div>
           {top.map(s => <ShapBar key={s.feature_name} feature={s} maxAbs={maxAbs} />)}
-        </div>
+        </ScrollArea>
       </div>
     </div>
   )
@@ -425,11 +426,11 @@ export default function FightDetailPage() {
                           {preview.generated_at && new Date(preview.generated_at).toLocaleDateString()}
                         </span>
                       </div>
-                      <div className="overflow-y-auto flex-1 min-h-0 max-h-full">
+                      <ScrollArea className="flex-1 min-h-0 max-h-full">
                         <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-th:text-foreground prose-td:text-foreground prose-p:text-muted-foreground prose-li:text-muted-foreground prose-table:text-sm">
                           <Markdown remarkPlugins={[remarkGfm]}>{preview.content}</Markdown>
                         </div>
-                      </div>
+                      </ScrollArea>
                     </>
                   ) : (
                     <>
@@ -442,7 +443,7 @@ export default function FightDetailPage() {
 
               {/* Right column — one scroll box through prediction / method / odds */}
               <div className="rounded-lg border border-border flex flex-col min-h-0">
-                <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-border">
+                <ScrollArea className="flex-1 min-h-0 divide-y divide-border">
                   {/* Model Prediction + Value Pick */}
                   {prediction && (() => {
                     // Value pick: side with the biggest gap between the model's probability and the
@@ -507,7 +508,6 @@ export default function FightDetailPage() {
                             <div className="flex items-center gap-1.5 mb-2">
                               <Zap className="h-3.5 w-3.5 text-sky-500" />
                               <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600">Value Pick</span>
-                              <span className="text-[10px] text-muted-foreground">· best price, not a winner pick</span>
                             </div>
                             {hasPositiveEdge ? (
                               <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
@@ -593,7 +593,7 @@ export default function FightDetailPage() {
                       </div>
                     </div>
                   )}
-                </div>
+                </ScrollArea>
               </div>
             </div>
           </CardContent>

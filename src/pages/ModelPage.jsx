@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import CountryFlag from '../components/CountryFlag'
 import MethodPrediction from '../components/sports/MethodPrediction'
 import { fetchEvents, fetchEventDetail, fetchEventPredictions, fetchModelMetrics, fetchUpcomingEvents } from '../lib/api'
+import { ScrollArea } from '../components/ui/scroll-area'
 import { cn, formatDate } from '../lib/utils'
 
 function MetricCard({ label, value, sub }) {
@@ -320,7 +321,8 @@ export default function ModelPage({ tab = 'upcoming' }) {
                 ))}
               </div>
               <Card className="flex flex-col flex-1 min-h-0">
-                <CardContent className="flex-1 overflow-y-auto pt-4">
+                <CardContent className="flex-1 pt-4">
+                <ScrollArea className="h-full">
                   {upcoming.filter(e => upcomingFilter === 'all' || e.id === upcomingFilter).map((event, idx, arr) => (
                     <div key={event.id}>
                       <div className="flex items-center justify-between mb-2">
@@ -413,6 +415,7 @@ export default function ModelPage({ tab = 'upcoming' }) {
                       {idx < arr.length - 1 && <Separator className="mb-4" />}
                     </div>
                   ))}
+                </ScrollArea>
                 </CardContent>
               </Card>
               {(() => {
@@ -453,7 +456,8 @@ export default function ModelPage({ tab = 'upcoming' }) {
                   <CardTitle className="text-sm">Events</CardTitle>
                   <DateRangeFilter dateRange={dateRange} onApply={setDateRange} />
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto space-y-1 pt-0">
+                <CardContent className="flex-1 pt-0">
+                <ScrollArea className="h-full space-y-1">
                   {events.map(event => (
                     <button
                       key={event.id}
@@ -469,6 +473,7 @@ export default function ModelPage({ tab = 'upcoming' }) {
                       <div className="text-xs mt-0.5">{formatDate(event.date)}</div>
                     </button>
                   ))}
+                </ScrollArea>
                 </CardContent>
               </Card>
 
@@ -486,7 +491,8 @@ export default function ModelPage({ tab = 'upcoming' }) {
                     )}
                   </div>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto pt-0">
+                <CardContent className="flex-1 pt-0">
+                <ScrollArea className="h-full">
                   {eventLoading && (
                     <div className="flex items-center justify-center h-32">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -499,6 +505,7 @@ export default function ModelPage({ tab = 'upcoming' }) {
                       ))}
                     </div>
                   )}
+                </ScrollArea>
                 </CardContent>
               </Card>
             </div>
@@ -507,7 +514,7 @@ export default function ModelPage({ tab = 'upcoming' }) {
       )}
 
       {tab === 'metrics' && (
-        <div className="flex-1 overflow-y-auto">
+        <ScrollArea className="flex-1">
           {!metrics ? (
             <div className="flex items-center justify-center h-32">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -623,7 +630,7 @@ export default function ModelPage({ tab = 'upcoming' }) {
               </Card>
             </div>
           )}
-        </div>
+        </ScrollArea>
       )}
     </div>
   )
