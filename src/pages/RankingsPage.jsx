@@ -317,7 +317,7 @@ function DetailPanel({ fighter, profile, division }) {
       </div>
 
       {/* body */}
-      <div className="grid grid-cols-1 gap-5 px-5 pb-6 pt-3 lg:grid-cols-[230px_270px_1fr]">
+      <div className="grid grid-cols-1 gap-5 px-5 pb-6 pt-3 xl:grid-cols-[230px_270px_1fr]">
         {/* identity + photo */}
         <div>
           <div className="relative flex h-[280px] items-end justify-center overflow-hidden rounded-2xl border bg-gradient-to-b from-blue-500/10 to-transparent">
