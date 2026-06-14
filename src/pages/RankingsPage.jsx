@@ -533,6 +533,7 @@ export default function RankingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeWc, setActiveWc] = useState(null)
+  const [wcOpen, setWcOpen] = useState(false)
 
   useEffect(() => {
     fetchRankings()
@@ -584,13 +585,14 @@ export default function RankingsPage() {
           const mens = data.weight_classes.filter((wc) => !wc.key.startsWith('w_') && wc.key !== 'p4p_women')
           const womens = data.weight_classes.filter((wc) => wc.key.startsWith('w_') || wc.key === 'p4p_women')
           const isPfp = (key) => key.startsWith('p4p')
+          const activeLabel = activeDiv?.label || ''
           const WcButton = ({ wc }) => {
             const active = activeWc === wc.key
             const gold = isPfp(wc.key)
             return (
               <button
                 key={wc.key}
-                onClick={() => setActiveWc(wc.key)}
+                onClick={() => { setActiveWc(wc.key); setWcOpen(false) }}
                 className={cn(
                   'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
                   active && gold && 'border-amber-500 bg-amber-500 text-white shadow-sm',
@@ -606,20 +608,50 @@ export default function RankingsPage() {
             )
           }
           return (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-10 shrink-0">Men</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {mens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
+            <>
+              {/* Mobile: collapsible division picker */}
+              <div className="md:hidden">
+                <button
+                  onClick={() => setWcOpen(!wcOpen)}
+                  className="flex w-full items-center justify-between rounded-lg border bg-card px-3 py-2"
+                >
+                  <span className="text-sm font-semibold">{activeLabel}</span>
+                  <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', wcOpen && 'rotate-180')} />
+                </button>
+                {wcOpen && (
+                  <div className="mt-2 space-y-2 rounded-lg border bg-card p-3">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Men</span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {mens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Women</span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {womens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop: always visible */}
+              <div className="hidden md:block space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-10 shrink-0">Men</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {mens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-10 shrink-0">Women</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {womens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-10 shrink-0">Women</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {womens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
-                </div>
-              </div>
-            </div>
+            </>
           )
         })()}
       </div>
