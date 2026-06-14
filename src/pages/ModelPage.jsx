@@ -310,7 +310,7 @@ export default function ModelPage({ tab = 'upcoming' }) {
                   <span className="text-sm font-medium text-muted-foreground">— click any fight to view details</span>
                 </h1>
               </div>
-              <div className="flex flex-wrap gap-2 shrink-0">
+              <div className="hidden md:flex flex-wrap gap-2 shrink-0">
                 <Button
                   variant={upcomingFilter === 'all' ? 'default' : 'outline'}
                   size="sm"

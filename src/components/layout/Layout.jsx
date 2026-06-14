@@ -17,24 +17,18 @@ function AppBreadcrumb() {
   const path = location.pathname
 
   // Build breadcrumb segments
-  const crumbs = [{ label: 'Dashboard', path: '/' }]
+  const crumbs = [{ label: 'UFC', path: '/' }]
 
   if (path.startsWith('/arbitrage')) {
-    crumbs.push({ label: 'UFC', path: '/ufc' })
-    crumbs.push({ label: 'Model', path: '/model/upcoming' })
     crumbs.push({ label: 'Arbitrage', path: null })
-  } else if (path.startsWith('/ufc') || path.startsWith('/model')) {
-    crumbs.push({ label: 'UFC', path: '/ufc' })
-    if (path.startsWith('/ufc/rankings')) {
-      crumbs.push({ label: 'Rankings', path: null })
-    } else if (path.startsWith('/ufc/fights/')) {
-      crumbs.push({ label: 'Fight Details', path: null })
-    } else if (path.startsWith('/model')) {
-      crumbs.push({ label: 'Model', path: '/model/upcoming' })
-      if (path === '/model/upcoming') crumbs.push({ label: 'Upcoming', path: null })
-      else if (path === '/model/past') crumbs.push({ label: 'Past Fights', path: null })
-      else if (path === '/model/metrics') crumbs.push({ label: 'Metrics', path: null })
-    }
+  } else if (path.startsWith('/ufc/rankings')) {
+    crumbs.push({ label: 'Rankings', path: null })
+  } else if (path.startsWith('/ufc/fights/')) {
+    crumbs.push({ label: 'Fight Details', path: null })
+  } else if (path === '/ufc') {
+    crumbs.push({ label: 'Events & Fights', path: null })
+  } else if (path === '/' || path.startsWith('/model/upcoming')) {
+    crumbs.push({ label: 'Upcoming', path: null })
   } else if (path.startsWith('/admin')) {
     crumbs.push({ label: 'Admin', path: null })
   }
