@@ -23,6 +23,12 @@ function AppBreadcrumb() {
     crumbs.push({ label: 'Arbitrage', path: null })
   } else if (path.startsWith('/ufc/rankings')) {
     crumbs.push({ label: 'Rankings', path: null })
+  } else if (path === '/ufc/fighters/stats') {
+    crumbs.push({ label: 'Fighter Stats', path: null })
+  } else if (path === '/ufc/fighters/decompositions') {
+    crumbs.push({ label: 'Decompositions', path: null })
+  } else if (path.startsWith('/ufc/fighters/')) {
+    crumbs.push({ label: 'Fighter Profile', path: null })
   } else if (path.startsWith('/ufc/fights/')) {
     crumbs.push({ label: 'Fight Details', path: null })
   } else if (path === '/ufc') {

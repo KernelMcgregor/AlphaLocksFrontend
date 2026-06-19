@@ -43,6 +43,7 @@ export const fetchFighters = (params = {}) => {
 }
 export const fetchFighter = (id) => cachedRequest(`/ufc/fighters/${id}`)
 export const fetchFighterFights = (id) => cachedRequest(`/ufc/fighters/${id}/fights`)
+export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)
 
 export const fetchEvents = (params = {}) => {
   const qs = new URLSearchParams(params).toString()
