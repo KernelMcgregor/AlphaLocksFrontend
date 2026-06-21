@@ -44,6 +44,12 @@ export const fetchFighters = (params = {}) => {
 export const fetchFighter = (id) => cachedRequest(`/ufc/fighters/${id}`)
 export const fetchFighterFights = (id) => cachedRequest(`/ufc/fighters/${id}/fights`)
 export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)
+export const fetchFighterCareerStats = (id) => cachedRequest(`/ufc/fighters/${id}/career-stats`)
+export const fetchAllCareerStats = (params = {}) => {
+  const qs = new URLSearchParams(params).toString()
+  return cachedRequest(`/ufc/career-stats${qs ? `?${qs}` : ''}`, 30 * 60 * 1000)
+}
+
 
 export const fetchEvents = (params = {}) => {
   const qs = new URLSearchParams(params).toString()
