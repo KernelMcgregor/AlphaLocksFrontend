@@ -12,16 +12,18 @@
 export const DIMS = [
   { key: 'str_vol', label: 'Striking Volume',   short: 'Volume',    group: 'striking' },
   { key: 'str_acc', label: 'Striking Accuracy', short: 'Accuracy',  group: 'striking' },
+  { key: 'str_def', label: 'Strike Defense',    short: 'Defense',   group: 'striking' },
   { key: 'ko',      label: 'KO Power',           short: 'KO Power',  group: 'striking' },
   { key: 'kod',     label: 'Chin',               short: 'Chin',      group: 'striking' },
+  { key: 'durability', label: 'Durability',      short: 'Durability', group: 'striking' },
   { key: 'dist',    label: 'Distance Striking',  short: 'Distance',  group: 'striking' },
   { key: 'pts',     label: 'Pace / Output',      short: 'Pace',      group: 'striking' },
   { key: 'td',      label: 'Takedowns',          short: 'Takedowns', group: 'grappling' },
   { key: 'tdd',     label: 'Takedown Defense',   short: 'TD Def',    group: 'grappling' },
-  { key: 'ctrl',    label: 'Top Control',        short: 'Control',   group: 'grappling' },
-  { key: 'ctrld',   label: 'Escapes / Get-ups',  short: 'Escapes',   group: 'grappling' },
+  { key: 'ctrl',    label: 'Control',             short: 'Control',   group: 'grappling' },
   { key: 'sub',     label: 'Submission Offense', short: 'Sub',       group: 'grappling' },
   { key: 'subd',    label: 'Submission Defense', short: 'Sub Def',   group: 'grappling' },
+  { key: 'clinch',  label: 'Clinch Fighting',    short: 'Clinch',    group: 'grappling' },
   { key: 'gnd',     label: 'Ground Striking',    short: 'Ground',    group: 'grappling' },
 ]
 
@@ -29,6 +31,7 @@ export const DIMS = [
 export const AXES = [
   { key: 'str_vol', label: 'Volume',     group: 'striking' },
   { key: 'str_acc', label: 'Accuracy',   group: 'striking' },
+  { key: 'str_def', label: 'Defense',    group: 'striking' },
   { key: 'ko',      label: 'KO Power',   group: 'striking' },
   { key: 'kod',     label: 'Chin',       group: 'striking' },
   { key: 'td',      label: 'Takedowns',  group: 'grappling' },
@@ -37,8 +40,8 @@ export const AXES = [
   { key: 'sub',     label: 'Submission', group: 'grappling' },
 ]
 
-export const STRIKING_DIMS = ['str_vol', 'str_acc', 'ko', 'kod', 'dist', 'pts']
-export const GRAPPLING_DIMS = ['td', 'tdd', 'ctrl', 'ctrld', 'sub', 'subd', 'gnd']
+export const STRIKING_DIMS = ['str_vol', 'str_acc', 'str_def', 'ko', 'kod', 'durability', 'dist', 'pts']
+export const GRAPPLING_DIMS = ['td', 'tdd', 'ctrl', 'sub', 'subd', 'clinch', 'gnd']
 
 export function ordinal(n) {
   const v = Math.round(n)

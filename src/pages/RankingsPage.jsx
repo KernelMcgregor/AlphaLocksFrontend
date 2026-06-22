@@ -9,12 +9,13 @@ import { cn, formatRecord } from '../lib/utils'
 // ---------------------------------------------------------------------------
 // Dimension model
 // ---------------------------------------------------------------------------
-const DIMS = ['pts', 'ko', 'kod', 'sub', 'subd', 'td', 'tdd', 'ctrl', 'ctrld', 'str_vol', 'str_acc', 'dist', 'gnd']
+const DIMS = ['pts', 'ko', 'kod', 'sub', 'subd', 'td', 'tdd', 'ctrl', 'str_vol', 'str_acc', 'str_def', 'dist', 'clinch', 'gnd', 'durability']
 
-// The 8 axes shown on the radial graphs (a readable subset of the 13 dims).
+// The 9 axes shown on the radial graphs (a readable subset of the 16 dims).
 const AXES = [
   { key: 'str_vol', label: 'Volume', group: 'striking' },
   { key: 'str_acc', label: 'Accuracy', group: 'striking' },
+  { key: 'str_def', label: 'Defense', group: 'striking' },
   { key: 'ko', label: 'KO Power', group: 'striking' },
   { key: 'kod', label: 'Chin', group: 'striking' },
   { key: 'td', label: 'Takedowns', group: 'grappling' },
@@ -23,8 +24,8 @@ const AXES = [
   { key: 'sub', label: 'Submission', group: 'grappling' },
 ]
 
-const STRIKING_DIMS = ['str_vol', 'str_acc', 'ko', 'kod', 'dist']
-const GRAPPLING_DIMS = ['td', 'tdd', 'ctrl', 'ctrld', 'sub', 'subd', 'gnd']
+const STRIKING_DIMS = ['str_vol', 'str_acc', 'str_def', 'ko', 'kod', 'durability', 'dist']
+const GRAPPLING_DIMS = ['td', 'tdd', 'ctrl', 'sub', 'subd', 'clinch', 'gnd']
 
 const GRAPH_STYLES = [
   { key: 'radar', label: 'Radar' },
