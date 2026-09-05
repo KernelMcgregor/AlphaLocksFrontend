@@ -61,8 +61,9 @@ export default function HomePage() {
               Model Performance
             </CardTitle>
             <CardDescription>
-              v5 ensemble: GBT + RNN + GNN + Siamese with ridge meta-learner.
-              82% accuracy at 30%+ confidence threshold.
+              Gradient-boosted trees over Elo, Glicko, and rolling fight stats.
+              66.6% accuracy on 2,077 priced fights in walk-forward testing,
+              against 67.7% for the closing line.
             </CardDescription>
           </CardHeader>
           <CardContent>

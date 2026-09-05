@@ -316,13 +316,17 @@ function PerformanceTable({ splits, mode }) {
       const edgePl = splits.reduce((a, s) => a + (s.edge_pl || 0), 0)
       const correct = splits.reduce((a, s) => a + s.correct_with_odds, 0)
       const edgeCorrect = splits.reduce((a, s) => a + (s.edge_correct || 0), 0)
+      // Edge bets are a different set than picks, so edge ROI needs its own
+      // denominator — dividing by the pick count inflates it.
+      const edgeFights = splits.reduce(
+        (a, s) => a + (s.edge_fights_with_odds ?? s.fights_with_odds), 0)
       return {
         fights,
         accuracy: fights > 0 ? correct / fights : 0,
         pl,
         roi: fights > 0 ? (pl / (fights * 100)) * 100 : 0,
         edgePl,
-        edgeRoi: fights > 0 ? (edgePl / (fights * 100)) * 100 : 0,
+        edgeRoi: edgeFights > 0 ? (edgePl / (edgeFights * 100)) * 100 : 0,
       }
     }
     const edgePl = splits.reduce((a, s) => a + s.edge_pl, 0)
