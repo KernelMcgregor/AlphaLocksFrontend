@@ -45,6 +45,16 @@ export const fetchFighter = (id) => cachedRequest(`/ufc/fighters/${id}`)
 export const fetchFighterFights = (id) => cachedRequest(`/ufc/fighters/${id}/fights`)
 export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)
 export const fetchFighterCareerStats = (id) => cachedRequest(`/ufc/fighters/${id}/career-stats`)
+// Divisional rank after each bout. Served from the precomputed ufc_ranking_history
+// table; returns [] until `python -m app.services.ufc.rank_history_backfill` has run.
+export const fetchFighterRankHistory = (id) =>
+  cachedRequest(`/ufc/fighters/${id}/rank-history`, 30 * 60 * 1000)
+// Stylistic comparables. Recomputed only after an event, so a long TTL is safe.
+export const fetchSimilarFighters = (id, { limit = 10, sameDivisionOnly = false } = {}) =>
+  cachedRequest(
+    `/ufc/fighters/${id}/similar?limit=${limit}&same_division_only=${sameDivisionOnly}`,
+    30 * 60 * 1000,
+  )
 export const fetchAllCareerStats = (params = {}) => {
   const qs = new URLSearchParams(params).toString()
   return cachedRequest(`/ufc/career-stats${qs ? `?${qs}` : ''}`, 30 * 60 * 1000)

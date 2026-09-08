@@ -77,8 +77,8 @@ export default function Layout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="flex flex-1 flex-col overflow-hidden px-4 py-4 md:px-8 md:py-6">
-        <div className="mb-4 shrink-0 flex items-center gap-3">
+      <main className="flex flex-1 flex-col overflow-hidden px-4 py-4 md:px-8 md:py-4">
+        <div className="mb-3 shrink-0 flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
             className="md:hidden rounded-md p-1.5 text-muted-foreground hover:bg-accent"
@@ -86,6 +86,9 @@ export default function Layout({ children }) {
             <Menu className="h-5 w-5" />
           </button>
           <AppBreadcrumb />
+          {/* Pages render their own actions here via <HeaderActions> so they don't
+              need to spend a second full-width row on a toolbar. */}
+          <div id="page-header-actions" className="ml-auto flex items-center gap-2" />
         </div>
         <div className="flex-1 overflow-auto md:overflow-hidden">
           {children}

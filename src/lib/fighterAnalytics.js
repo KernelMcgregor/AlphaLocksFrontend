@@ -2,12 +2,12 @@
 // Shared analytics for the Fighter Decompositions, Fighter Stats, and Fighter Profile pages.
 // Pure functions over the real API shapes:
 //   - rankings fighter:  { id, first_name, last_name, nickname, wins, losses, draws,
-//                          country_code, image_url, rank, score, dimensions: {<13 keys>} }
+//                          country_code, image_url, rank, score, dimensions: {<15 keys>} }
 //   - fight stats row:   UFCFightStatsResponse (per fight/round: sig_str_landed, td_landed, ctrl_seconds, ...)
 //   - fight:             UFCFightResponse (winner_id, method, fight_time_seconds, finish_round, ...)
 
 // ---------------------------------------------------------------------------
-// The 13 model dimensions (order + keys match ranking_service.DIMENSIONS)
+// The 15 model dimensions (order + keys match ranking_service.DIMENSIONS)
 // ---------------------------------------------------------------------------
 export const DIMS = [
   { key: 'str_vol', label: 'Striking Volume',   short: 'Volume',    group: 'striking' },
@@ -74,7 +74,13 @@ export function buildPercentile(fighters) {
 export function deriveProfile(fighter, pct) {
   const raw = fighter.dimensions || {}
   const dims = DIMS.map((d) => ({ ...d, value: pct(d.key, raw[d.key] ?? 0), raw: raw[d.key] ?? 0 }))
-  const axes = AXES.map((a) => ({ ...a, value: pct(a.key, raw[a.key] ?? 0) }))
+  // axes carry the DIMS long label too — the radar shows the short one but its
+  // tooltip wants the full name ("Volume" vs "Striking Volume").
+  const axes = AXES.map((a) => ({
+    ...a,
+    value: pct(a.key, raw[a.key] ?? 0),
+    full: DIMS.find((d) => d.key === a.key)?.label ?? a.label,
+  }))
   const sorted = [...dims].sort((a, b) => b.value - a.value)
   const avg = (keys) => Math.round(keys.reduce((s, k) => s + pct(k, raw[k] ?? 0), 0) / keys.length)
   const striking = avg(STRIKING_DIMS)
@@ -173,6 +179,107 @@ export function aggregateCareer(statRows, fights, fighterId) {
     winPct: wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0,
     // raw career totals (handy for tooltips / detail)
     totals: { sig, sigAtt, tot, td, tdAtt, subAtt, rev, ctrlSeconds: ctrl, kd },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Form / trend data derived purely from the fight log — streaks, octagon time,
+// method splits for both wins AND losses, and activity per year.
+// ---------------------------------------------------------------------------
+export function deriveForm(fights, fighterId) {
+  const done = (fights || [])
+    .filter((f) => String(f.red_fighter_id) === String(fighterId) || String(f.blue_fighter_id) === String(fighterId))
+    .filter((f) => f.winner_id != null || f.method)
+    .slice()
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+
+  if (!done.length) return null
+
+  const results = done.map((f) => ({
+    id: f.id,
+    win: String(f.winner_id) === String(fighterId),
+    draw: f.winner_id == null,
+    method: methodLabel(f.method),
+    round: f.finish_round,
+    date: f.date,
+    seconds: f.fight_time_seconds || 0,
+    // opponent id so the form strip can name who each result was against
+    oppId: String(f.red_fighter_id) === String(fighterId) ? f.blue_fighter_id : f.red_fighter_id,
+    eventId: f.event_id,
+  }))
+
+  // current streak (most recent run of the same outcome, draws break it)
+  let streak = 0
+  let streakWin = results[0].win
+  for (const r of results) {
+    if (r.draw || r.win !== streakWin) break
+    streak++
+  }
+
+  // longest win streak across the whole log
+  let longestWin = 0
+  let run = 0
+  for (const r of [...results].reverse()) {
+    if (r.win && !r.draw) { run++; longestWin = Math.max(longestWin, run) } else run = 0
+  }
+
+  const wins = results.filter((r) => r.win && !r.draw)
+  const losses = results.filter((r) => !r.win && !r.draw)
+  const count = (arr, label) => arr.filter((r) => r.method === label).length
+
+  const timed = results.filter((r) => r.seconds > 0)
+  const octagonSeconds = timed.reduce((s, r) => s + r.seconds, 0)
+  const avgSeconds = timed.length ? octagonSeconds / timed.length : 0
+
+  const r1Finishes = wins.filter((r) => r.round === 1 && r.method !== 'Decision').length
+  const decisions = count(wins, 'Decision') + count(losses, 'Decision')
+
+  // fights per calendar year, with the W/L split (most recent 6 active years)
+  const byYear = {}
+  for (const r of results) {
+    if (!r.date) continue
+    const y = String(r.date).slice(0, 4)
+    if (!byYear[y]) byYear[y] = { count: 0, wins: 0, losses: 0, opponents: [] }
+    byYear[y].count++
+    byYear[y].opponents.push({ oppId: r.oppId, win: r.win, draw: r.draw })
+    if (r.draw) continue
+    if (r.win) byYear[y].wins++
+    else byYear[y].losses++
+  }
+  // Every active year, oldest first. The UI windows this itself so the user can
+  // slide back through a long career rather than only seeing the recent end.
+  const activity = Object.entries(byYear).sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([year, v]) => ({ year, ...v }))
+
+  const lastDate = results[0].date
+
+  return {
+    results,
+    recentForm: results.slice(0, 10),
+    streak,
+    streakWin,
+    longestWin,
+    // Fixed categorical slots — same hue means the same method everywhere.
+    winMethods: [
+      { label: 'KO/TKO', value: count(wins, 'KO/TKO'), cls: 'bg-viz-1' },
+      { label: 'Submission', value: count(wins, 'Submission'), cls: 'bg-viz-2' },
+      { label: 'Decision', value: count(wins, 'Decision'), cls: 'bg-viz-3' },
+    ],
+    lossMethods: [
+      { label: 'KO/TKO', value: count(losses, 'KO/TKO'), cls: 'bg-viz-1' },
+      { label: 'Submission', value: count(losses, 'Submission'), cls: 'bg-viz-2' },
+      { label: 'Decision', value: count(losses, 'Decision'), cls: 'bg-viz-3' },
+    ],
+    totalWins: wins.length,
+    totalLosses: losses.length,
+    octagonSeconds,
+    octagonTime: fmtClock(octagonSeconds),
+    avgFightTime: fmtClock(avgSeconds),
+    r1Finishes,
+    distanceRate: results.length ? Math.round((decisions / results.length) * 100) : 0,
+    activity,
+    lastDate,
+    daysSinceLast: lastDate ? Math.max(0, Math.round((Date.now() - new Date(lastDate + 'T00:00:00')) / 86400000)) : null,
   }
 }
 

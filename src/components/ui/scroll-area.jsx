@@ -1,10 +1,13 @@
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area'
 import { cn } from '../../lib/utils'
 
-export function ScrollArea({ className, children, ...props }) {
+// `viewportClassName` targets the Radix viewport — use it to restyle the wrapper
+// Radix injects around children, e.g. `[&>div]:!flex [&>div]:!min-h-full` so short
+// content stretches to fill the scroll area instead of leaving dead space below.
+export function ScrollArea({ className, viewportClassName, children, ...props }) {
   return (
     <ScrollAreaPrimitive.Root className={cn('relative overflow-hidden', className)} {...props}>
-      <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] pr-3 [&>div]:!block" style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+      <ScrollAreaPrimitive.Viewport className={cn('h-full w-full rounded-[inherit] pr-3 [&>div]:!block', viewportClassName)} style={{ overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
         {children}
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />
