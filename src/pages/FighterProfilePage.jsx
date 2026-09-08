@@ -31,6 +31,13 @@ const VB = { x: -36, y: 2, w: 312, h: 236 }
 // during render is impure.
 const NOW = Date.now()
 
+// UFC.com writes "--" for a missing measurement rather than leaving it blank, and a
+// truthy string sails through a plain falsy check. Reach alone has ~1,983 of them.
+function val(v) {
+  const t = typeof v === 'string' ? v.trim() : v
+  return !t || t === '--' ? null : t
+}
+
 // Backend division keys are snake_case ("light_heavyweight", "p4p_men").
 function divisionName(key) {
   if (!key) return null
@@ -242,18 +249,6 @@ function StatTile({ label, value }) {
     <div className="flex flex-col justify-center rounded-md border bg-muted/40 px-2 py-1.5">
       <div className="text-sm font-extrabold leading-none tabular-nums text-foreground">{value}</div>
       <div className="mt-1 text-[9px] font-semibold text-muted-foreground">{label}</div>
-    </div>
-  )
-}
-
-// Outcome chip for the left column. Stacked and centred: the grid stretches these
-// vertically, so putting the label under the number uses that height instead of
-// squeezing both onto one line and truncating the label.
-function OutcomeChip({ label, value }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-md border bg-muted/40 px-1 py-1.5">
-      <span className="text-[18px] font-extrabold leading-none tabular-nums text-foreground">{value}</span>
-      <span className="mt-1 text-[9.5px] font-semibold leading-none text-muted-foreground">{label}</span>
     </div>
   )
 }
@@ -471,10 +466,9 @@ function bumpPath(pts) {
   }, '')
 }
 
-// Background tint per weight-class period. The first spell is left unpainted (the
-// card surface) so a fighter who never moved shows no banding at all; later spells
-// take validated categorical slots. Not red/green — that pair is the worst case for
-// colourblind readers, and every band is labelled so colour is never the only cue.
+// Background tint per weight-class period. The current spell is left unpainted (the
+// card surface); earlier spells take validated categorical slots. Not red/green —
+// that pair is the worst case for colourblind readers.
 const BAND_FILLS = ['var(--color-viz-2)', 'var(--color-viz-3)', 'var(--color-viz-1)']
 
 // Collapse points into contiguous runs of the same division.
@@ -504,7 +498,7 @@ function BumpChart({ series, points, formatValue, yLabel, invertY = false, start
   const iw = Math.max(10, w - M.l - M.r)
   const ih = Math.max(10, h - M.t - M.b)
   const n = points.length
-  const win = Math.min(size, n)
+  const win = Math.min(size, n) || 1
 
   const all = series.flatMap((s) => s.values.filter((v) => v != null))
   let lo, hi
@@ -534,19 +528,16 @@ function BumpChart({ series, points, formatValue, yLabel, invertY = false, start
   const step = Math.max(1, Math.ceil(win / Math.max(2, Math.floor(iw / 54))))
   const clipId = `plot-clip-${(yLabel || 'v').replace(/\W/g, '')}`
   const runs = divisionRuns(points)
-  // Fill carries the result — win green, loss red, draw/NC left on the surface
-  // colour. The ring stays the series colour so the line and its points still read
-  // as one series.
+  const glide = { transform: `translateX(${shift}px)`, transition: 'transform 560ms cubic-bezier(0.34, 1.42, 0.64, 1)' }
+
   // Result colour fills the dot; the ring is foreground ink rather than the series
   // colour, so the fill reads at this size without the ring competing with it.
-  // Thinner than the unresolved-dot ring for the same reason.
   const resultDot = (i) => {
     const r = points[i]?.win
     if (r === true) return 'fill-emerald-500 stroke-foreground'
     if (r === false) return 'fill-rose-500 stroke-foreground'
     return null
   }
-  const glide = { transform: `translateX(${shift}px)`, transition: 'transform 560ms cubic-bezier(0.34, 1.42, 0.64, 1)' }
 
   return (
     <div ref={wrapRef} className="relative min-h-0 w-full flex-1">
@@ -1027,7 +1018,10 @@ export default function FighterProfilePage() {
       .sort()
     return {
       age: fighter.dob ? Math.floor((NOW - new Date(`${fighter.dob}T00:00:00`)) / 31557600000) : null,
-      debut: dated.length ? new Date(`${dated[0]}T00:00:00`).getFullYear() : null,
+      // Prefer the scraped octagon_debut; fall back to the earliest dated bout.
+      debut: fighter.octagon_debut
+        ? new Date(`${fighter.octagon_debut}T00:00:00`).getFullYear()
+        : (dated.length ? new Date(`${dated[0]}T00:00:00`).getFullYear() : null),
       last: dated.length ? formatDate(dated[dated.length - 1]) : null,
     }
   }, [fighter, fights])
@@ -1043,33 +1037,6 @@ export default function FighterProfilePage() {
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden lg:flex-row">
       {/* Actions live in the Layout breadcrumb row — see HeaderActions. */}
       <HeaderActions>
-        {/* next fight — always rendered as a box, empty state included */}
-        {(() => {
-          const opp = upcoming ? oppData[String(upcoming.oppId)] : null
-          const shell = 'flex items-center gap-2 rounded-lg border border-border bg-card py-1 pl-2 pr-2.5'
-          if (!upcoming) {
-            return (
-              <div className={cn(shell, 'text-muted-foreground')}>
-                <span className="text-[9px] font-bold uppercase tracking-wide">Next</span>
-                <span className="text-[12px] leading-none">No fight scheduled</span>
-              </div>
-            )
-          }
-          return (
-            <Link to={`/ufc/fighters/${upcoming.oppId}`} className={cn(shell, 'transition-colors hover:bg-muted')}>
-              <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Next</span>
-              {opp?.image_url ? (
-                <img src={opp.image_url} alt="" className="h-5 w-5 rounded-full object-cover object-top" />
-              ) : (
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[8px] font-bold text-muted-foreground">
-                  {opp?.name ? opp.name.split(' ').map((n) => n[0]).join('') : '?'}
-                </div>
-              )}
-              <span className="text-[12.5px] font-bold leading-none">vs {opp?.name || 'TBA'}</span>
-              <span className="text-[10.5px] leading-none text-muted-foreground">{formatDate(upcoming.date)}</span>
-            </Link>
-          )
-        })()}
         <SlideTabs
           size="sm"
           value={tab}
@@ -1089,11 +1056,13 @@ export default function FighterProfilePage() {
       {/* ---------------- LEFT: identity + scores ---------------- */}
       <div className="flex shrink-0 flex-col gap-3 overflow-y-auto lg:w-[280px]">
           {/* identity */}
-          <div className="rounded-lg border border-border p-2.5">
-            <div className="relative flex h-[168px] items-end justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-b from-blue-500/10 to-transparent">
+          <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border p-2.5">
+            {/* flex-1 so the portrait takes any leftover column height — otherwise the
+                slack collects as dead space between this card and the one below. */}
+            <div className="relative flex min-h-[132px] flex-1 items-end justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-b from-blue-500/10 to-transparent">
               <WavingFlag countryCode={fighter.country_code} />
               {fighter.image_url ? (
-                <img src={fighter.image_url} alt={`${fighter.first_name} ${fighter.last_name}`} className="relative z-10 h-[160px] object-contain object-bottom" />
+                <img src={fighter.image_url} alt={`${fighter.first_name} ${fighter.last_name}`} className="relative z-10 h-full w-full object-contain object-bottom" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-5xl font-extrabold text-muted-foreground/30">{initialsOf(fighter)}</div>
               )}
@@ -1104,13 +1073,13 @@ export default function FighterProfilePage() {
               )}
             </div>
 
-            <div className="mt-2">
+            <div className="mt-1.5 shrink-0">
               <div className="flex items-center gap-2">
                 <CountryFlag countryCode={fighter.country_code} />
                 <h1 className="text-lg font-extrabold leading-none tracking-tight">{fighter.first_name} {fighter.last_name}</h1>
               </div>
-              {fighter.nickname && <div className="mt-0.5 text-xs text-muted-foreground">"{fighter.nickname}"</div>}
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {fighter.nickname && <div className="mt-0.5 text-[11px] text-muted-foreground">"{fighter.nickname}"</div>}
+              <div className="mt-1 flex flex-wrap gap-1.5">
                 <span className="rounded-md border bg-background px-2 py-0.5 text-[11px] font-bold tabular-nums">{record}</span>
                 {ranked && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
                 {ranked && divisionLabel && (
@@ -1119,35 +1088,90 @@ export default function FighterProfilePage() {
               </div>
             </div>
 
-            {/* bio */}
-            <div className="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-1.5 border-t pt-2.5 text-sm">
+            {/* bio — fixed row groups. Each row lays its surviving fields out evenly,
+                and a row with nothing in it disappears, so sparse fields (style ~23%,
+                gym ~24%, leg reach ~35%) collapse cleanly instead of leaving holes. */}
+            <div className="mt-2 flex shrink-0 flex-col gap-1.5 border-t pt-2">
               {[
-                ['Height', fighter.height], ['Weight', fighter.weight],
-                ['Reach', fighter.reach], ['Stance', fighter.stance],
-                ['Age', bio.age ? `${bio.age} yrs` : null], ['Division', divisionLabel],
-                ['UFC debut', bio.debut], ['Last fight', bio.last],
-              ].filter(([, v]) => v).map(([k, v]) => (
-                <div key={k}><div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{k}</div><div className="text-[13px] font-semibold">{v}</div></div>
+                [['Age', bio.age ? `${bio.age} yrs` : null], ['Height', val(fighter.height)], ['Weight', val(fighter.weight)]],
+                [['Reach', val(fighter.reach)], ['Leg reach', val(fighter.leg_reach) ? `${fighter.leg_reach}"` : null]],
+                [['Stance', val(fighter.stance)], ['Style', val(fighter.fighting_style)]],
+                [['UFC debut', bio.debut], ['Since last fight', form?.daysSinceLast != null ? `${form.daysSinceLast} days` : null]],
+                [['From', val(fighter.birthplace)]],
+                [['Gym', val(fighter.trains_at)]],
+              ].map((row) => row.filter(([, v]) => v)).filter((row) => row.length).map((row) => (
+                <div key={row.map(([k]) => k).join('-')} className="flex gap-2">
+                  {row.map(([k, v]) => (
+                    <div key={k} className="min-w-0 flex-1">
+                      <div className="text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">{k}</div>
+                      <div className="truncate text-[13px] font-semibold leading-snug" title={String(v)}>{v}</div>
+                    </div>
+                  ))}
+                </div>
               ))}
             </div>
           </div>
 
-          {/* outcomes — flex-1 so this card absorbs the slack and the column's
-              bottom edge lines up with the card in the right-hand column */}
-          <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border p-2.5">
-            {career?.hasStats && (
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div className="mb-1 shrink-0 text-[10px] font-bold uppercase tracking-wide text-foreground/70">Outcomes</div>
-                <div className="grid flex-1 auto-rows-fr grid-cols-3 gap-1.5">
-                  <OutcomeChip label="Win%" value={`${career.winPct}%`} />
-                  <OutcomeChip label="Finish %" value={`${career.finishRate}%`} />
-                  <OutcomeChip label="KO/TKO" value={career.ko} />
-                  <OutcomeChip label="Submission" value={career.sub} />
-                  <OutcomeChip label="Decision" value={career.dec} />
-                  <OutcomeChip label="UFC fights" value={career.fightCount} />
+          {/* last / next fight, side by side under the bio */}
+          <div className="grid shrink-0 grid-cols-2 gap-2 rounded-lg border border-border p-2.5">
+            {(() => {
+              const last = form?.results?.[0]
+              const opp = last ? oppData[String(last.oppId)] : null
+              return (
+                <div className="min-w-0">
+                  <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-foreground/70">Last fight</div>
+                  {last ? (
+                    <Link to={`/ufc/fighters/${last.oppId}`} className="flex items-center gap-2 rounded-md transition-colors hover:bg-muted/50">
+                      <div className="relative shrink-0">
+                        {opp?.image_url ? (
+                          <img src={opp.image_url} alt="" className="h-8 w-8 rounded-full object-cover object-top" />
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
+                            {opp?.name ? opp.name.split(' ').map((n) => n[0]).join('') : '?'}
+                          </div>
+                        )}
+                        <span className={cn(
+                          'absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-extrabold text-white ring-2 ring-card',
+                          last.draw ? 'bg-slate-400' : last.win ? 'bg-emerald-500' : 'bg-rose-500',
+                        )}>{last.draw ? 'D' : last.win ? 'W' : 'L'}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[12px] font-bold leading-tight">{opp?.name || 'Unknown'}</div>
+                        <div className="truncate text-[10px] text-muted-foreground">{last.date ? formatDate(last.date) : '—'}</div>
+                      </div>
+                    </Link>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">No recorded fights</p>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
+
+            {(() => {
+              const opp = upcoming ? oppData[String(upcoming.oppId)] : null
+              return (
+                <div className="min-w-0 border-l border-border pl-2.5">
+                  <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-foreground/70">Next fight</div>
+                  {upcoming ? (
+                    <Link to={`/ufc/fighters/${upcoming.oppId}`} className="flex items-center gap-2 rounded-md transition-colors hover:bg-muted/50">
+                      {opp?.image_url ? (
+                        <img src={opp.image_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover object-top" />
+                      ) : (
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
+                          {opp?.name ? opp.name.split(' ').map((n) => n[0]).join('') : '?'}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[12px] font-bold leading-tight">{opp?.name || 'TBA'}</div>
+                        <div className="truncate text-[10px] text-muted-foreground">{formatDate(upcoming.date)}</div>
+                      </div>
+                    </Link>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">Not scheduled</p>
+                  )}
+                </div>
+              )
+            })()}
           </div>
 
         </div>
