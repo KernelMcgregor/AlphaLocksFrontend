@@ -26,6 +26,19 @@
   --color-viz-1: #2a78d6;
   --color-viz-2: #eb6834;
   --color-viz-3: #1baf7a;
+
+  /* Two-shade pair for "the fighter" vs "their opponents" — same hue, so the pair
+     reads as one measure seen from both sides rather than two categories.
+     This is a sequential 2-step, not a categorical slot, so the validator's
+     lightness-band and chroma-floor checks (which keep sibling CATEGORIES from
+     dominating or reading gray) do not apply; separation and contrast do.
+     #2a78d6 <-> #7ab4f0: CVD dE 18.3, normal-vision 18.7, chroma PASS.
+     The soft step is 2.18:1 on white -> every mark using it carries a visible
+     numeric label, which is the relief that WARN requires. */
+  --color-viz-1-soft: #7ab4f0;
+  /* Negative arm of the diverging scale only — never a categorical slot, and not
+     --color-destructive, which is a reserved status colour. */
+  --color-viz-neg: #e34948;
 }
 
 .dark {
@@ -49,6 +62,11 @@
   --color-viz-1: #3987e5;
   --color-viz-2: #d95926;
   --color-viz-3: #199e70;
+  /* Dark: the soft step goes LIGHTER, not darker — darker steps that clear the
+     15 dE separation floor fall below 3:1 on #111113. CVD 17.5, normal 18.5,
+     contrast PASS. */
+  --color-viz-1-soft: #8fc0f2;
+  --color-viz-neg: #e34948;
 }
 
 body {

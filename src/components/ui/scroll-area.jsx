@@ -22,7 +22,10 @@ function ScrollBar({ className, orientation = 'vertical', ...props }) {
       forceMount
       orientation={orientation}
       className={cn(
-        'flex select-none',
+        // forceMount keeps the track in the DOM even when nothing overflows, which
+        // renders a permanent grey bar that reads as a scrollbar. Radix flags that
+        // case with data-state="hidden"; act on it.
+        'flex select-none data-[state=hidden]:hidden',
         orientation === 'vertical' && 'h-full w-2.5 border-l border-l-transparent p-px',
         orientation === 'horizontal' && 'h-2.5 flex-col border-t border-t-transparent p-px',
         className

@@ -1,18 +1,19 @@
 // src/pages/FighterProfilePage.jsx
 import { ArrowLeft, ChevronLeft, ChevronRight, Crown, Flame, Loader2, Swords, Timer, TrendingUp } from 'lucide-react'
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
 import HeaderActions from '../components/layout/HeaderActions'
 import SimilarFighters from '../components/sports/SimilarFighters'
 import { Card, CardContent } from '../components/ui/card'
-import { ScrollArea } from '../components/ui/scroll-area'
 import { SlideTabs } from '../components/ui/slide-tabs'
+import { Tip } from '../components/ui/tip'
+import FighterMini from '../components/sports/FighterMini'
 // NOTE: add `export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)`
 // to src/lib/api.js — the endpoint already exists in routers/ufc.py.
-import { fetchEvents, fetchFighter, fetchFighterFights, fetchFighterRankHistory, fetchFighterStats, fetchRankings } from '../lib/api'
+import { fetchEvents, fetchFighter, fetchFighterCareerStats, fetchFighterFights, fetchFighterRankHistory, fetchFighterStats, fetchRankings } from '../lib/api'
 import { cn, formatDate, formatRecord } from '../lib/utils'
-import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, initialsOf, methodLabel, ordinal } from '../lib/fighterAnalytics'
+import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, deriveRoundPacing, deriveRoundSurvival, deriveTwoWay, initialsOf, methodLabel, ordinal } from '../lib/fighterAnalytics'
 
 // ---------------------------------------------------------------------------
 // Radial charts (dependency-free inline SVG — same family as RankingsPage)
@@ -30,6 +31,14 @@ const VB = { x: -36, y: 2, w: 312, h: 236 }
 // Captured once at module load — age only changes yearly, and reading the clock
 // during render is impure.
 const NOW = Date.now()
+
+// Order here is the order they appear in the scrolling column.
+const SECTIONS = [
+  { key: 'skills', label: 'Skills' },
+  { key: 'overview', label: 'Career Overview' },
+  { key: 'career', label: 'Career Stats' },
+  { key: 'fights', label: 'Fight History' },
+]
 
 // UFC.com writes "--" for a missing measurement rather than leaving it blank, and a
 // truthy string sails through a plain falsy check. Reach alone has ~1,983 of them.
@@ -73,8 +82,8 @@ function RadarChart({ axes }) {
   const active = hover ? axes[hover.i] : null
 
   return (
-    <div ref={wrapRef} className="relative flex min-h-0 flex-1 justify-center">
-      <svg viewBox={`${VB.x} ${VB.y} ${VB.w} ${VB.h}`} className="h-auto max-h-full w-full max-w-[268px]">
+    <div ref={wrapRef} className="relative flex w-full justify-center py-1">
+      <svg viewBox={`${VB.x} ${VB.y} ${VB.w} ${VB.h}`} className="h-auto w-full max-w-[300px]">
         {[0.25, 0.5, 0.75, 1].map((fr, gi) => (
           <polygon key={gi} points={axes.map((_, i) => polar(cx, cy, R * fr, i, n).join(',')).join(' ')} fill="none" className="stroke-border" strokeWidth={1} />
         ))}
@@ -175,10 +184,17 @@ function WavingFlag({ countryCode }) {
       ctx.clearRect(0, 0, W, H)
       t += 0.02
 
-      // Oversized flag so waves don't reveal edges
+      // Cover-fit the flag at its own aspect ratio, then oversize so the waves
+      // never reveal an edge. Scaling W and H independently (the previous
+      // behaviour) stretched the flag whenever the container's aspect changed —
+      // which it now does constantly, since the portrait flexes with the column.
       const scale = 1.35
-      const flagW = W * scale
-      const flagH = H * scale
+      const imgAspect = img.naturalWidth / img.naturalHeight
+      const boxAspect = W / H
+      const baseW = boxAspect > imgAspect ? W : H * imgAspect
+      const baseH = boxAspect > imgAspect ? W / imgAspect : H
+      const flagW = baseW * scale
+      const flagH = baseH * scale
       const ox = (W - flagW) / 2
       const oy = (H - flagH) / 2
 
@@ -275,8 +291,26 @@ function fightTotals(data) {
 }
 
 // Expanded fight row — the fighter's own stat line for that bout.
-function FightDetail({ detail, data }) {
+// A row is padding if nothing at all was recorded in it.
+const EMPTY_ROUND = (r) => !(
+  Number(r.sig_str_attempted) || Number(r.total_str_attempted) || Number(r.td_attempted)
+  || Number(r.sub_att) || Number(r.kd) || Number(r.ctrl_seconds) || Number(r.rev)
+)
+
+function FightDetail({ detail, data, finishRound }) {
   const t = fightTotals(data)
+
+  // 286 fighter-fights carry zero-filled stat rows past the round the bout
+  // actually ended in — one runs to R23 — so the table has to be capped rather
+  // than rendering whatever rows exist. finish_round is authoritative; when it is
+  // missing (no-contests) fall back to trimming the trailing empty rows.
+  const rounds = useMemo(() => {
+    const all = data?.rounds || []
+    if (finishRound) return all.filter((r) => Number(r.round_number) <= finishRound)
+    const out = all.slice()
+    while (out.length && EMPTY_ROUND(out[out.length - 1])) out.pop()
+    return out
+  }, [data, finishRound])
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
   const target = (t?.head_landed || 0) + (t?.body_landed || 0) + (t?.leg_landed || 0)
   const position = (t?.distance_landed || 0) + (t?.clinch_landed || 0) + (t?.ground_landed || 0)
@@ -290,9 +324,9 @@ function FightDetail({ detail, data }) {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 xl:grid-cols-6">
-            <StatTile label="Sig. strikes" value={`${t.sig_str_landed}/${t.sig_str_attempted}`} />
-            <StatTile label="Sig. accuracy" value={`${pct(t.sig_str_landed, t.sig_str_attempted)}%`} />
-            <StatTile label="Total strikes" value={t.total_str_landed} />
+            <StatTile label="Sig. Strikes" value={`${t.sig_str_landed}/${t.sig_str_attempted}`} />
+            <StatTile label="Sig. Accuracy" value={`${pct(t.sig_str_landed, t.sig_str_attempted)}%`} />
+            <StatTile label="Total Strikes" value={t.total_str_landed} />
             <StatTile label="Knockdowns" value={t.kd} />
             <StatTile label="Takedowns" value={`${t.td_landed}/${t.td_attempted}`} />
             <StatTile label="Control" value={clock(t.ctrl_seconds)} />
@@ -323,7 +357,7 @@ function FightDetail({ detail, data }) {
             </div>
           )}
 
-          {data.rounds.length > 0 && (
+          {rounds.length > 0 && (
             <div>
               <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-foreground/70">By round</div>
               <div className="overflow-x-auto">
@@ -340,7 +374,7 @@ function FightDetail({ detail, data }) {
                     </tr>
                   </thead>
                   <tbody className="tabular-nums">
-                    {data.rounds.map((r) => (
+                    {rounds.map((r) => (
                       <tr key={r.round_number} className="border-t border-border/60">
                         <td className="py-1 pr-3 font-bold">R{r.round_number}</td>
                         <td className="py-1 pr-3">{r.sig_str_landed}/{r.sig_str_attempted}</td>
@@ -358,28 +392,6 @@ function FightDetail({ detail, data }) {
           )}
         </>
       )}
-    </div>
-  )
-}
-
-// CSS-only hover tooltip. No state, no positioning maths — the bubble is a
-// sibling revealed by group-hover, anchored above the trigger.
-function Tip({ children, content, className, style, align = 'center' }) {
-  // Triggers near a panel edge must anchor to that edge — a centred bubble gets
-  // clipped by the ScrollArea's overflow.
-  const pos = {
-    start: 'left-0 translate-x-0',
-    center: 'left-1/2 -translate-x-1/2',
-    end: 'right-0 translate-x-0',
-  }[align]
-  return (
-    <div className={cn('group/tip relative', className)} style={style}>
-      {children}
-      <div className={cn('pointer-events-none absolute bottom-full z-40 mb-2 hidden group-hover/tip:block', pos)}>
-        <div className="w-max max-w-[220px] rounded-lg border border-border bg-background px-2.5 py-2 text-left shadow-lg">
-          {content}
-        </div>
-      </div>
     </div>
   )
 }
@@ -672,10 +684,325 @@ function BumpChart({ series, points, formatValue, yLabel, invertY = false, start
   )
 }
 
+// The right column is one scroll container holding every section. The tab bar is a
+// scrollspy over it: clicking scrolls, scrolling re-highlights. `lockUntil` swallows
+// the spy for the duration of a click-driven smooth scroll, otherwise the highlight
+// flickers through every section it passes on the way.
+function useScrollSpy(sections) {
+  const scrollRef = useRef(null)
+  const nodes = useRef({})
+  const lockUntil = useRef(0)
+  const [active, setActive] = useState(sections[0].key)
+
+  const register = useCallback((id, el) => {
+    if (el) nodes.current[id] = el
+    else delete nodes.current[id]
+  }, [])
+
+  useEffect(() => {
+    const root = scrollRef.current
+    if (!root) return undefined
+    const onScroll = () => {
+      if (Date.now() < lockUntil.current) return
+      // bottom of the scroll can never reach the last section's top, so pin it
+      const atBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 8
+      let current = sections[0].key
+      if (atBottom) {
+        current = sections[sections.length - 1].key
+      } else {
+        const line = root.scrollTop + 28
+        for (const sec of sections) {
+          const el = nodes.current[sec.key]
+          if (el && el.offsetTop <= line) current = sec.key
+        }
+      }
+      setActive((a) => (a === current ? a : current))
+    }
+    root.addEventListener('scroll', onScroll, { passive: true })
+    return () => root.removeEventListener('scroll', onScroll)
+  }, [sections])
+
+  const scrollTo = (id) => {
+    const root = scrollRef.current
+    const el = nodes.current[id]
+    if (!root || !el) return
+    lockUntil.current = Date.now() + 800
+    setActive(id)
+    root.scrollTo({ top: Math.max(0, el.offsetTop - 12), behavior: 'smooth' })
+  }
+
+  return { scrollRef, register, active, scrollTo }
+}
+
+// One titled sub-box in the scrolling column.
+function Section({ id, title, note, children, className, register }) {
+  return (
+    <section
+      ref={(el) => register(id, el)}
+      className={cn('flex shrink-0 flex-col rounded-xl border border-border p-3', className)}
+    >
+      <div className="mb-2 flex shrink-0 items-baseline gap-2">
+        <h2 className="text-[13px] font-extrabold tracking-tight">{title}</h2>
+        {note && <span className="text-[11px] text-muted-foreground">{note}</span>}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Offense vs defense. Encoding across every mark below: viz-1 (blue) is this
+// fighter, viz-2 (orange) is their opponents. Two shades of one hue were tried
+// first and did not separate at dot size; "fighter" and "opponents" are two
+// entities, so a validated categorical pair is the honest encoding anyway.
+// ---------------------------------------------------------------------------
+const fmtTwoWay = (v, fmt) => {
+  if (v == null) return '—'
+  if (fmt === 'pct1') return `${v.toFixed(1)}%`
+  if (fmt === 'clock') return clock(v)
+  return v.toFixed(2)
+}
+
+function TwoWayLegend() {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-viz-1" />
+        <span className="text-[10px] font-semibold text-muted-foreground">Fighter</span>
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-viz-2" />
+        <span className="text-[10px] font-semibold text-muted-foreground">Opponents</span>
+      </span>
+    </div>
+  )
+}
+
+// One metric: what they do vs what is done to them, as two dots on a shared track.
+// Each row carries its OWN scale — the units differ per row and both ends are
+// directly labelled, so this reads as a two-number comparison, not a shared axis.
+function DumbbellRow({ label, self, opp, fmt }) {
+  const domain = Math.max(self ?? 0, opp ?? 0) * 1.12 || 1
+  const pos = (v) => (v == null ? null : Math.max(3, Math.min(97, (v / domain) * 100)))
+  const xs = pos(self)
+  const xo = pos(opp)
+  const delta = self != null && opp != null ? self - opp : null
+
+  // When the two dots sit close together, centred labels would overlap. Rather
+  // than merging them into one string — which made that row look unlike every
+  // other row — anchor each label to the far side of its own dot so the pair
+  // grows apart instead of into each other.
+  const tight = xs != null && xo != null && Math.abs(xs - xo) < 18
+  const anchor = (mine, other) => {
+    if (!tight) return '-translate-x-1/2'
+    return mine <= other ? '-translate-x-full' : 'translate-x-0'
+  }
+
+  return (
+      <div className="flex items-center gap-2.5 py-[3px]">
+        <span className="w-[100px] shrink-0 whitespace-nowrap text-[11px] font-medium leading-tight text-foreground/80">{label}</span>
+
+        {/* 34px: labels own the top band, the track sits at 24px */}
+        <div className="relative h-[34px] min-w-[90px] flex-1">
+          <div className="absolute inset-x-0 top-[24px] h-px bg-border" />
+          {xs != null && xo != null && (
+            <div
+              className="absolute top-[24px] h-[3px] -translate-y-1/2 rounded-full bg-foreground/15"
+              style={{ left: `${Math.min(xs, xo)}%`, width: `${Math.abs(xs - xo)}%` }}
+            />
+          )}
+          {xo != null && (
+            <>
+              <span className="absolute top-[24px] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-viz-2 ring-2 ring-card" style={{ left: `${xo}%` }} />
+              <span
+                className={cn('absolute top-0 whitespace-nowrap text-[9.5px] font-semibold tabular-nums text-viz-2', anchor(xo, xs))}
+                style={{ left: `${xo}%` }}
+              >
+                {fmtTwoWay(opp, fmt)}
+              </span>
+            </>
+          )}
+          {xs != null && (
+            <>
+              <span className="absolute top-[24px] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-viz-1 ring-2 ring-card" style={{ left: `${xs}%` }} />
+              <span
+                className={cn('absolute top-0 whitespace-nowrap text-[9.5px] font-bold tabular-nums text-foreground', anchor(xs, xo))}
+                style={{ left: `${xs}%` }}
+              >
+                {fmtTwoWay(self, fmt)}
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Signed, so colour reinforces rather than carries the meaning. */}
+        <span className={cn(
+          'w-[54px] shrink-0 text-right text-[10.5px] font-bold tabular-nums',
+          delta == null ? 'text-muted-foreground' : delta >= 0 ? 'text-emerald-600' : 'text-rose-600',
+        )}>
+          {delta == null ? '—' : `${delta >= 0 ? '+' : '−'}${fmtTwoWay(Math.abs(delta), fmt)}`}
+        </span>
+      </div>
+  )
+}
+
+// Where they strike vs where they are struck. Shared domain across both halves —
+// that comparability is the entire point of a mirror.
+function MirrorBars({ title, rows, mode }) {
+  const pm = mode === 'pm'
+  const vals = rows.flatMap((r) => [pm ? r.selfPm : r.self, pm ? r.oppPm : r.opp]).filter((v) => v != null)
+  const domain = Math.max(...vals, 0.01) * 1.05
+  const fmt = (v) => (v == null ? '—' : pm ? v.toFixed(2) : `${Math.round(v)}%`)
+
+  return (
+    <div>
+      <div className="mb-2 grid grid-cols-[1fr_78px_1fr] items-baseline gap-1.5">
+        <span className="text-right text-[9px] font-bold uppercase tracking-wide text-muted-foreground">They strike</span>
+        <span className="text-center text-[10px] font-bold uppercase tracking-wide text-foreground/70">{title}</span>
+        <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">They&apos;re hit</span>
+      </div>
+      <div className="flex flex-col gap-[6px]">
+        {rows.map((r) => {
+          const a = pm ? r.selfPm : r.self
+          const b = pm ? r.oppPm : r.opp
+          return (
+              <div key={r.label} className="grid grid-cols-[1fr_78px_1fr] items-center gap-1.5">
+                <div className="flex items-center justify-end gap-1">
+                  <span className="text-[9.5px] tabular-nums text-muted-foreground">{fmt(a)}</span>
+                  <div className="h-[18px] rounded-l-[4px] bg-viz-1" style={{ width: `${((a ?? 0) / domain) * 100}%` }} />
+                </div>
+                <span className="text-center text-[10.5px] text-foreground/80">{r.label}</span>
+                <div className="flex items-center gap-1">
+                  <div className="h-[18px] rounded-r-[4px] bg-viz-2" style={{ width: `${((b ?? 0) / domain) * 100}%` }} />
+                  <span className="text-[9.5px] tabular-nums text-muted-foreground">{fmt(b)}</span>
+                </div>
+              </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Where strikes land, drawn on a body rather than as bars. Two figures facing each
+// other: the fighter on the left with what they throw, opponents on the right with
+// what they land back. Zone opacity is scaled within each figure — against a fixed
+// 0-100% scale the legs (typically ~10%) would be invisible next to the head.
+// Front-facing figure split into the three scored target zones. The paths tile —
+// head ends where the torso begins, torso where the legs do — so the zones read as
+// one body rather than three stacked shapes. Arms are drawn separately and never
+// filled: they are not a scored target, and shading them would imply otherwise.
+// Pacing across rounds, as small multiples. One series each, so no legend box —
+// each panel title names its own measure.
+const PACE_PANELS = [
+  { key: 'slpm', label: 'Sig. Str / Min', fmt: (v) => v.toFixed(1) },
+  { key: 'sigAcc', label: 'Sig. Accuracy', fmt: (v) => `${Math.round(v)}%` },
+  { key: 'td15', label: 'Takedowns / 15', fmt: (v) => v.toFixed(2) },
+]
+
+function PaceColumns({ rounds, panel }) {
+  const vals = rounds.map((r) => r[panel.key]).filter((v) => v != null)
+  const max = Math.max(...vals, 0.01) * 1.12
+  const peak = Math.max(...vals, 0)
+  return (
+    <div className="flex flex-col rounded-lg border border-border bg-muted/20 p-2.5">
+      <div className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-wide text-foreground/70">{panel.label}</div>
+      {/* bars fill the box rather than sitting in a narrow centred track */}
+      <div className="flex h-[152px] flex-1 items-end gap-[4px]">
+        {rounds.map((r) => {
+          const v = r[panel.key]
+          const isPeak = v != null && v === peak
+          return (
+            <div key={r.round} className="flex flex-1 flex-col items-center justify-end">
+              <span className={cn('mb-1 text-[10px] font-bold tabular-nums', isPeak ? 'text-foreground' : 'text-muted-foreground')}>
+                {v == null ? '\u2014' : panel.fmt(v)}
+              </span>
+              <div
+                className={cn('w-full rounded-t-[4px] bg-viz-1', r.n < 3 && 'opacity-45')}
+                style={{ height: `${Math.max(3, ((v ?? 0) / max) * 128)}px` }}
+              />
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-1.5 flex shrink-0 gap-[4px]">
+        {rounds.map((r) => (
+          <div key={r.round} className="flex-1 text-center text-[10px] font-semibold text-muted-foreground">R{r.round}</div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+
+// Two different questions about the same rounds, so a toggle rather than two
+// panels: "fighter" asks whether THEY were stopped there; "fight" asks whether the
+// BOUT carried on past it. A round they won by knockout is one the fight did not
+// survive but they did — the two series genuinely disagree.
+function SurvivalTable({ survival }) {
+  const [mode, setMode] = useState('fighter')
+  const rows = survival?.rounds || []
+  const fighterMode = mode === 'fighter'
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-2.5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Got out of round</span>
+        <SlideTabs
+          size="sm"
+          value={mode}
+          onChange={setMode}
+          tabs={[{ key: 'fighter', label: 'Fighter' }, { key: 'fight', label: 'Fight' }]}
+        />
+      </div>
+      <table className="w-full text-[10.5px]">
+        <thead>
+          <tr className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+            <th className="pb-1 text-left font-bold">Rd</th>
+            <th className="pb-1 text-right font-bold">Entered</th>
+            <th className="pb-1 text-right font-bold">Out</th>
+            <th className="pb-1 text-right font-bold">%</th>
+          </tr>
+        </thead>
+        <tbody className="tabular-nums">
+          {rows.map((r) => {
+            const out = fighterMode ? r.entered - r.stopped : r.continued
+            const pctv = fighterMode ? r.survivedPct : r.continuedPct
+            return (
+              <tr key={r.round} className="border-t border-border/60">
+                <td className="py-[3px] font-bold">R{r.round}</td>
+                <td className="py-[3px] text-right text-muted-foreground">{r.entered}</td>
+                <td className="py-[3px] text-right text-muted-foreground">{out}</td>
+                <td className={cn('py-[3px] text-right font-bold', r.entered < 3 && 'opacity-50')}>
+                  {pctv == null ? '—' : `${Math.round(pctv)}%`}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className="mt-1.5 text-[9px] leading-snug text-muted-foreground/80">
+        {fighterMode
+          ? 'Share of bouts reaching the round that they were not stopped in.'
+          : 'Share of bouts reaching the round where the fight carried on past it.'}
+      </p>
+    </div>
+  )
+}
+
+function RoundPacing({ rounds, survival }) {
+  return (
+    <div className="grid items-stretch gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+      {PACE_PANELS.map((panel) => <PaceColumns key={panel.key} rounds={rounds} panel={panel} />)}
+      {survival?.rounds?.length ? <SurvivalTable survival={survival} /> : null}
+    </div>
+  )
+}
+
 // Larger headline tile used by the Overview tab.
 function HeroTile({ icon: Icon, label, value, sub, accent = 'text-foreground' }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center rounded-xl border bg-gradient-to-b from-muted/60 to-muted/20 px-1.5 py-2.5 text-center">
+    <div className="flex h-full flex-col items-center justify-center rounded-xl border bg-gradient-to-b from-muted/60 to-muted/20 px-1.5 py-2 text-center">
       <div className={cn('text-xl font-extrabold leading-none tabular-nums', accent)}>{value}</div>
       <div className="mt-1.5 flex items-center justify-center gap-1 text-muted-foreground">
         {Icon && <Icon className="h-3 w-3 shrink-0" />}
@@ -714,13 +1041,12 @@ function SplitBar({ title, segments, unit = '%' }) {
 function FormStrip({ results, oppData, eventMap }) {
   return (
     <div className="flex flex-wrap gap-1">
-      {results.map((r, i) => {
+      {results.map((r) => {
         const opp = oppData?.[String(r.oppId)]
         const eventName = eventMap?.[String(r.eventId)]
         return (
           <Tip
             key={r.id}
-            align={i < 2 ? 'start' : i > results.length - 3 ? 'end' : 'center'}
             content={
               <>
                 <div className="flex items-center gap-1.5">
@@ -738,7 +1064,7 @@ function FormStrip({ results, oppData, eventMap }) {
           >
             <div
               className={cn(
-                'flex h-7 w-7 cursor-default items-center justify-center rounded-md text-[11px] font-extrabold text-white transition-transform hover:scale-110',
+                'flex h-6 w-6 cursor-default items-center justify-center rounded-md text-[10.5px] font-extrabold text-white transition-transform hover:scale-110',
                 r.draw ? 'bg-slate-400' : r.win ? 'bg-emerald-500' : 'bg-rose-500'
               )}
             >
@@ -761,18 +1087,17 @@ function ActivityBars({ activity, oppData, start = 0, size = 6 }) {
   return (
     <div className="overflow-hidden">
       <div
-        className="flex h-[86px] items-end"
+        className="flex h-[76px] items-end"
         style={{
           width: `${(n / win) * 100}%`,
           transform: `translateX(-${(start / n) * 100}%)`,
           transition: 'transform 560ms cubic-bezier(0.34, 1.42, 0.64, 1)',
         }}
       >
-        {activity.map((a, i) => (
+        {activity.map((a) => (
           <Tip
             key={a.year}
-            align={i === start ? 'start' : i === start + win - 1 ? 'end' : 'center'}
-            className="flex shrink-0 flex-col items-center gap-1 px-1"
+              className="flex shrink-0 flex-col items-center gap-1 px-1"
             style={{ width: `${100 / n}%` }}
             content={
               <>
@@ -793,7 +1118,7 @@ function ActivityBars({ activity, oppData, start = 0, size = 6 }) {
             }
           >
             <span className="text-[10px] font-extrabold tabular-nums text-foreground">{a.count}</span>
-            <div className="w-full cursor-default rounded-t-sm bg-blue-600 transition-colors duration-200 hover:bg-blue-500" style={{ height: `${Math.max(4, (a.count / max) * 46)}px` }} />
+            <div className="w-full cursor-default rounded-t-sm bg-blue-600 transition-colors duration-200 hover:bg-blue-500" style={{ height: `${Math.max(4, (a.count / max) * 40)}px` }} />
             <span className="text-[9px] font-semibold text-muted-foreground">{a.year}</span>
           </Tip>
         ))}
@@ -836,8 +1161,9 @@ function DimBar({ dim }) {
 export default function FighterProfilePage() {
   const { id } = useParams()
   const [state, setState] = useState({ loading: true, error: null, fighter: null, fights: [], career: null, ranked: null, divisionLabel: null, divisionFighters: null })
-  const [tab, setTab] = useState('skills')
+  const { scrollRef, register, active, scrollTo } = useScrollSpy(SECTIONS)
   const [openFight, setOpenFight] = useState(null) // one expanded row at a time
+  const [strikeMode, setStrikeMode] = useState('pct') // strike map: share vs per-minute
   const [oppData, setOppData] = useState({}) // { [fighterId]: { name, image_url } }
 
   useEffect(() => {
@@ -855,8 +1181,11 @@ export default function FighterProfilePage() {
       // Empty until the rank-history backfill has been run; the chart falls back
       // to output-per-fight in that case.
       fetchFighterRankHistory(id).catch(() => []),
+      // The opponent-relative half of the career line. 404s for anyone with no
+      // computed row (a debut fighter), which is normal — null, not an error.
+      fetchFighterCareerStats(id).catch(() => null),
     ])
-      .then(([fighter, fights, stats, rankings, events, rankHistory]) => {
+      .then(([fighter, fights, stats, rankings, events, rankHistory, cstats]) => {
         if (cancelled) return
         let ranked = null, divisionLabel = null, divisionFighters = null
         for (const wc of rankings.weight_classes || []) {
@@ -867,7 +1196,7 @@ export default function FighterProfilePage() {
         const career = aggregateCareer(stats, fights, id)
         const eventMap = {}
         for (const e of events || []) eventMap[String(e.id)] = e.name
-        setState({ loading: false, error: null, fighter, fights, stats, rankHistory, career, ranked, divisionLabel, divisionFighters, rankings, eventMap })
+        setState({ loading: false, error: null, fighter, fights, stats, rankHistory, cstats, career, ranked, divisionLabel, divisionFighters, rankings, eventMap })
       })
       .catch((e) => !cancelled && setState((s) => ({ ...s, loading: false, error: e.message })))
     return () => { cancelled = true }
@@ -880,11 +1209,25 @@ export default function FighterProfilePage() {
     if (!fighter || !fights?.length) return
     const oppIds = [...new Set(fights.map((f) => (String(f.red_fighter_id) === String(fighter.id) ? f.blue_fighter_id : f.red_fighter_id)).filter(Boolean).map(String))]
 
-    // Build lookup from ALL divisions in rankings data
+    // Build lookup from ALL divisions in rankings data. Carries enough for the
+    // hover card (record, rank, nickname), not just name + image.
     const fromRankings = {}
     for (const wc of state.rankings?.weight_classes || []) {
+      const isP4P = wc.key?.startsWith('p4p')
       for (const f of wc.fighters) {
-        fromRankings[String(f.id)] = { name: `${f.first_name} ${f.last_name}`, image_url: f.image_url }
+        const key = String(f.id)
+        // A fighter appears in their division and in p4p; the divisional rank is
+        // the meaningful one, so never let p4p overwrite it.
+        if (fromRankings[key] && isP4P) continue
+        fromRankings[key] = {
+          name: `${f.first_name} ${f.last_name}`,
+          image_url: f.image_url,
+          nickname: f.nickname,
+          country_code: f.country_code,
+          record: formatRecord(f.wins, f.losses, f.draws || undefined),
+          rank: isP4P ? null : f.rank,
+          division: isP4P ? null : wc.label,
+        }
       }
     }
 
@@ -902,7 +1245,15 @@ export default function FighterProfilePage() {
 
     if (!still.length) return
     let cancelled = false
-    Promise.all(still.map((oid) => fetchFighter(oid).then((o) => [oid, { name: `${o.first_name} ${o.last_name}`, image_url: o.image_url }]).catch(() => [oid, { name: 'Unknown', image_url: null }])))
+    Promise.all(still.map((oid) => fetchFighter(oid)
+      .then((o) => [oid, {
+        name: `${o.first_name} ${o.last_name}`,
+        image_url: o.image_url,
+        nickname: o.nickname,
+        country_code: o.country_code,
+        record: formatRecord(o.wins, o.losses, o.draws || undefined),
+      }])
+      .catch(() => [oid, { name: 'Unknown', image_url: null }])))
       .then((pairs) => { if (!cancelled) setOppData((prev) => ({ ...prev, ...Object.fromEntries(pairs) })) })
     return () => { cancelled = true }
   }, [fighter, fights, state.rankings]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1007,6 +1358,42 @@ export default function FighterProfilePage() {
   const trendWin = useSlidingWindow(trendData.length, TREND_WIN, 5)
   const yearWin = useSlidingWindow(form?.activity?.length || 0, YEAR_WIN, 3)
 
+  // Offense-vs-defense pairs and the strike map, from the server's career row.
+  const twoWay = useMemo(() => deriveTwoWay(state.cstats), [state.cstats])
+
+  // Tiles that also appear as a dumbbell endpoint must agree with it. aggregateCareer
+  // counts only fights present in the stats payload AND carrying fight_time_seconds;
+  // the server counts every fight with a totals row. Same metric, different fight
+  // set, values differing in the second decimal — inches apart on screen. Prefer the
+  // server row wherever it exists and fall back to the client aggregate.
+  const tiles = useMemo(() => {
+    const cs = state.cstats
+    if (!cs || !career) return career
+    const pick = (server, client, scale = 1) => (server == null ? client : server * scale)
+    return {
+      ...career,
+      slpm: pick(cs.slpm, career.slpm),
+      tslpm: pick(cs.tslpm, career.tslpm),
+      sigAcc: Math.round(pick(cs.sig_acc, career.sigAcc / 100, 1) * 100),
+      kd15: pick(cs.kd15, career.kd15),
+      td15: pick(cs.td15, career.td15),
+      tdAcc: Math.round(pick(cs.td_acc, career.tdAcc / 100, 1) * 100),
+      ctrl15Str: cs.ctrl15 == null ? career.ctrl15Str : clock(cs.ctrl15),
+      subAtt15: pick(cs.sub_att15, career.subAtt15),
+    }
+  }, [state.cstats, career])
+
+  // Per-round pacing, pooled across every bout. Reuses the statsByFight index.
+  const pacing = useMemo(
+    () => deriveRoundPacing(statsByFight, fights),
+    [statsByFight, fights],
+  )
+
+  const survival = useMemo(
+    () => (fighter ? deriveRoundSurvival(fights, fighter.id) : null),
+    [fights, fighter],
+  )
+
   const toggleFight = (id) => setOpenFight((prev) => (prev === id ? null : id))
 
   // Extra bio rows derived from what the fighter/fight records already carry.
@@ -1039,14 +1426,11 @@ export default function FighterProfilePage() {
       <HeaderActions>
         <SlideTabs
           size="sm"
-          value={tab}
-          onChange={setTab}
-          tabs={[
-            { key: 'skills', label: 'Skills' },
-            { key: 'overview', label: 'Career Overview' },
-            { key: 'career', label: 'Career Stats' },
-            { key: 'fights', label: 'Fight History', badge: recent.length || null },
-          ]}
+          value={active}
+          onChange={scrollTo}
+          tabs={SECTIONS.map((sec) => (
+            sec.key === 'fights' ? { ...sec, badge: recent.length || null } : sec
+          ))}
         />
         <Link to="/ufc/fighters/stats" className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to fighters
@@ -1096,15 +1480,21 @@ export default function FighterProfilePage() {
                 [['Age', bio.age ? `${bio.age} yrs` : null], ['Height', val(fighter.height)], ['Weight', val(fighter.weight)]],
                 [['Reach', val(fighter.reach)], ['Leg reach', val(fighter.leg_reach) ? `${fighter.leg_reach}"` : null]],
                 [['Stance', val(fighter.stance)], ['Style', val(fighter.fighting_style)]],
-                [['UFC debut', bio.debut], ['Since last fight', form?.daysSinceLast != null ? `${form.daysSinceLast} days` : null]],
+                [
+                  ['UFC debut', bio.debut],
+                  // completed bouts in the fight log; career.fightCount only counts
+                  // the ones that also have stat rows, so it undercounts
+                  ['UFC fights', form?.results?.length || career?.fightCount || null],
+                  ['Last activity', form?.daysSinceLast != null ? `${form.daysSinceLast} days` : null],
+                ],
                 [['From', val(fighter.birthplace)]],
                 [['Gym', val(fighter.trains_at)]],
               ].map((row) => row.filter(([, v]) => v)).filter((row) => row.length).map((row) => (
                 <div key={row.map(([k]) => k).join('-')} className="flex gap-2">
                   {row.map(([k, v]) => (
                     <div key={k} className="min-w-0 flex-1">
-                      <div className="text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">{k}</div>
-                      <div className="truncate text-[13px] font-semibold leading-snug" title={String(v)}>{v}</div>
+                      <div className="truncate whitespace-nowrap text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">{k}</div>
+                      <div className="truncate text-[13.5px] font-semibold leading-snug" title={String(v)}>{v}</div>
                     </div>
                   ))}
                 </div>
@@ -1121,6 +1511,7 @@ export default function FighterProfilePage() {
                 <div className="min-w-0">
                   <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-foreground/70">Last fight</div>
                   {last ? (
+                    <Tip content={<FighterMini f={opp} />}>
                     <Link to={`/ufc/fighters/${last.oppId}`} className="flex items-center gap-2 rounded-md transition-colors hover:bg-muted/50">
                       <div className="relative shrink-0">
                         {opp?.image_url ? (
@@ -1140,6 +1531,7 @@ export default function FighterProfilePage() {
                         <div className="truncate text-[10px] text-muted-foreground">{last.date ? formatDate(last.date) : '—'}</div>
                       </div>
                     </Link>
+                    </Tip>
                   ) : (
                     <p className="text-[11px] text-muted-foreground">No recorded fights</p>
                   )}
@@ -1153,6 +1545,7 @@ export default function FighterProfilePage() {
                 <div className="min-w-0 border-l border-border pl-2.5">
                   <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-foreground/70">Next fight</div>
                   {upcoming ? (
+                    <Tip content={<FighterMini f={opp} />}>
                     <Link to={`/ufc/fighters/${upcoming.oppId}`} className="flex items-center gap-2 rounded-md transition-colors hover:bg-muted/50">
                       {opp?.image_url ? (
                         <img src={opp.image_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover object-top" />
@@ -1166,6 +1559,7 @@ export default function FighterProfilePage() {
                         <div className="truncate text-[10px] text-muted-foreground">{formatDate(upcoming.date)}</div>
                       </div>
                     </Link>
+                    </Tip>
                   ) : (
                     <p className="text-[11px] text-muted-foreground">Not scheduled</p>
                   )}
@@ -1178,14 +1572,21 @@ export default function FighterProfilePage() {
 
       {/* ------ RIGHT: one card, four tabs (skills / overview / stats / fights) ------ */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
-        {/* Skills never scrolls — it compresses to whatever height is available.
-            Everything else keeps the ScrollArea, with short panels stretched to fill. */}
-        {tab === 'skills' ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+        {/* one scroll container, one section per tab. `relative` matters: the spy
+            reads section.offsetTop, which is measured against the offset parent. */}
+        <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="flex flex-col gap-3">
+
+          <Section
+            id="skills"
+            title="Skills"
+            note={profile ? `vs ${divisionLabel}` : null}
+            register={register}
+          >
             {profile ? (
-              <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[290px_1fr]">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(240px,320px)_1fr]">
                 {/* radar + best/worst axes */}
-                <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border p-3">
+                <div className="flex flex-col rounded-lg border border-border p-3">
                   <div className="mb-1 flex shrink-0 items-center gap-2">
                     <span className="text-[13px] font-extrabold tracking-tight">Skill Radar</span>
                     <span className="text-[11px] text-muted-foreground">vs {divisionLabel}</span>
@@ -1213,25 +1614,25 @@ export default function FighterProfilePage() {
                 </div>
 
                 {/* skill decomposition */}
-                <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border p-3">
+                <div className="flex flex-col rounded-lg border border-border p-3">
                   <div className="mb-2 flex shrink-0 items-center gap-2">
                     <span className="text-[13px] font-extrabold tracking-tight">Skill Decomposition</span>
                     <span className="text-[11px] text-muted-foreground">vs {divisionLabel}</span>
                   </div>
                   {/* Striking above, grappling below — one full-width column each,
                       so the bar track gets the whole card width instead of ~20px. */}
-                  <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="flex flex-1 flex-col gap-3">
+                    <div className="flex flex-1 flex-col">
                       <div className="mb-1.5 flex shrink-0 items-center gap-2 border-b pb-1">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-amber-600">Striking</span>
                       </div>
-                      <div className="flex min-h-0 flex-1 flex-col justify-between gap-1.5 overflow-hidden">{profile.striking.map((d) => <DimBar key={d.key} dim={d} />)}</div>
+                      <div className="flex flex-1 flex-col justify-between gap-1.5">{profile.striking.map((d) => <DimBar key={d.key} dim={d} />)}</div>
                     </div>
-                    <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="flex flex-1 flex-col">
                       <div className="mb-1.5 flex shrink-0 items-center gap-2 border-b pb-1">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">Grappling</span>
                       </div>
-                      <div className="flex min-h-0 flex-1 flex-col justify-between gap-1.5 overflow-hidden">{profile.grappling.map((d) => <DimBar key={d.key} dim={d} />)}</div>
+                      <div className="flex flex-1 flex-col justify-between gap-1.5">{profile.grappling.map((d) => <DimBar key={d.key} dim={d} />)}</div>
                     </div>
                   </div>
                 </div>
@@ -1239,12 +1640,10 @@ export default function FighterProfilePage() {
             ) : (
               <p className="text-sm text-muted-foreground">No ranked skill decomposition for this fighter (unranked or insufficient rounds).</p>
             )}
-          </div>
-        ) : (
-        <ScrollArea className="min-h-0 flex-1" viewportClassName="[&>div]:!flex [&>div]:!min-h-full [&>div]:!flex-col">
-          <div className="flex flex-1 flex-col p-3">
-            {/* ---------------- OVERVIEW ---------------- */}
-            {tab === 'overview' && (form ? (
+          </Section>
+
+          <Section id="overview" title="Career Overview" register={register}>
+            {form ? (
               <div className="grid flex-1 gap-3 lg:grid-cols-2">
                 <div className="flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1274,8 +1673,8 @@ export default function FighterProfilePage() {
                   </div>
 
                   {form.activity.length > 1 && (
-                    <div className="rounded-lg border border-border p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="rounded-lg border border-border p-2.5">
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Fights per year</span>
                         {form.activity.length > 6 && (
                           <SlideControls
@@ -1294,7 +1693,7 @@ export default function FighterProfilePage() {
                   )}
 
                   {trendData.length > 1 && (
-                    <div className="flex min-h-[190px] flex-1 flex-col rounded-lg border border-border p-3">
+                    <div className="flex h-[230px] flex-col rounded-lg border border-border p-2.5">
                       <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">
                           {usingRank ? 'Rank after each fight' : 'Output per fight'}
@@ -1337,98 +1736,158 @@ export default function FighterProfilePage() {
                 </div>
 
                 <div className="flex min-h-0 flex-col gap-3">
-                  <div className="space-y-3.5 rounded-lg border border-border p-3">
-                    <SplitBar title={`How they win · ${form.totalWins}`} segments={form.winMethods} unit="" />
-                    <SplitBar title={`How they lose · ${form.totalLosses}`} segments={form.lossMethods} unit="" />
+                  <div className="space-y-3 rounded-lg border border-border p-2.5">
+                    {/* third person singular once the name is in: "wins" / "loses" */}
+                    <SplitBar title={`How ${fighter.last_name} wins · ${form.totalWins}`} segments={form.winMethods} unit="" />
+                    <SplitBar title={`How ${fighter.last_name} loses · ${form.totalLosses}`} segments={form.lossMethods} unit="" />
                   </div>
 
                   {career?.hasStats && (
-                    <div className="rounded-lg border border-border p-3">
+                    <div className="rounded-lg border border-border p-2.5">
                       <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-foreground/70">Career rates</div>
                       {/* Win%/Finish% live in the left panel — these are per-time rates instead. */}
                       <div className="grid grid-cols-3 gap-1.5">
-                        <StatTile label="Sig. str/min" value={career.slpm.toFixed(2)} />
-                        <StatTile label="Str. acc" value={`${career.sigAcc}%`} />
+                        <StatTile label="Sig. Str / Min" value={tiles.slpm.toFixed(2)} />
+                        <StatTile label="Str. Acc" value={`${career.sigAcc}%`} />
                         <StatTile label="KD / 15" value={career.kd15.toFixed(2)} />
-                        <StatTile label="TD / 15" value={career.td15.toFixed(2)} />
-                        <StatTile label="TD acc" value={`${career.tdAcc}%`} />
+                        <StatTile label="TD / 15" value={tiles.td15.toFixed(2)} />
+                        <StatTile label="TD Acc" value={`${career.tdAcc}%`} />
                         <StatTile label="Ctrl / 15" value={career.ctrl15Str} />
                       </div>
                     </div>
                   )}
 
-                  <SimilarFighters fighterId={fighter.id} className="flex min-h-0 flex-1 flex-col" />
+                  <SimilarFighters fighterId={fighter.id} className="flex flex-1 flex-col" />
                 </div>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No completed fight history available.</p>
-            ))}
+            )}
+          </Section>
 
-            {/* ---------------- CAREER STATS ---------------- */}
-            {tab === 'career' && (career?.hasStats ? (
-              <div className="grid flex-1 gap-3 xl:grid-cols-3">
+          <Section
+            id="career"
+            title="Career Stats"
+            note={twoWay ? `${twoWay.fightCount} fights · ${Math.round(twoWay.totalMin ?? 0)} min logged` : null}
+            register={register}
+          >
+            {career?.hasStats ? (
+              <div className="flex flex-col gap-3">
+              <div className="grid gap-3 xl:grid-cols-3">
+                <div className="rounded-lg border border-border p-3">
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-foreground/70">Outcomes</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <StatTile label="Win %" value={`${career.winPct}%`} />
+                    <StatTile label="Finish %" value={`${career.finishRate}%`} />
+                    <StatTile
+                      label="Avg Fight Time"
+                      value={state.cstats?.avg_fight_sec != null ? clock(state.cstats.avg_fight_sec) : (form?.avgFightTime ?? '—')}
+                    />
+                    <StatTile label="Reversals / 15" value={career.rev15.toFixed(1)} />
+                  </div>
+                  <div className="mt-3 border-t pt-2.5">
+                    <SplitBar
+                      title={`Win Methods · ${career.ko + career.sub + career.dec}`}
+                      unit=""
+                      segments={[
+                        { label: 'KO/TKO', value: career.ko, cls: 'bg-viz-1' },
+                        { label: 'Submission', value: career.sub, cls: 'bg-viz-2' },
+                        { label: 'Decision', value: career.dec, cls: 'bg-viz-3' },
+                      ]}
+                    />
+                  </div>
+                </div>
                 <div className="rounded-lg border border-border p-3">
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-amber-600">Striking</div>
                   <div className="grid grid-cols-2 gap-1.5">
-                    <StatTile label="Sig. str/min" value={career.slpm.toFixed(2)} />
-                    <StatTile label="Total str/min" value={career.tslpm.toFixed(2)} />
-                    <StatTile label="Sig. str. accuracy" value={`${career.sigAcc}%`} />
-                    <StatTile label="Knockdowns / 15" value={career.kd15.toFixed(2)} />
+                    <StatTile label="Sig. Str / Min" value={career.slpm.toFixed(2)} />
+                    <StatTile label="Total Str / Min" value={tiles.tslpm.toFixed(2)} />
+                    <StatTile label="Sig. Str. Accuracy" value={`${tiles.sigAcc}%`} />
+                    <StatTile label="Knockdowns / 15" value={tiles.kd15.toFixed(2)} />
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-1.5 border-t pt-2">
-                    <StatTile label="Sig. strikes landed" value={career.totals.sig.toLocaleString()} />
-                    <StatTile label="Sig. strikes thrown" value={career.totals.sigAtt.toLocaleString()} />
+                    <StatTile label="Sig. Strikes Landed" value={career.totals.sig.toLocaleString()} />
+                    <StatTile label="Sig. Strikes Thrown" value={career.totals.sigAtt.toLocaleString()} />
                   </div>
                 </div>
-
                 <div className="rounded-lg border border-border p-3">
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-indigo-600">Grappling</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     <StatTile label="TD / 15" value={career.td15.toFixed(2)} />
-                    <StatTile label="TD accuracy" value={`${career.tdAcc}%`} />
-                    <StatTile label="Control / 15" value={career.ctrl15Str} />
-                    <StatTile label="Sub att / 15" value={career.subAtt15.toFixed(1)} />
+                    <StatTile label="TD Accuracy" value={`${tiles.tdAcc}%`} />
+                    <StatTile label="Control / 15" value={tiles.ctrl15Str} />
+                    <StatTile label="Sub Att / 15" value={tiles.subAtt15.toFixed(1)} />
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-1.5 border-t pt-2">
-                    <StatTile label="Takedowns landed" value={career.totals.td} />
-                    <StatTile label="Total control" value={`${Math.round(career.totals.ctrlSeconds / 60)}m`} />
+                    <StatTile label="Takedowns Landed" value={career.totals.td} />
+                    <StatTile label="Total Control" value={`${Math.round(career.totals.ctrlSeconds / 60)}m`} />
                   </div>
                 </div>
 
-                <div className="space-y-3.5 rounded-lg border border-border p-3">
-                  <SplitBar
-                    title="Where they strike"
-                    segments={[
-                      { label: 'Head', value: career.head, cls: 'bg-amber-500' },
-                      { label: 'Body', value: career.body, cls: 'bg-amber-400' },
-                      { label: 'Leg', value: career.leg, cls: 'bg-amber-300' },
-                    ]}
-                  />
-                  <SplitBar
-                    title="Where they fight"
-                    segments={[
-                      { label: 'Distance', value: career.distance, cls: 'bg-blue-500' },
-                      { label: 'Clinch', value: career.clinch, cls: 'bg-violet-500' },
-                      { label: 'Ground', value: career.ground, cls: 'bg-indigo-500' },
-                    ]}
-                  />
-                  <SplitBar
-                    title={`Win methods · ${career.ko + career.sub + career.dec}`}
-                    unit=""
-                    segments={[
-                      { label: 'KO/TKO', value: career.ko, cls: 'bg-rose-500' },
-                      { label: 'Submission', value: career.sub, cls: 'bg-indigo-500' },
-                      { label: 'Decision', value: career.dec, cls: 'bg-slate-400' },
-                    ]}
-                  />
+                {/* Target and position splits used to live here, but the strike map
+                    below shows the same shares AND the absorbed side — this card is
+                    outcomes instead, which nothing else in the section covers. */}
+              </div>
+
+              {/* Offense vs defense + the strike map. Absent (rather than empty) when
+                  the server has no career row for this fighter — the cards above and
+                  the pacing row below are computed from different sources and still
+                  render. */}
+              {twoWay?.hasTwoWay && (
+                <div className="grid gap-3 xl:grid-cols-[1.05fr_1fr]">
+                  <div className="rounded-lg border border-border p-3">
+                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Offense vs defense</span>
+                      {/* one legend serves both cards in this row — same encoding */}
+                      <TwoWayLegend />
+                    </div>
+                    <div className="mt-1 space-y-0.5">
+                      {twoWay.rows.map((r) => <DumbbellRow key={r.key} {...r} />)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-border p-3">
+                    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Strike profile</span>
+                      <SlideTabs
+                        size="sm"
+                        value={strikeMode}
+                        onChange={setStrikeMode}
+                        tabs={[{ key: 'pct', label: 'Share' }, { key: 'pm', label: 'Per min' }]}
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <MirrorBars title="Target" rows={twoWay.target} mode={strikeMode} />
+                      <div className="border-t pt-4">
+                        <MirrorBars title="Position" rows={twoWay.position} mode={strikeMode} />
+                      </div>
+                      {twoWay.targetAcc.length > 0 && (
+                        <div className="border-t pt-4">
+                          {/* how well each side LANDS on a zone, as opposed to how
+                              often they aim there — always a percentage, so this
+                              block ignores the share/per-min toggle */}
+                          <MirrorBars title="Accuracy By Target" rows={twoWay.targetAcc} mode="pct" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {pacing.length > 1 && (
+                <div className="rounded-lg border border-border p-3">
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-foreground/70">Pacing by round</div>
+                  <RoundPacing rounds={pacing} survival={survival} />
+                </div>
+              )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No per-fight statistics recorded for this fighter.</p>
-            ))}
+            )}
+          </Section>
 
-            {/* ---------------- FIGHT HISTORY ---------------- */}
-            {tab === 'fights' && (recent.length === 0 ? (
+          <Section id="fights" title="Fight History" note={`${recent.length} fights`} register={register}>
+            {recent.length === 0 ? (
               <p className="text-sm text-muted-foreground">No fight history available.</p>
             ) : (
               <div className="overflow-x-auto">
@@ -1465,7 +1924,7 @@ export default function FighterProfilePage() {
                               </span>
                             </td>
                             <td className="py-1.5 pr-2">
-                              <div className="flex items-center gap-2">
+                              <Tip className="flex items-center gap-2" content={<FighterMini f={opp} />}>
                                 {opp?.image_url ? (
                                   <img src={opp.image_url} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover object-top" />
                                 ) : (
@@ -1480,7 +1939,7 @@ export default function FighterProfilePage() {
                                 >
                                   {opp?.name || 'Unknown'}
                                 </Link>
-                              </div>
+                              </Tip>
                             </td>
                             <td className="py-1.5 pr-2 text-[11.5px] font-semibold text-foreground/70">{r.method}</td>
                             <td className="py-1.5 pr-2 text-[11.5px] tabular-nums text-muted-foreground">{r.round ? `R${r.round}` : '—'}</td>
@@ -1491,7 +1950,7 @@ export default function FighterProfilePage() {
                           {open && (
                             <tr>
                               <td colSpan={8} className="p-0 pb-1.5">
-                                <FightDetail detail={r.detail} data={data} />
+                                <FightDetail detail={r.detail} data={data} finishRound={r.round} />
                               </td>
                             </tr>
                           )}
@@ -1501,10 +1960,11 @@ export default function FighterProfilePage() {
                   </tbody>
                 </table>
               </div>
-            ))}
+            )}
+          </Section>
+
           </div>
-        </ScrollArea>
-        )}
+        </div>
       </div>
     </div>
   )

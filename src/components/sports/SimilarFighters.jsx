@@ -13,7 +13,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CountryFlag from '../CountryFlag'
 import { SlideTabs } from '../ui/slide-tabs'
-import { fetchSimilarFighters } from '../../lib/api'
+import { Tip } from '../ui/tip'
+import FighterMini from './FighterMini'
+import { fetchRankings, fetchSimilarFighters } from '../../lib/api'
 import { initialsOf } from '../../lib/fighterAnalytics'
 import { cn, formatRecord } from '../../lib/utils'
 
@@ -79,7 +81,27 @@ export default function SimilarFighters({ fighterId, className }) {
   // setting state synchronously inside the effect just to flip it true, which cascades a
   // render on every fighter change.
   const [result, setResult] = useState({ key: null, rows: [] })
+  // Divisional rank is NOT on the similarity response — its `rank` column is the
+  // neighbour's position in *this* similarity list. Pull real ranks from the
+  // rankings payload, which cachedRequest already has in memory for this page.
+  const [ranks, setRanks] = useState({})
   const key = `${fighterId}:${scope}`
+
+  useEffect(() => {
+    let cancelled = false
+    fetchRankings()
+      .then((data) => {
+        if (cancelled) return
+        const map = {}
+        for (const wc of data?.weight_classes || []) {
+          if (wc.key?.startsWith('p4p')) continue // divisional rank is the meaningful one
+          for (const f of wc.fighters) map[String(f.id)] = { rank: f.rank, division: wc.label }
+        }
+        setRanks(map)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (!fighterId) return undefined
@@ -132,8 +154,18 @@ export default function SimilarFighters({ fighterId, className }) {
         ) : (
           <div className="flex flex-col gap-1.5">
             {rows.map((f) => (
-              <Link
+              <Tip
                 key={f.id}
+                content={<FighterMini f={{
+                  name: `${f.first_name} ${f.last_name}`,
+                  image_url: f.image_url,
+                  nickname: f.nickname,
+                  country_code: f.country_code,
+                  record: formatRecord(f.wins, f.losses, f.draws || undefined),
+                  ...(ranks[String(f.id)] || {}),
+                }} />}
+              >
+              <Link
                 to={`/ufc/fighters/${f.id}`}
                 className="flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-1.5 transition-colors hover:bg-muted/40"
               >
@@ -171,6 +203,7 @@ export default function SimilarFighters({ fighterId, className }) {
                   {Math.round(f.similarity * 100)}%
                 </span>
               </Link>
+              </Tip>
             ))}
           </div>
         )}
