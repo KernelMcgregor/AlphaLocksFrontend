@@ -12,7 +12,7 @@ const navTree = [
     path: '/ufc',
     children: [
       { id: 'model-upcoming', label: 'Upcoming', icon: Clock, path: '/model/upcoming' },
-      { id: 'ufc-events', label: 'Events & Fights', icon: Calendar, path: '/ufc' },
+      { id: 'ufc-events', label: 'Events & Fights', icon: Calendar, path: '/ufc/events' },
       { id: 'fighter-stats', label: 'Fighter Stats', icon: BarChart3, path: '/ufc/fighters/stats' },
       { id: 'fighter-decompositions', label: 'Rankings', icon: Layers, path: '/ufc/fighters/decompositions' },
     ],
@@ -29,11 +29,15 @@ function TreeBranch({ node, navigate, activeId, setActiveId }) {
     <div>
       <button
         onClick={() => {
-          if (hasChildren) {
-            setExpanded(!expanded)
-          } else {
+          // A branch with its own path is a page too: clicking it navigates and opens
+          // the subtree. The chevron below is the only control that collapses it, so
+          // visiting the section never hides its children.
+          if (node.path) {
             setActiveId(node.id)
             navigate(node.path)
+            if (hasChildren) setExpanded(true)
+          } else if (hasChildren) {
+            setExpanded(!expanded)
           }
         }}
         className={cn(
@@ -45,10 +49,15 @@ function TreeBranch({ node, navigate, activeId, setActiveId }) {
         )}
       >
         {hasChildren ? (
-          <ChevronRight className={cn(
-            'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
-            expanded && 'rotate-90'
-          )} />
+          <ChevronRight
+            role="button"
+            aria-label={expanded ? 'Collapse' : 'Expand'}
+            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
+            className={cn(
+              'h-3.5 w-3.5 shrink-0 rounded transition-transform duration-200 hover:bg-white/20',
+              expanded && 'rotate-90'
+            )}
+          />
         ) : (
           <span className="w-3.5" />
         )}
@@ -76,11 +85,13 @@ function TreeBranch({ node, navigate, activeId, setActiveId }) {
 function getInitialActiveId(pathname) {
   function search(nodes) {
     for (const node of nodes) {
-      if (node.path === pathname && !node.children) return node.id
+      // Children first: a branch and a child can share a prefix, and the deeper match
+      // is the one the user is actually on.
       if (node.children) {
         const found = search(node.children)
         if (found) return found
       }
+      if (node.path === pathname) return node.id
     }
     return null
   }

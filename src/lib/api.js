@@ -36,6 +36,17 @@ async function cachedRequest(path, ttl = DEFAULT_TTL) {
   return data
 }
 
+// Headshot URL for an <img src>. Points at our own endpoint, which serves the cached
+// copy when scripts/cache_fighter_images.py has stored one and redirects to UFC.com
+// otherwise — so it is correct whether or not the cache has been filled, and it keeps
+// working when a UFC `?itok=` signature expires. Returns null when the fighter has no
+// portrait at all, so callers can render their initials fallback.
+export const fighterImageUrl = (fighter) => {
+  if (!fighter?.id) return fighter?.image_url || null
+  if (!fighter.image_url && !fighter.has_image) return null
+  return `${BASE_URL}/ufc/fighters/${fighter.id}/image`
+}
+
 // UFC
 export const fetchFighters = (params = {}) => {
   const qs = new URLSearchParams(params).toString()

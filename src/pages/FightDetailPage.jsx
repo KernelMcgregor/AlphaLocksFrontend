@@ -19,6 +19,7 @@ import WeightClassBadge from '../components/WeightClassBadge'
 import { fetchFight } from '../lib/api'
 import { ScrollArea } from '../components/ui/scroll-area'
 import { cn } from '../lib/utils'
+import FighterImage from '../components/sports/FighterImage'
 
 function formatCtrl(seconds) {
   if (!seconds) return '0:00'
@@ -53,13 +54,12 @@ function FighterHeader({ fighter, corner, isWinner }) {
   const dotColor = corner === 'red' ? 'bg-red-500' : 'bg-blue-500'
   return (
     <div className="flex-1 flex flex-col items-center text-center sm:text-left sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
-      {fighter.image_url && (
-        <img
-          src={fighter.image_url}
-          alt={`${fighter.first_name} ${fighter.last_name}`}
-          className="h-28 sm:h-40 object-contain object-bottom shrink-0 sm:translate-y-5 sm:order-last"
-        />
-      )}
+      <FighterImage
+        fighter={fighter}
+        fit="contain"
+        alt={`${fighter.first_name} ${fighter.last_name}`}
+        className="h-28 w-24 shrink-0 sm:order-last sm:h-40 sm:w-32 sm:translate-y-5"
+      />
       <div className="min-w-0 flex-1 py-2 sm:py-4">
         <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
           <span className={cn('h-3 w-3 rounded-full shrink-0', dotColor)} />
@@ -296,7 +296,7 @@ export default function FightDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
         <p className="text-muted-foreground">Fight not found.</p>
-        <Link to="/ufc" className="text-sm text-primary hover:underline">Back to events</Link>
+        <Link to="/ufc/events" className="text-sm text-primary hover:underline">Back to events</Link>
       </div>
     )
   }

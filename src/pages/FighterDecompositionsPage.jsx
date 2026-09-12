@@ -3,10 +3,11 @@ import { Crown, Layers, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
+import FighterImage from '../components/sports/FighterImage'
 import { Card, CardContent } from '../components/ui/card'
 import { fetchRankings } from '../lib/api'
 import { cn, formatRecord } from '../lib/utils'
-import { DIMS, buildPercentile, deriveProfile, initialsOf } from '../lib/fighterAnalytics'
+import { DIMS, buildPercentile, deriveProfile } from '../lib/fighterAnalytics'
 
 const STRIKING = DIMS.filter((d) => d.group === 'striking')
 const GRAPPLING = DIMS.filter((d) => d.group === 'grappling')
@@ -31,18 +32,12 @@ function RankCell({ rank }) {
 }
 
 function Avatar({ fighter }) {
-  if (fighter.image_url) {
-    return (
-      <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border">
-        <img src={fighter.image_url} alt="" className="h-full w-full scale-110 object-cover object-top" />
-      </div>
-    )
-  }
-  const tier = fighter.rank === 1 ? 'bg-amber-500/15 text-amber-600' : fighter.rank <= 5 ? 'bg-blue-500/10 text-blue-600' : 'bg-muted text-muted-foreground'
   return (
-    <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ring-1 ring-border', tier)}>
-      {initialsOf(fighter)}
-    </div>
+    <FighterImage
+      fighter={fighter}
+      className="h-9 w-9 shrink-0 rounded-full bg-muted ring-1 ring-border"
+      imgClassName="scale-110"
+    />
   )
 }
 

@@ -16,8 +16,8 @@ import { SlideTabs } from '../ui/slide-tabs'
 import { Tip } from '../ui/tip'
 import FighterMini from './FighterMini'
 import { fetchRankings, fetchSimilarFighters } from '../../lib/api'
-import { initialsOf } from '../../lib/fighterAnalytics'
 import { cn, formatRecord } from '../../lib/utils'
+import FighterImage from './FighterImage'
 
 // Feature key -> what to actually call it on screen. The raw column names (gnp15g,
 // td15s, sub_att15g) are backend vocabulary and mean nothing to a reader.
@@ -170,13 +170,7 @@ export default function SimilarFighters({ fighterId, className }) {
                 className="flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-1.5 transition-colors hover:bg-muted/40"
               >
                 <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full bg-muted">
-                  {f.image_url ? (
-                    <img src={f.image_url} alt="" className="h-full w-full object-cover object-top" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">
-                      {initialsOf(f)}
-                    </div>
-                  )}
+                  <FighterImage fighter={f} className="h-full w-full" />
                   <CountryFlag countryCode={f.country_code} />
                 </div>
 

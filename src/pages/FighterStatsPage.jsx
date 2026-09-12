@@ -3,13 +3,14 @@ import { BarChart3, Crown, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
+import FighterImage from '../components/sports/FighterImage'
 import { Card, CardContent } from '../components/ui/card'
 import { ScrollArea } from '../components/ui/scroll-area'
 // NOTE: add `export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)`
 // to src/lib/api.js — the endpoint already exists in routers/ufc.py.
 import { fetchFighterFights, fetchFighterStats, fetchRankings } from '../lib/api'
 import { cn, formatRecord } from '../lib/utils'
-import { aggregateCareer, initialsOf } from '../lib/fighterAnalytics'
+import { aggregateCareer } from '../lib/fighterAnalytics'
 
 // Every tracked fight stat, grouped. dir = best-is direction.
 const GROUPS = [
@@ -57,15 +58,13 @@ const GROUP_CELL = {
 const COL = 'w-[60px] min-w-[60px]'
 
 function Avatar({ fighter }) {
-  if (fighter.image_url) {
-    return (
-      <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border">
-        <img src={fighter.image_url} alt="" className="h-full w-full scale-110 object-cover object-top" />
-      </div>
-    )
-  }
-  const tier = fighter.rank === 1 ? 'bg-amber-500/15 text-amber-600' : fighter.rank <= 5 ? 'bg-blue-500/10 text-blue-600' : 'bg-muted text-muted-foreground'
-  return <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ring-1 ring-border', tier)}>{initialsOf(fighter)}</div>
+  return (
+    <FighterImage
+      fighter={fighter}
+      className="h-9 w-9 shrink-0 rounded-full bg-muted ring-1 ring-border"
+      imgClassName="scale-110"
+    />
+  )
 }
 
 export default function FighterStatsPage() {

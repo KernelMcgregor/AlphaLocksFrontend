@@ -16,6 +16,10 @@ function AppBreadcrumb() {
   const location = useLocation()
   const path = location.pathname
 
+  // The UFC landing page titles itself; a one-item 'UFC' breadcrumb above it just
+  // repeats the heading.
+  if (path === '/ufc') return null
+
   // Build breadcrumb segments
   const crumbs = [{ label: 'UFC', path: '/' }]
 
@@ -31,8 +35,10 @@ function AppBreadcrumb() {
     crumbs.push({ label: 'Fighter Profile', path: null })
   } else if (path.startsWith('/ufc/fights/')) {
     crumbs.push({ label: 'Fight Details', path: null })
-  } else if (path === '/ufc') {
+  } else if (path === '/ufc/events') {
     crumbs.push({ label: 'Events & Fights', path: null })
+  // '/ufc' is the section landing page — the root crumb already names it, so it gets no
+  // second segment.
   } else if (path === '/' || path.startsWith('/model/upcoming')) {
     crumbs.push({ label: 'Upcoming', path: null })
   } else if (path.startsWith('/admin')) {

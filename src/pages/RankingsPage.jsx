@@ -5,6 +5,7 @@ import CountryFlag from '../components/CountryFlag'
 import { ScrollArea } from '../components/ui/scroll-area'
 import { fetchRankings } from '../lib/api'
 import { cn, formatRecord } from '../lib/utils'
+import FighterImage from '../components/sports/FighterImage'
 
 // ---------------------------------------------------------------------------
 // Dimension model
@@ -38,10 +39,6 @@ function ordinal(n) {
   const s = ['th', 'st', 'nd', 'rd']
   const m = v % 100
   return v + (s[(m - 20) % 10] || s[m] || s[0])
-}
-
-function initialsOf(fighter) {
-  return ((fighter.first_name?.[0] || '') + (fighter.last_name?.[0] || '')).toUpperCase()
 }
 
 // Build a percentile lookup across every ranked fighter in a division.
@@ -256,21 +253,12 @@ function RankBadge({ rank }) {
 
 function FighterAvatar({ fighter, size = 'sm' }) {
   const dim = size === 'sm' ? 'h-10 w-10' : 'h-12 w-12'
-  if (fighter.image_url) {
-    return (
-      <div className={cn(dim, 'overflow-hidden rounded-full bg-muted ring-1 ring-border')}>
-        <img src={fighter.image_url} alt="" className="h-full w-full scale-110 object-cover object-top" />
-      </div>
-    )
-  }
-  const tier =
-    fighter.rank === 1 ? 'bg-amber-500/15 text-amber-600' :
-    fighter.rank <= 5 ? 'bg-blue-500/10 text-blue-600' :
-    'bg-muted text-muted-foreground'
   return (
-    <div className={cn(dim, 'flex items-center justify-center rounded-full text-[13px] font-extrabold tracking-tight ring-1 ring-border', tier)}>
-      {initialsOf(fighter)}
-    </div>
+    <FighterImage
+      fighter={fighter}
+      className={cn(dim, 'rounded-full bg-muted ring-1 ring-border')}
+      imgClassName="scale-110"
+    />
   )
 }
 
@@ -322,17 +310,12 @@ function DetailPanel({ fighter, profile, division }) {
         {/* identity + photo */}
         <div>
           <div className="relative flex h-[280px] items-end justify-center overflow-hidden rounded-2xl border bg-gradient-to-b from-blue-500/10 to-transparent">
-            {fighter.image_url ? (
-              <img
-                src={fighter.image_url}
-                alt={`${fighter.first_name} ${fighter.last_name}`}
-                className="h-[270px] object-contain object-bottom"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-5xl font-extrabold text-muted-foreground/40">
-                {initialsOf(fighter)}
-              </div>
-            )}
+            <FighterImage
+              fighter={fighter}
+              fit="contain"
+              className="h-[270px] w-full"
+              alt={`${fighter.first_name} ${fighter.last_name}`}
+            />
           </div>
           <div className="mt-3.5">
             <div className="flex items-center gap-2">

@@ -14,6 +14,7 @@ import FighterMini from '../components/sports/FighterMini'
 import { fetchEvents, fetchFighter, fetchFighterCareerStats, fetchFighterFights, fetchFighterRankHistory, fetchFighterStats, fetchRankings } from '../lib/api'
 import { cn, formatDate, formatRecord } from '../lib/utils'
 import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, deriveRoundPacing, deriveRoundSurvival, deriveTwoWay, initialsOf, methodLabel, ordinal } from '../lib/fighterAnalytics'
+import FighterImage from '../components/sports/FighterImage'
 
 // ---------------------------------------------------------------------------
 // Radial charts (dependency-free inline SVG — same family as RankingsPage)
@@ -737,13 +738,15 @@ function useScrollSpy(sections) {
 // One titled sub-box in the scrolling column.
 function Section({ id, title, note, children, className, register }) {
   return (
+    // No card of its own — sections are separated by a rule (applied by the
+    // parent to every section after the first) rather than boxed individually.
     <section
       ref={(el) => register(id, el)}
-      className={cn('flex shrink-0 flex-col rounded-xl border border-border p-3', className)}
+      className={cn('flex shrink-0 flex-col', className)}
     >
-      <div className="mb-2 flex shrink-0 items-baseline gap-2">
-        <h2 className="text-[13px] font-extrabold tracking-tight">{title}</h2>
-        {note && <span className="text-[11px] text-muted-foreground">{note}</span>}
+      <div className="mb-3 flex shrink-0 items-baseline gap-2.5">
+        <h2 className="text-[17px] font-extrabold tracking-tight">{title}</h2>
+        {note && <span className="text-[11.5px] text-muted-foreground">{note}</span>}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
     </section>
@@ -1445,11 +1448,12 @@ export default function FighterProfilePage() {
                 slack collects as dead space between this card and the one below. */}
             <div className="relative flex min-h-[132px] flex-1 items-end justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-b from-blue-500/10 to-transparent">
               <WavingFlag countryCode={fighter.country_code} />
-              {fighter.image_url ? (
-                <img src={fighter.image_url} alt={`${fighter.first_name} ${fighter.last_name}`} className="relative z-10 h-full w-full object-contain object-bottom" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-5xl font-extrabold text-muted-foreground/30">{initialsOf(fighter)}</div>
-              )}
+              <FighterImage
+                fighter={fighter}
+                fit="contain"
+                alt={`${fighter.first_name} ${fighter.last_name}`}
+                className="relative z-10 h-full w-full"
+              />
               {isChamp && (
                 <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-background/90 px-2 py-0.5 text-[10px] font-bold text-amber-600 backdrop-blur">
                   <Crown className="h-3 w-3" /> CHAMPION
@@ -1514,13 +1518,7 @@ export default function FighterProfilePage() {
                     <Tip content={<FighterMini f={opp} />}>
                     <Link to={`/ufc/fighters/${last.oppId}`} className="flex items-center gap-2 rounded-md transition-colors hover:bg-muted/50">
                       <div className="relative shrink-0">
-                        {opp?.image_url ? (
-                          <img src={opp.image_url} alt="" className="h-8 w-8 rounded-full object-cover object-top" />
-                        ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
-                            {opp?.name ? opp.name.split(' ').map((n) => n[0]).join('') : '?'}
-                          </div>
-                        )}
+                        <FighterImage fighter={opp} className="h-8 w-8 rounded-full bg-muted" />
                         <span className={cn(
                           'absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-extrabold text-white ring-2 ring-card',
                           last.draw ? 'bg-slate-400' : last.win ? 'bg-emerald-500' : 'bg-rose-500',
@@ -1547,13 +1545,7 @@ export default function FighterProfilePage() {
                   {upcoming ? (
                     <Tip content={<FighterMini f={opp} />}>
                     <Link to={`/ufc/fighters/${upcoming.oppId}`} className="flex items-center gap-2 rounded-md transition-colors hover:bg-muted/50">
-                      {opp?.image_url ? (
-                        <img src={opp.image_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover object-top" />
-                      ) : (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
-                          {opp?.name ? opp.name.split(' ').map((n) => n[0]).join('') : '?'}
-                        </div>
-                      )}
+                      <FighterImage fighter={opp} className="h-8 w-8 shrink-0 rounded-full bg-muted" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[12px] font-bold leading-tight">{opp?.name || 'TBA'}</div>
                         <div className="truncate text-[10px] text-muted-foreground">{formatDate(upcoming.date)}</div>
@@ -1574,8 +1566,10 @@ export default function FighterProfilePage() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
         {/* one scroll container, one section per tab. `relative` matters: the spy
             reads section.offsetTop, which is measured against the offset parent. */}
-        <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto p-3">
-          <div className="flex flex-col gap-3">
+        <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto p-4">
+          {/* the rule belongs to the gap between sections, so it is applied to
+              every section that follows another rather than to each one */}
+          <div className="flex flex-col gap-5 [&>section+section]:border-t-2 [&>section+section]:border-foreground [&>section+section]:pt-5">
 
           <Section
             id="skills"
@@ -1925,13 +1919,7 @@ export default function FighterProfilePage() {
                             </td>
                             <td className="py-1.5 pr-2">
                               <Tip className="flex items-center gap-2" content={<FighterMini f={opp} />}>
-                                {opp?.image_url ? (
-                                  <img src={opp.image_url} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover object-top" />
-                                ) : (
-                                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-bold text-muted-foreground">
-                                    {opp?.name ? opp.name.split(' ').map((n) => n[0]).join('') : '?'}
-                                  </div>
-                                )}
+                                <FighterImage fighter={opp} className="h-6 w-6 shrink-0 rounded-full bg-muted" />
                                 <Link
                                   to={`/ufc/fighters/${r.oppId}`}
                                   onClick={(e) => e.stopPropagation()}

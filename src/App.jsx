@@ -5,6 +5,7 @@ import FighterDecompositionsPage from './pages/FighterDecompositionsPage'
 import FighterProfilePage from './pages/FighterProfilePage'
 import FighterStatsPage from './pages/FighterStatsPage'
 import ModelPage from './pages/ModelPage'
+import UFCHomePage from './pages/UFCHomePage'
 import UFCPage from './pages/UFCPage'
 
 export default function App() {
@@ -12,7 +13,8 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<ModelPage tab="upcoming" />} />
-        <Route path="/ufc" element={<UFCPage />} />
+        <Route path="/ufc" element={<UFCHomePage />} />
+        <Route path="/ufc/events" element={<UFCPage />} />
         <Route path="/ufc/fights/:id" element={<FightDetailPage />} />
         <Route path="/ufc/rankings" element={<FighterDecompositionsPage />} />
         <Route path="/model/upcoming" element={<ModelPage tab="upcoming" />} />

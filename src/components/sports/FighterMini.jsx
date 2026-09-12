@@ -2,19 +2,13 @@
 // record and divisional rank. Every field is optional — callers assemble it from
 // whatever lookup they have (rankings payload, fighter fetch, similarity rows).
 import CountryFlag from '../CountryFlag'
+import FighterImage from './FighterImage'
 
 export default function FighterMini({ f }) {
   if (!f) return <span className="text-[11px] text-muted-foreground">Unknown fighter</span>
-  const initials = f.name ? f.name.split(' ').map((n) => n[0]).join('') : '?'
   return (
     <div className="flex items-center gap-2.5">
-      {f.image_url ? (
-        <img src={f.image_url} alt="" className="h-11 w-11 shrink-0 rounded-md object-cover object-top" />
-      ) : (
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-bold text-muted-foreground">
-          {initials}
-        </div>
-      )}
+      <FighterImage fighter={f} className="h-11 w-11 shrink-0 rounded-md bg-muted" />
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <CountryFlag countryCode={f.country_code} />
