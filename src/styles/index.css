@@ -39,6 +39,15 @@
   /* Negative arm of the diverging scale only — never a categorical slot, and not
      --color-destructive, which is a reserved status colour. */
   --color-viz-neg: #e34948;
+
+  /* UFC corners. NOT a categorical chart slot: the corners are literally named
+     red and blue, so this is a domain-literal encoding the reader already knows,
+     not an arbitrary assignment. The viz slots were used here first, which had
+     the red corner rendering blue and the blue corner orange.
+     Kept off --color-destructive (reserved status) and darker than the rose-500
+     used for losses, since both can appear on a fight page. */
+  --color-corner-red: #d92d3c;
+  --color-corner-blue: #2a6fd6;
 }
 
 .dark {
@@ -67,6 +76,10 @@
      contrast PASS. */
   --color-viz-1-soft: #8fc0f2;
   --color-viz-neg: #e34948;
+
+  /* Lifted for the dark surface rather than flipped. */
+  --color-corner-red: #e8404f;
+  --color-corner-blue: #3b82f6;
 }
 
 body {

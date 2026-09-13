@@ -83,6 +83,17 @@ export const fetchFights = (params = {}) => {
   return cachedRequest(`/ufc/fights${qs ? `?${qs}` : ''}`)
 }
 export const fetchFight = (id) => cachedRequest(`/ufc/fights/${id}`)
+// Matchup context: per-corner Glicko skill percentiles, the ranked skill edges
+// between them, finish rates, layoff, and shared opponents. Complements fetchFight
+// rather than replacing it — career stats and fight logs stay on their own
+// per-fighter endpoints so the profile page shares the cache entries.
+export const fetchFightContext = (id) => cachedRequest(`/ufc/fights/${id}/context`)
+// Index rows for every written preview — headline, lede and the card it belongs
+// to, not the article bodies. The full piece comes from fetchFight.
+export const fetchPreviews = (params = {}) => {
+  const qs = new URLSearchParams(params).toString()
+  return cachedRequest(`/ufc/previews${qs ? `?${qs}` : ''}`)
+}
 
 // Predictions & Model
 export const fetchEventPredictions = (eventId) => cachedRequest(`/ufc/events/${eventId}/predictions`)

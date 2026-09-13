@@ -33,8 +33,12 @@ function AppBreadcrumb() {
     crumbs.push({ label: 'Decompositions', path: null })
   } else if (path.startsWith('/ufc/fighters/')) {
     crumbs.push({ label: 'Fighter Profile', path: null })
+  } else if (path.startsWith('/ufc/fights/') && path.endsWith('/preview')) {
+    crumbs.push({ label: 'Fight Preview', path: null })
   } else if (path.startsWith('/ufc/fights/')) {
     crumbs.push({ label: 'Fight Details', path: null })
+  } else if (path === '/ufc/articles') {
+    crumbs.push({ label: 'Articles', path: null })
   } else if (path === '/ufc/events') {
     crumbs.push({ label: 'Events & Fights', path: null })
   // '/ufc' is the section landing page — the root crumb already names it, so it gets no
@@ -83,7 +87,7 @@ export default function Layout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="flex flex-1 flex-col overflow-hidden px-4 py-4 md:px-8 md:py-4">
+      <main className="flex flex-1 flex-col overflow-hidden px-3 py-4 md:px-4 md:py-4">
         <div className="mb-3 shrink-0 flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
