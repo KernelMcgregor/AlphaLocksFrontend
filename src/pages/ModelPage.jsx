@@ -355,6 +355,13 @@ export default function ModelPage({ tab = 'upcoming' }) {
                           const abbrTag = !isDK && pickedBook ? bookAbbr[pickedBook] || pickedBook : null
                           const pickedRed = pred?.predicted_winner === 'red'
                           const prob = pred ? (pickedRed ? pred.red_prob : 1 - pred.red_prob) : null
+                          // Volume-weighted Kalshi/Polymarket price, oriented to the side the
+                          // model picked so it sits directly beside the model's own number.
+                          const exch = fight.exchange
+                          const exchProb = exch ? (pickedRed ? exch.red_prob : 1 - exch.red_prob) : null
+                          // Model minus market. Meaningful without a de-vig step, unlike the
+                          // American prices above, because exchange quotes carry no vig.
+                          const exchEdge = exchProb != null && prob != null ? (prob - exchProb) * 100 : null
 
                           return (
                             <div key={fight.id} className="rounded-lg border border-border bg-card p-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate(`/ufc/fights/${fight.id}`)}>
@@ -412,6 +419,21 @@ export default function ModelPage({ tab = 'upcoming' }) {
                                     {pickedRed ? `${r.first_name} ${r.last_name}` : `${b.first_name} ${b.last_name}`}
                                   </span>
                                   <span className="text-muted-foreground">({(prob * 100) | 0}%)</span>
+                                  {exchProb != null && (
+                                    <span
+                                      className="ml-auto flex items-center gap-1 tabular-nums"
+                                      title={`Exchange consensus across ${exch.venues} venue${exch.venues === 1 ? '' : 's'}, volume-weighted. No vig.`}
+                                    >
+                                      <span className="text-muted-foreground">mkt</span>
+                                      <span className="font-semibold">{(exchProb * 100) | 0}%</span>
+                                      <span className={cn(
+                                        'font-semibold',
+                                        exchEdge > 2 ? 'text-emerald-500' : 'text-muted-foreground',
+                                      )}>
+                                        {exchEdge > 0 ? '+' : ''}{exchEdge.toFixed(0)}
+                                      </span>
+                                    </span>
+                                  )}
                                 </div>
                               )}
                               {fight.method_prediction && (

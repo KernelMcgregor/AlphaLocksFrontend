@@ -88,6 +88,12 @@ export const fetchFight = (id) => cachedRequest(`/ufc/fights/${id}`)
 // rather than replacing it — career stats and fight logs stay on their own
 // per-fighter endpoints so the profile page shares the cache entries.
 export const fetchFightContext = (id) => cachedRequest(`/ufc/fights/${id}/context`)
+// Prediction-market price curves (Kalshi, Polymarket), one series per venue, as
+// red-corner probabilities over time. Kept off fetchFight because a curve is
+// hundreds of points per venue and only the movement chart needs it. Short TTL:
+// the ingestion job refreshes every two hours, so a stale hour is visible.
+export const fetchMarketHistory = (id, marketType = 'moneyline') =>
+  cachedRequest(`/ufc/fights/${id}/market-history?market_type=${marketType}`, 30 * 60 * 1000)
 // Index rows for every written preview — headline, lede and the card it belongs
 // to, not the article bodies. The full piece comes from fetchFight.
 export const fetchPreviews = (params = {}) => {
