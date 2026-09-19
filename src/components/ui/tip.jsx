@@ -14,7 +14,10 @@ import { cn } from '../../lib/utils'
 const EDGE = 130 // keeps the bubble fully on screen near either side
 const GAP = 14 // clearance so the cursor never sits on top of the bubble
 
-export function Tip({ children, content, className, style }) {
+// Extra props land on the wrapper, so a trigger can also be clickable (`onClick`),
+// labelled, or given a role. They are spread first so Tip's own hover handlers always
+// win — a caller cannot accidentally break the tooltip by passing onMouseLeave.
+export function Tip({ children, content, className, style, ...rest }) {
   const [pos, setPos] = useState(null)
   const raf = useRef(0)
 
@@ -42,6 +45,7 @@ export function Tip({ children, content, className, style }) {
 
   return (
     <div
+      {...rest}
       className={cn('relative', className)}
       style={style}
       onMouseEnter={track}

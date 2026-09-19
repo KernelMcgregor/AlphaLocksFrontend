@@ -1,591 +1,458 @@
-import { ChevronDown, Crown, Loader2, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react'
+// src/pages/RankingsPage.jsx
+//
+// The divisional standings board. One row per ranked fighter: where they stand, the
+// six-fight window the rank is computed from, who they just beat, who they fight next,
+// and which way they are moving.
+//
+// Same table format as Fighter Skills (FighterDecompositionsPage) — a real <table> with
+// the # and Fighter columns pinned left and the rest scrolling horizontally, sortable
+// column headers. The two pages are read the same way; only the columns differ.
+//
+// Every cell states its value outright; Form is the single exception, because six
+// coloured pips genuinely need a key. Clicking a bout box opens the fight page, clicking
+// anywhere else in the row opens the fighter.
+//
+// This page deliberately shows NO skill dimensions — those live on Fighter Skills. The
+// split is the point: this page answers "where does this fighter stand", that one
+// answers "what is this fighter good at".
+import { ChevronDown, Loader2, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Card, CardContent } from '../components/ui/card'
+import { Link, useNavigate } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
-import { ScrollArea } from '../components/ui/scroll-area'
+import FighterImage from '../components/sports/FighterImage'
+import BeltIcon from '../components/ui/belt-icon'
+import { Card, CardContent } from '../components/ui/card'
+import { Tip } from '../components/ui/tip'
 import { fetchRankings } from '../lib/api'
 import { cn, formatRecord } from '../lib/utils'
-import FighterImage from '../components/sports/FighterImage'
 
 // ---------------------------------------------------------------------------
-// Dimension model
+// Formatting
 // ---------------------------------------------------------------------------
 
-// The 9 axes shown on the radial graphs (a readable subset of the 16 dims).
-const AXES = [
-  { key: 'str_vol', label: 'Volume', group: 'striking' },
-  { key: 'str_acc', label: 'Accuracy', group: 'striking' },
-  { key: 'str_def', label: 'Defense', group: 'striking' },
-  { key: 'ko', label: 'KO Power', group: 'striking' },
-  { key: 'kod', label: 'Chin', group: 'striking' },
-  { key: 'td', label: 'Takedowns', group: 'grappling' },
-  { key: 'tdd', label: 'TD Defense', group: 'grappling' },
-  { key: 'ctrl', label: 'Control', group: 'grappling' },
-  { key: 'sub', label: 'Submission', group: 'grappling' },
-]
-
-const STRIKING_DIMS = ['str_vol', 'str_acc', 'str_def', 'ko', 'kod', 'durability', 'dist']
-const GRAPPLING_DIMS = ['td', 'tdd', 'ctrl', 'sub', 'subd', 'clinch', 'gnd']
-
-const GRAPH_STYLES = [
-  { key: 'radar', label: 'Radar' },
-  { key: 'columns', label: 'Radial bars' },
-  { key: 'rings', label: 'Rings' },
-]
-
-function ordinal(n) {
-  const v = Math.round(n)
-  const s = ['th', 'st', 'nd', 'rd']
-  const m = v % 100
-  return v + (s[(m - 20) % 10] || s[m] || s[0])
+// Methods arrive as ufcstats spells them ("Decision - Unanimous"). In a table cell the
+// prefix is dead width — the column header already says what this is.
+function shortMethod(m) {
+  if (!m) return '—'
+  if (m.startsWith('Decision - ')) return `${m.slice(11)} dec`
+  if (m.includes('Doctor')) return 'TKO (dr)'
+  if (m === 'KO/TKO') return 'KO/TKO'
+  if (m.startsWith('Submission')) return 'Sub'
+  return m
 }
 
-// The backend's `dimensions` are ALREADY percentiles (0-100), computed by
-// ranking_service.compute_dimension_profiles against the whole division. This used to
-// re-percentile them here, which is not a no-op: ranking a set of percentiles spreads
-// them back out to fill 0-100, so a division where everyone is genuinely close would
-// render as though it had a wide spread, and a fighter's number changed depending on how
-// many others happened to be loaded. Pass them through.
-function buildPercentile() {
-  return (dim, val) => Math.max(0, Math.min(100, Math.round(val ?? 0)))
+// "May '26" — for a past bout the year is what matters, the day never does.
+function monthYear(iso) {
+  if (!iso) return '—'
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${d.toLocaleString('en-US', { month: 'short' })} '${String(d.getFullYear()).slice(2)}`
 }
 
-function deriveProfile(fighter, pct) {
-  const dims = fighter.dimensions || {}
-  const axes = AXES.map((a) => ({ ...a, value: pct(a.key, dims[a.key] ?? 0) }))
-  const sorted = [...axes].sort((a, b) => b.value - a.value)
-  const avg = (keys) => Math.round(keys.reduce((s, k) => s + pct(k, dims[k] ?? 0), 0) / keys.length)
-  const striking = avg(STRIKING_DIMS)
-  const grappling = avg(GRAPPLING_DIMS)
-  const overall = Math.round((striking + grappling) / 2)
-  return {
-    axes,
-    strengths: sorted.slice(0, 3),
-    weaknesses: sorted.slice(-3).reverse(),
-    topSkills: sorted.slice(0, 2),
-    groups: [
-      { label: 'Striking', value: striking, cls: 'text-amber-500', stroke: 'stroke-amber-500', fill: 'fill-amber-500' },
-      { label: 'Grappling', value: grappling, cls: 'text-indigo-500', stroke: 'stroke-indigo-500', fill: 'fill-indigo-500' },
-      { label: 'Overall', value: overall, cls: 'text-blue-600', stroke: 'stroke-blue-600', fill: 'fill-blue-600' },
-    ],
-    overall,
-  }
+// "Sep 19" — for a booked bout the exact day is the whole point, and it is always
+// near enough that the year is obvious.
+function monthDay(iso) {
+  if (!iso) return '—'
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function dayDelta(iso) {
+  if (!iso) return null
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((d - today) / 86400000)
+}
+
+// "8mo" / "1.4y" — a layoff column has room for a number and a unit, nothing more.
+function shortSpan(days) {
+  if (days == null) return '—'
+  const n = Math.abs(days)
+  if (n < 31) return `${n}d`
+  if (n < 365) return `${Math.round(n / 30.4)}mo`
+  return `${(n / 365).toFixed(1)}y`
 }
 
 // ---------------------------------------------------------------------------
-// Radial charts (dependency-free inline SVG)
+// Shared bits
 // ---------------------------------------------------------------------------
-function polar(cx, cy, r, i, n) {
-  const a = (i / n) * 2 * Math.PI - Math.PI / 2
-  return [cx + r * Math.cos(a), cy + r * Math.sin(a)]
-}
 
-function RadarChart({ axes }) {
-  const cx = 120, cy = 120, R = 92, n = axes.length
-  const rings = [0.25, 0.5, 0.75, 1]
-  const [scale, setScale] = useState(0)
-
-  useEffect(() => {
-    let start = null
-    let raf
-    const duration = 600
-    const ease = (t) => {
-      // cubic-bezier overshoot approximation
-      const c4 = (2 * Math.PI) / 4.5
-      return t < 0.5
-        ? 8 * t * t * t * t
-        : 1 - Math.pow(-2 * t + 2, 4) / 2 + Math.sin(t * c4) * 0.08
-    }
-    const step = (ts) => {
-      if (!start) start = ts
-      const elapsed = ts - start
-      const t = Math.min(elapsed / duration, 1)
-      setScale(ease(t))
-      if (t < 1) raf = requestAnimationFrame(step)
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  const s = scale
+function ResultDot({ won, drew, className }) {
   return (
-    <svg viewBox="-30 -14 300 268" width={248} height={248} className="max-w-full">
-      {rings.map((fr, gi) => (
-        <polygon
-          key={gi}
-          points={axes.map((_, i) => polar(cx, cy, R * fr, i, n).join(',')).join(' ')}
-          fill="none"
-          className="stroke-border"
-          strokeWidth={1}
-        />
-      ))}
-      {axes.map((_, i) => {
-        const [x, y] = polar(cx, cy, R, i, n)
-        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} className="stroke-border" strokeWidth={1} />
-      })}
-      <polygon
-        points={axes.map((a, i) => polar(cx, cy, (R * a.value * s) / 100, i, n).join(',')).join(' ')}
-        className="fill-blue-500/20 stroke-blue-600"
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      {axes.map((a, i) => {
-        const [x, y] = polar(cx, cy, (R * a.value * s) / 100, i, n)
-        return (
-          <circle
-            key={i} cx={x} cy={y} r={2.6}
-            className="fill-background stroke-blue-600"
-            strokeWidth={1.6}
-          />
-        )
-      })}
-      {axes.map((a, i) => {
-        const [x, y] = polar(cx, cy, R + 16, i, n)
-        const dx = x - cx
-        const anchor = Math.abs(dx) < 8 ? 'middle' : dx > 0 ? 'start' : 'end'
-        return (
-          <text
-            key={i} x={x} y={y + 3} fontSize={9} fontWeight={600} textAnchor={anchor}
-            className="fill-muted-foreground"
-            style={{ opacity: s, transition: `opacity 400ms ease ${200 + i * 30}ms` }}
-          >
-            {a.label}
-          </text>
-        )
-      })}
-    </svg>
+    <span
+      className={cn(
+        'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9.5px] font-extrabold text-white',
+        drew ? 'bg-muted-foreground/60' : won ? 'bg-emerald-600' : 'bg-rose-600',
+        className,
+      )}
+    >
+      {drew ? 'D' : won ? 'W' : 'L'}
+    </span>
   )
 }
 
-function RadialBars({ axes, overall }) {
-  const cx = 120, cy = 120, r0 = 40, Rmax = 104, n = axes.length
-  return (
-    <svg viewBox="0 0 240 240" width={240} height={240} className="max-w-full">
-      {axes.map((_, i) => {
-        const [x1, y1] = polar(cx, cy, r0, i, n)
-        const [x2, y2] = polar(cx, cy, Rmax, i, n)
-        return <line key={`t${i}`} x1={x1} y1={y1} x2={x2} y2={y2} className="stroke-muted" strokeWidth={9} strokeLinecap="round" />
-      })}
-      {axes.map((a, i) => {
-        const [x1, y1] = polar(cx, cy, r0, i, n)
-        const [x2, y2] = polar(cx, cy, r0 + ((Rmax - r0) * a.value) / 100, i, n)
-        return (
-          <line
-            key={`b${i}`}
-            x1={x1} y1={y1} x2={x2} y2={y2}
-            className={a.group === 'striking' ? 'stroke-amber-500' : 'stroke-indigo-500'}
-            strokeWidth={9}
-            strokeLinecap="round"
-          />
-        )
-      })}
-      <circle cx={cx} cy={cy} r={31} className="fill-background stroke-border" strokeWidth={1} />
-      <text x={cx} y={cy - 1} fontSize={20} fontWeight={800} textAnchor="middle" className="fill-foreground">{overall}</text>
-      <text x={cx} y={cy + 13} fontSize={7.5} fontWeight={700} textAnchor="middle" letterSpacing="0.1em" className="fill-muted-foreground">OVR</text>
-    </svg>
-  )
-}
-
-function ActivityRings({ groups, overall }) {
-  const cx = 120, cy = 120, sw = 16
-  const radii = [94, 70, 46]
-  return (
-    <svg viewBox="0 0 240 240" width={240} height={240} className="max-w-full">
-      {radii.map((r, idx) => {
-        const g = groups[idx]
-        const C = 2 * Math.PI * r
-        return (
-          <g key={idx}>
-            <circle cx={cx} cy={cy} r={r} fill="none" className="stroke-muted" strokeWidth={sw} />
-            <circle
-              cx={cx} cy={cy} r={r} fill="none"
-              className={g.stroke}
-              strokeWidth={sw}
-              strokeLinecap="round"
-              strokeDasharray={`${(C * g.value) / 100} ${C * 2}`}
-              transform={`rotate(-90 ${cx} ${cy})`}
-            />
-          </g>
-        )
-      })}
-      <text x={cx} y={cy - 1} fontSize={27} fontWeight={800} textAnchor="middle" className="fill-foreground">{overall}</text>
-      <text x={cx} y={cy + 15} fontSize={8} fontWeight={700} textAnchor="middle" letterSpacing="0.12em" className="fill-muted-foreground">OVERALL</text>
-    </svg>
-  )
-}
-
-const GRAPH_NOTE = {
-  radar: 'Spider chart · 8 skill axes, radius = percentile',
-  columns: 'Radial bars · length = percentile · amber striking, indigo grappling',
-  rings: 'Concentric rings · Striking, Grappling, Overall',
-}
-
-// ---------------------------------------------------------------------------
-// Small pieces
-// ---------------------------------------------------------------------------
-function RankBadge({ rank }) {
-  if (rank === 1) {
-    return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-amber-500/15">
-        <Crown className="h-4 w-4 text-amber-500" />
-      </div>
-    )
-  }
-  if (rank <= 5) {
-    return (
-      <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-blue-500/10">
-        <span className="text-sm font-extrabold tabular-nums text-blue-600">{rank}</span>
-      </div>
-    )
-  }
-  return (
-    <div className="flex h-8 w-8 items-center justify-center">
-      <span className="text-sm font-semibold tabular-nums text-muted-foreground">{rank}</span>
-    </div>
-  )
-}
-
-function FighterAvatar({ fighter, size = 'sm' }) {
-  const dim = size === 'sm' ? 'h-10 w-10' : 'h-12 w-12'
+// Portraits are full-body shots, object-top cropped to a circle. `scale-110` zooms about
+// the element's CENTRE, so it pushes 5% of the image out past the top edge — which is
+// exactly the sliver of skull that was being clipped. Translating down by 6% returns the
+// crown to just inside the rim; the extra zoom then overflows entirely at the bottom,
+// where it is only shoulders.
+function Portrait({ fighter, className, ring }) {
   return (
     <FighterImage
       fighter={fighter}
-      className={cn(dim, 'rounded-full bg-muted ring-1 ring-border')}
-      imgClassName="scale-110"
+      alt=""
+      className={cn('shrink-0 rounded-full bg-muted ring-1', ring || 'ring-border', className)}
+      imgClassName="scale-110 translate-y-[6%]"
     />
   )
 }
 
-function PercentileBar({ label, value, tone }) {
-  const fill = tone === 'good' ? 'bg-emerald-500' : 'bg-rose-500'
-  const text = tone === 'good' ? 'text-emerald-600' : 'text-rose-600'
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-[88px] shrink-0 text-xs font-medium text-foreground/80">{label}</span>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-        <div className={cn('h-full rounded-full', fill)} style={{ width: `${value}%` }} />
-      </div>
-      <span className={cn('w-11 shrink-0 text-right text-[13px] font-extrabold tabular-nums', text)}>{ordinal(value)}</span>
-    </div>
-  )
-}
+// ---------------------------------------------------------------------------
+// Cells
+// ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Detail panel (shown when a row is expanded)
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Score ledger — the per-bout decomposition of a fighter's rating
-// ---------------------------------------------------------------------------
-// The payoff of an objective ranking: every point of a fighter's standing traces back to
-// a specific bout, so the number can be audited instead of taken on faith. `points` is the
-// rating change that bout produced; `expected` is the pre-fight win probability, which is
-// what makes an upset visibly worth more than a formality.
-function ScoreLedger({ ledger }) {
-  if (!ledger?.length) return null
-
-  const fmtMethod = (m) => {
-    if (!m) return '—'
-    if (m.startsWith('Decision - ')) return m.slice(11)
-    if (m.includes('Doctor')) return 'TKO (dr)'
-    return m
+// The ranker pins the reigning champion to rank 1, so the board reads belt, 1, 2, 3 —
+// the contender numbering everyone actually uses, where "#1" means top contender rather
+// than champion. Pound-for-pound has no belt, so it stays 1, 2, 3.
+function RankCell({ rank, hasChampion }) {
+  if (hasChampion && rank === 1) {
+    return (
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15">
+        <BeltIcon className="h-[21px] w-[21px] text-amber-500" strokeWidth={2.6} />
+      </span>
+    )
   }
-
+  const shown = hasChampion ? rank - 1 : rank
   return (
-    <div>
-      <div className="mb-2 flex items-baseline gap-2">
-        <span className="text-xs font-bold uppercase tracking-wider text-blue-600">Score Breakdown</span>
-        <span className="text-xs text-muted-foreground">rating change per bout</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] text-[12px]">
-          <thead>
-            <tr className="border-b text-[10.5px] uppercase tracking-wide text-muted-foreground">
-              <th className="py-1.5 pr-2 text-left font-semibold">Date</th>
-              <th className="py-1.5 pr-2 text-left font-semibold">Opponent</th>
-              <th className="py-1.5 pr-2 text-left font-semibold">Method</th>
-              <th className="py-1.5 pr-2 text-right font-semibold">Exp</th>
-              <th className="py-1.5 text-right font-semibold">Pts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ledger.map((b) => (
-              <tr key={b.fight_id} className="border-b border-border/40 last:border-0">
-                <td className="py-1.5 pr-2 tabular-nums text-muted-foreground">{b.date}</td>
-                <td className="py-1.5 pr-2">
-                  <span
-                    className={cn(
-                      'mr-1.5 inline-block w-[14px] text-center text-[10px] font-bold',
-                      b.won ? 'text-emerald-600' : 'text-rose-600',
-                    )}
-                  >
-                    {b.won ? 'W' : 'L'}
-                  </span>
-                  <span className="font-semibold">{b.opponent_name || '—'}</span>
-                  <span className="ml-1.5 rounded bg-muted px-1 py-px text-[9.5px] font-semibold text-muted-foreground">
-                    T{b.tier}
-                  </span>
-                </td>
-                <td className="py-1.5 pr-2 text-muted-foreground">{fmtMethod(b.method)}</td>
-                <td className="py-1.5 pr-2 text-right tabular-nums text-muted-foreground">
-                  {Math.round((b.expected ?? 0) * 100)}%
-                </td>
-                <td
-                  className={cn(
-                    'py-1.5 text-right font-bold tabular-nums',
-                    b.points > 0 ? 'text-emerald-600' : b.points < 0 ? 'text-rose-600' : 'text-muted-foreground',
-                  )}
-                >
-                  {b.points > 0 ? '+' : ''}
-                  {b.points?.toFixed(1)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-        Tier is the opponent&apos;s strength <em>at the time of the fight</em>, so a bout&apos;s credit never
-        changes later. Exp is the pre-fight win probability — beating a heavy favourite is worth more
-        than beating someone you were supposed to beat.
-      </p>
-    </div>
+    <span
+      className={cn(
+        'inline-flex h-7 w-7 items-center justify-center rounded-lg text-[13px] tabular-nums',
+        shown <= 5 ? 'bg-blue-500/10 font-extrabold text-blue-600' : 'font-semibold text-muted-foreground',
+      )}
+    >
+      {shown}
+    </span>
   )
 }
 
-function DetailPanel({ fighter, profile, division }) {
-  const [graph, setGraph] = useState('radar')
+function FighterCell({ fighter, hasChampion }) {
   return (
-    <div className="border-t bg-muted/30">
-      {/* header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-1 pt-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-blue-600">Skill Profile</span>
-          <span className="text-xs text-muted-foreground">percentile vs {division} division</span>
+    <span className="flex items-center gap-2.5">
+      <Portrait
+        fighter={fighter}
+        className="h-9 w-9"
+        ring={hasChampion && fighter.rank === 1 ? 'ring-amber-400' : 'ring-border'}
+      />
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5">
+          <CountryFlag countryCode={fighter.country_code} />
+          <span className="truncate text-[14px] font-bold tracking-tight">
+            {fighter.first_name} {fighter.last_name}
+          </span>
+          {!fighter.eligible && (
+            <span className="shrink-0 rounded bg-muted px-1 py-px text-[9px] font-bold uppercase text-muted-foreground">
+              Inactive
+            </span>
+          )}
+        </span>
+        <span className="block truncate text-[11px] font-normal text-muted-foreground">
+          {fighter.nickname ? `"${fighter.nickname}"` : formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
+        </span>
+      </span>
+    </span>
+  )
+}
+
+// The six-fight window the rank is computed from, oldest on the left. This is the one
+// column that shows the *shape* of a resume rather than a summary of it — two fighters
+// on 4-2 read completely differently when one lost the last two. It is also the only
+// cell whose meaning is not legible without a key, hence the one surviving tooltip.
+function FormCell({ ledger, streak, streakType }) {
+  if (!ledger?.length) return <span className="text-[12px] text-muted-foreground/50">—</span>
+  const chrono = [...ledger].reverse()
+  return (
+    <Tip
+      className="flex items-center gap-1.5"
+      content={
+        <div className="w-[214px]">
+          <div className="mb-1.5 border-b pb-1.5 text-[12px] font-extrabold tracking-tight">
+            Last {chrono.length}
+          </div>
+          <div className="space-y-1">
+            {chrono.map((b) => (
+              <div key={b.fight_id} className="flex items-center gap-1.5">
+                <ResultDot won={b.won} drew={b.drew} />
+                <span className="min-w-0 flex-1 truncate text-[11px] font-semibold">{b.opponent_name}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">{shortMethod(b.method)}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="inline-flex gap-0.5 rounded-[10px] bg-muted p-0.5">
-          {GRAPH_STYLES.map((g) => (
-            <button
-              key={g.key}
-              onClick={() => setGraph(g.key)}
+      }
+    >
+      <span className="flex items-center gap-[3px]">
+        {chrono.map((b) => (
+          <span
+            key={b.fight_id}
+            className={cn(
+              'h-4 w-[7px] rounded-[2px]',
+              b.drew ? 'bg-muted-foreground/50' : b.won ? 'bg-emerald-500' : 'bg-rose-500',
+            )}
+          />
+        ))}
+      </span>
+      {streak > 1 && (
+        <span className={cn('text-[10.5px] font-extrabold tabular-nums', streakType === 'W' ? 'text-emerald-600' : 'text-rose-600')}>
+          {streakType}{streak}
+        </span>
+      )}
+    </Tip>
+  )
+}
+
+// Strength of schedule is Tapology's 1-99 display figure — the summed tier of the last
+// six opponents, rescaled. It is NOT an input to the rank, so it reads as context.
+function SosCell({ sos }) {
+  const v = sos || 0
+  const tone = v >= 70 ? 'text-rose-600' : v >= 50 ? 'text-amber-600' : 'text-emerald-600'
+  return <span className={cn('text-[14px] font-extrabold tabular-nums', tone)}>{v}</span>
+}
+
+// Time since the last scored bout: what separates an active contender from someone
+// coasting on an old win, and a warning before the 21-month eligibility cliff.
+function LastActiveCell({ bout, eligible }) {
+  const days = dayDelta(bout?.date)
+  if (days == null) return <span className="text-[12px] text-muted-foreground/50">—</span>
+  const ago = Math.abs(days)
+  const tone = !eligible || ago > 550 ? 'text-rose-600' : ago > 365 ? 'text-amber-600' : 'text-foreground'
+  return (
+    <span className="flex flex-col leading-tight">
+      <span className={cn('text-[12.5px] font-bold tabular-nums', tone)}>{shortSpan(days)}</span>
+      <span className="text-[10px] text-muted-foreground">{monthYear(bout.date)}</span>
+    </span>
+  )
+}
+
+// The boxed bout cells. Clicking either opens that fight's page.
+const BOX = 'flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1 transition-colors cursor-pointer'
+// Same rendered height as a filled box (border + py-1 + a two-line text block), so an
+// unbooked row does not sit a few pixels shorter than its neighbours.
+const BOX_EMPTY = 'block rounded-lg border border-dashed px-2 py-[9px] text-[11.5px] text-muted-foreground/50'
+
+function LastFightCell({ bout }) {
+  const navigate = useNavigate()
+  if (!bout) {
+    return <span className={BOX_EMPTY}>No bouts</span>
+  }
+  const opp = { id: bout.opponent_id, image_url: bout.opponent_image_url }
+  const ended = bout.finish_round ? `R${bout.finish_round}` : null
+  // Tint by outcome — the box itself carries the result, so the W/L never has to be
+  // read off the text.
+  const tint = bout.drew
+    ? 'border-border bg-muted/50 hover:bg-muted'
+    : bout.won
+      ? 'border-emerald-500/30 bg-emerald-500/[0.08] hover:border-emerald-500/60 hover:bg-emerald-500/15'
+      : 'border-rose-500/30 bg-rose-500/[0.08] hover:border-rose-500/60 hover:bg-rose-500/15'
+  return (
+    <span
+      onClick={(e) => { e.stopPropagation(); navigate(`/ufc/fights/${bout.fight_id}`) }}
+      className={cn(BOX, tint)}
+    >
+      <ResultDot won={bout.won} drew={bout.drew} />
+      <Portrait fighter={opp} className="h-7 w-7" />
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className="block truncate text-[12.5px] font-semibold">{bout.opponent_name || '—'}</span>
+        <span className="block truncate text-[10.5px] font-normal text-muted-foreground">
+          {shortMethod(bout.method)}{ended ? ` · ${ended}` : ''}
+        </span>
+      </span>
+    </span>
+  )
+}
+
+function NextFightCell({ next }) {
+  const navigate = useNavigate()
+  if (!next) {
+    return <span className={BOX_EMPTY}>Unbooked</span>
+  }
+  const opp = { id: next.opponent_id, image_url: next.opponent_image_url }
+  return (
+    <span
+      onClick={(e) => { e.stopPropagation(); navigate(`/ufc/fights/${next.fight_id}`) }}
+      className={cn(BOX, 'border-blue-500/25 bg-blue-500/[0.06] hover:border-blue-500/50 hover:bg-blue-500/12')}
+    >
+      <Portrait fighter={opp} className="h-7 w-7" ring="ring-blue-500/30" />
+      <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{next.opponent_name}</span>
+      <span className="shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
+        {monthDay(next.event_date)}
+      </span>
+    </span>
+  )
+}
+
+// `delta` is positive when the fighter climbed — the API already flips it, because ranks
+// count down and an unflipped delta reads backwards to everyone.
+function MovementCell({ movement }) {
+  const delta = movement?.delta
+  if (delta == null) {
+    return (
+      <span className="rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-400">
+        New
+      </span>
+    )
+  }
+  if (delta === 0) return <span className="inline-flex text-muted-foreground/40"><Minus className="h-3.5 w-3.5" /></span>
+  const up = delta > 0
+  const Icon = up ? TrendingUp : TrendingDown
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11.5px] font-extrabold tabular-nums',
+        up ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600',
+      )}
+    >
+      <Icon className="h-3 w-3" />
+      {Math.abs(delta)}
+    </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Table
+// ---------------------------------------------------------------------------
+
+// One entry per scrolling column: width, header, and the value the sorter reads.
+// `value` returning null sinks the row to the bottom in BOTH directions — "Unbooked"
+// and "New" are absent data, not extreme data, so they never top the list.
+const COLUMNS = [
+  { key: 'rec', label: 'Record', w: 'w-[72px] min-w-[72px]', align: 'text-center', dir: 'desc', value: (f) => f.wins - f.losses },
+  { key: 'form', label: 'Form', w: 'w-[100px] min-w-[100px]', align: 'text-left', dir: 'desc', value: (f) => (f.ledger || []).filter((b) => b.won).length },
+  { key: 'sos', label: 'SOS', w: 'w-[58px] min-w-[58px]', align: 'text-left', dir: 'desc', value: (f) => f.sos || 0 },
+  // Ascending = oldest bout first, i.e. longest layoff at the top. That is the question
+  // this column exists to answer — who is going stale — so it is the first-click default.
+  { key: 'active', label: 'Last active', w: 'w-[84px] min-w-[84px]', align: 'text-left', dir: 'asc', value: (f) => (f.last_fight?.date ? Date.parse(`${f.last_fight.date}T00:00:00`) : null) },
+  { key: 'last', label: 'Last fight', w: 'w-[214px] min-w-[214px]', align: 'text-left', dir: 'desc', value: (f) => (f.last_fight?.date ? Date.parse(`${f.last_fight.date}T00:00:00`) : null) },
+  { key: 'next', label: 'Next fight', w: 'w-[230px] min-w-[230px]', align: 'text-left', dir: 'asc', value: (f) => (f.next_fight?.event_date ? Date.parse(`${f.next_fight.event_date}T00:00:00`) : null) },
+  { key: 'move', label: 'Movement', w: 'w-[88px] min-w-[88px]', align: 'text-center', dir: 'desc', value: (f) => f.movement?.delta ?? null },
+]
+
+// Sticky cells need OPAQUE backgrounds. A translucent tint lets the non-sticky cells
+// slide visibly underneath during horizontal scroll, and where the two translucent
+// layers overlap they stack into a dark seam at the column boundary.
+const TH = 'bg-muted px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground'
+// With border-separate the row border has to live on the cells — a border set on <tr>
+// is not painted in the separated-borders model.
+//
+// py-1.5 rather than Fighter Skills' py-2 because the bout boxes add their own border
+// and padding on top of the cell's; the two pages land on the same ~52px row as a
+// result, which is the point — they are read as one table in two views.
+const TD = 'border-b border-border px-2 py-1.5'
+
+function HeaderCell({ col, sortKey, sortDir, onSort }) {
+  const active = sortKey === col.key
+  return (
+    <th
+      onClick={() => onSort(col.key)}
+      className={cn(TH, col.w, col.align, 'cursor-pointer select-none transition-colors hover:text-foreground', active && 'text-foreground')}
+    >
+      {col.label}
+      <span className={cn('ml-0.5 inline-block', !active && 'opacity-0')}>{sortDir === 'asc' ? '↑' : '↓'}</span>
+    </th>
+  )
+}
+
+function Row({ fighter, hasChampion }) {
+  const navigate = useNavigate()
+  const go = () => navigate(`/ufc/fighters/${fighter.id}`)
+  return (
+    <tr
+      onClick={go}
+      onKeyDown={(e) => { if (e.key === 'Enter') go() }}
+      tabIndex={0}
+      className="group cursor-pointer hover:bg-muted"
+    >
+      <td className={cn(TD, 'sticky left-0 z-[2] w-[46px] min-w-[46px] bg-card text-center group-hover:bg-muted')}>
+        <RankCell rank={fighter.rank} hasChampion={hasChampion} />
+      </td>
+      <td className={cn(TD, 'sticky left-[46px] z-[2] w-[218px] min-w-[218px] bg-card px-3 group-hover:bg-muted')}>
+        <FighterCell fighter={fighter} hasChampion={hasChampion} />
+      </td>
+      <td className={cn(TD, 'w-[72px] min-w-[72px] text-center text-[12.5px] font-semibold tabular-nums text-muted-foreground')}>
+        {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
+      </td>
+      <td className={cn(TD, 'w-[100px] min-w-[100px]')}>
+        <FormCell ledger={fighter.ledger} streak={fighter.streak} streakType={fighter.streak_type} />
+      </td>
+      <td className={cn(TD, 'w-[58px] min-w-[58px]')}>
+        <SosCell sos={fighter.sos} />
+      </td>
+      <td className={cn(TD, 'w-[84px] min-w-[84px]')}>
+        <LastActiveCell bout={fighter.last_fight} eligible={fighter.eligible} />
+      </td>
+      <td className={cn(TD, 'w-[214px] min-w-[214px]')}>
+        <LastFightCell bout={fighter.last_fight} />
+      </td>
+      <td className={cn(TD, 'w-[230px] min-w-[230px]')}>
+        <NextFightCell next={fighter.next_fight} />
+      </td>
+      <td className={cn(TD, 'w-[88px] min-w-[88px] text-center')}>
+        <MovementCell movement={fighter.movement} />
+      </td>
+    </tr>
+  )
+}
+
+function DivisionTable({ fighters, hasChampion, sortKey, sortDir, onSort }) {
+  const rows = useMemo(() => {
+    const list = [...fighters]
+    if (sortKey === 'rank') return list.sort((a, b) => (a.rank - b.rank) * (sortDir === 'asc' ? 1 : -1))
+    const col = COLUMNS.find((c) => c.key === sortKey)
+    if (!col) return list.sort((a, b) => a.rank - b.rank)
+    const dir = sortDir === 'asc' ? 1 : -1
+    return list.sort((a, b) => {
+      const av = col.value(a)
+      const bv = col.value(b)
+      // Absent data sinks regardless of direction, then rank breaks ties so the board
+      // never reshuffles arbitrarily within a group of equal values.
+      if (av == null && bv == null) return a.rank - b.rank
+      if (av == null) return 1
+      if (bv == null) return -1
+      return av === bv ? a.rank - b.rank : (av - bv) * dir
+    })
+  }, [fighters, sortKey, sortDir])
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-separate border-spacing-0 tabular-nums">
+        <thead>
+          <tr>
+            <th
+              onClick={() => onSort('rank')}
               className={cn(
-                'rounded-[7px] px-3 py-1.5 text-[11.5px] font-semibold transition-colors',
-                graph === g.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                TH, 'sticky left-0 z-[5] w-[46px] min-w-[46px] cursor-pointer select-none transition-colors hover:text-foreground',
+                sortKey === 'rank' && 'text-foreground',
               )}
             >
-              {g.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* body */}
-      <div className="grid grid-cols-1 gap-5 px-5 pb-6 pt-3 xl:grid-cols-[230px_270px_1fr]">
-        {/* identity + photo */}
-        <div>
-          <div className="relative flex h-[280px] items-end justify-center overflow-hidden rounded-2xl border bg-gradient-to-b from-blue-500/10 to-transparent">
-            <FighterImage
-              fighter={fighter}
-              fit="contain"
-              className="h-[270px] w-full"
-              alt={`${fighter.first_name} ${fighter.last_name}`}
-            />
-          </div>
-          <div className="mt-3.5">
-            <div className="flex items-center gap-2">
-              <CountryFlag countryCode={fighter.country_code} />
-              <span className="text-xl font-extrabold leading-tight tracking-tight">
-                {fighter.first_name} {fighter.last_name}
+              #
+              <span className={cn('ml-0.5 inline-block', sortKey !== 'rank' && 'opacity-0')}>
+                {sortDir === 'asc' ? '↑' : '↓'}
               </span>
-            </div>
-            {fighter.nickname && <div className="mt-0.5 text-sm text-muted-foreground">"{fighter.nickname}"</div>}
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              <span className="rounded-md border bg-background px-2.5 py-1 text-[11px] font-bold tabular-nums text-foreground/80">
-                {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
-              </span>
-              <span className="rounded-md border bg-background px-2.5 py-1 text-[11px] font-bold text-foreground/80">
-                Power Score {fighter.score.toFixed(0)}
-              </span>
-            </div>
-            {fighter.rank === 1 && (
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-600">
-                <Crown className="h-3 w-3" /> {division} Champion
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* radial chart */}
-        <div className="flex flex-col items-center rounded-2xl border bg-card p-4">
-          <div className="flex min-h-[248px] w-full items-center justify-center">
-            {graph === 'radar' && <RadarChart axes={profile.axes} />}
-            {graph === 'columns' && <RadialBars axes={profile.axes} overall={profile.overall} />}
-            {graph === 'rings' && <ActivityRings groups={profile.groups} overall={profile.overall} />}
-          </div>
-          <p className="mt-1 text-center text-[11px] leading-snug text-muted-foreground">{GRAPH_NOTE[graph]}</p>
-          <div className="mt-3.5 flex w-full gap-2 border-t pt-3.5">
-            {profile.groups.map((g) => (
-              <div key={g.label} className="flex-1 text-center">
-                <div className={cn('text-lg font-extrabold leading-none tabular-nums', g.cls)}>{g.value}</div>
-                <div className="mt-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">{g.label}</div>
-              </div>
+            </th>
+            <th className={cn(TH, 'sticky left-[46px] z-[5] w-[218px] min-w-[218px] px-3 text-left')}>Fighter</th>
+            {COLUMNS.map((col) => (
+              <HeaderCell key={col.key} col={col} sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             ))}
-          </div>
-        </div>
-
-        {/* strengths / weaknesses */}
-        <div className="flex flex-col gap-4">
-          <div>
-            <div className="mb-2.5 flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-              <span className="text-xs font-bold uppercase tracking-wide">Strengths</span>
-            </div>
-            <div className="flex flex-col gap-2.5">
-              {profile.strengths.map((s) => (
-                <PercentileBar key={s.key} label={s.label} value={s.value} tone="good" />
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="mb-2.5 flex items-center gap-1.5">
-              <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
-              <span className="text-xs font-bold uppercase tracking-wide">Weaknesses</span>
-            </div>
-            <div className="flex flex-col gap-2.5">
-              {profile.weaknesses.map((s) => (
-                <PercentileBar key={s.key} label={s.label} value={s.value} tone="bad" />
-              ))}
-            </div>
-          </div>
-          <p className="rounded-xl border bg-card px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
-            Percentiles rank {fighter.last_name} against all ranked {division}s.
-          </p>
-        </div>
-      </div>
-
-      {/* Score ledger spans the full panel — it is the audit trail for the rank itself,
-          not a property of the skill radar above it. */}
-      {fighter.ledger?.length > 0 && (
-        <div className="border-t px-5 pb-6 pt-4">
-          <ScoreLedger ledger={fighter.ledger} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Fighter row
-// ---------------------------------------------------------------------------
-const ROW_GRID = 'grid grid-cols-[36px_36px_1fr_auto_20px] md:grid-cols-[44px_44px_minmax(140px,1fr)_84px_140px_190px_24px] items-center gap-2 md:gap-3.5'
-
-function FighterRow({ fighter, profile, division, expanded, onToggle, scorePct }) {
-  return (
-    <div className="border-b last:border-b-0">
-      <div
-        onClick={onToggle}
-        className={cn(ROW_GRID, 'cursor-pointer px-3 py-2.5 transition-colors hover:bg-muted/40 md:px-4', expanded && 'bg-muted/40')}
-      >
-        <div className="flex justify-center"><RankBadge rank={fighter.rank} /></div>
-        <FighterAvatar fighter={fighter} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <CountryFlag countryCode={fighter.country_code} />
-            <span className="truncate text-[14px] font-bold tracking-tight md:text-[15px]">
-              {fighter.first_name} {fighter.last_name}
-            </span>
-          </div>
-          {fighter.nickname && <div className="hidden truncate text-[11.5px] text-muted-foreground md:block">"{fighter.nickname}"</div>}
-          {/* Mobile: show record + score inline under name */}
-          <div className="flex items-center gap-2 mt-0.5 md:hidden">
-            <span className="text-[11px] font-semibold tabular-nums text-muted-foreground">
-              {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
-            </span>
-            <span className="text-[11px] font-extrabold tabular-nums">{fighter.score.toFixed(0)}</span>
-            <div className="h-1 w-12 overflow-hidden rounded-full bg-muted">
-              <div
-                className={cn('h-full rounded-full', fighter.rank === 1 ? 'bg-amber-500' : fighter.rank <= 5 ? 'bg-blue-600' : 'bg-muted-foreground/50')}
-                style={{ width: `${scorePct}%` }}
-              />
-            </div>
-          </div>
-        </div>
-        {/* Mobile: top skill badge */}
-        <div className="flex gap-1 md:hidden">
-          {profile.topSkills.slice(0, 1).map((s) => (
-            <span key={s.key} className="inline-flex items-center whitespace-nowrap rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[9.5px] font-semibold text-sky-700">
-              {s.label}
-            </span>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((fighter) => (
+            <Row key={fighter.id} fighter={fighter} hasChampion={hasChampion} />
           ))}
-        </div>
-        {/* Desktop columns */}
-        <span className="hidden text-[13px] font-semibold tabular-nums text-muted-foreground md:block">
-          {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
-        </span>
-        <div className="hidden items-center gap-2.5 md:flex">
-          <span className="w-10 text-sm font-extrabold tabular-nums">{fighter.score.toFixed(0)}</span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn('h-full rounded-full', fighter.rank === 1 ? 'bg-amber-500' : fighter.rank <= 5 ? 'bg-blue-600' : 'bg-muted-foreground/50')}
-              style={{ width: `${scorePct}%` }}
-            />
-          </div>
-        </div>
-        <div className="hidden flex-wrap gap-1.5 md:flex">
-          {profile.topSkills.map((s) => (
-            <span key={s.key} className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-sky-700 dark:text-sky-300">
-              {s.label}<b className="tabular-nums">{ordinal(s.value)}</b>
-            </span>
-          ))}
-        </div>
-        <ChevronDown className={cn('h-4 w-4 justify-self-center text-muted-foreground/50 transition-transform', expanded && 'rotate-180')} />
-      </div>
-      {expanded && <DetailPanel fighter={fighter} profile={profile} division={division} />}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Division table
-// ---------------------------------------------------------------------------
-function DivisionTable({ fighters, label }) {
-  const [expandedId, setExpandedId] = useState(null)
-  const [showAll, setShowAll] = useState(false)
-
-  const { pct, scores } = useMemo(() => {
-    const pct = buildPercentile()
-    const vals = fighters.map((f) => f.score)
-    const min = Math.min(...vals, 0)
-    const max = Math.max(...vals, 1)
-    const scores = {}
-    fighters.forEach((f) => {
-      scores[f.id] = Math.max(8, Math.round(((f.score - min) / Math.max(max - min, 1)) * 92) + 8)
-    })
-    return { pct, scores }
-  }, [fighters])
-
-  const visible = showAll ? fighters : fighters.slice(0, 15)
-
-  return (
-    <div>
-      {visible.map((fighter) => (
-        <FighterRow
-          key={fighter.id}
-          fighter={fighter}
-          profile={deriveProfile(fighter, pct)}
-          division={label}
-          expanded={expandedId === fighter.id}
-          onToggle={() => setExpandedId((id) => (id === fighter.id ? null : fighter.id))}
-          scorePct={scores[fighter.id]}
-        />
-      ))}
-      {fighters.length > 15 && (
-        <button
-          onClick={() => setShowAll((v) => !v)}
-          className="w-full py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {showAll ? 'Show Top 15' : `Show all ${fighters.length} fighters`}
-        </button>
-      )}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -595,10 +462,11 @@ function DivisionTable({ fighters, label }) {
 // ---------------------------------------------------------------------------
 export default function RankingsPage() {
   const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [activeWc, setActiveWc] = useState(null)
   const [wcOpen, setWcOpen] = useState(false)
+  const [sortKey, setSortKey] = useState('rank')
+  const [sortDir, setSortDir] = useState('asc')
 
   useEffect(() => {
     fetchRankings()
@@ -607,145 +475,127 @@ export default function RankingsPage() {
         if (d?.weight_classes?.length) setActiveWc(d.weight_classes[0].key)
       })
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
   }, [])
 
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+  function onSort(key) {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir(key === 'rank' ? 'asc' : COLUMNS.find((c) => c.key === key)?.dir || 'desc')
+    }
   }
+
   if (error) {
-    return (
-      <Card><CardContent className="p-6"><p className="text-destructive">Failed to load rankings: {error}</p></CardContent></Card>
-    )
+    return <Card><CardContent className="p-6"><p className="text-destructive">Failed to load rankings: {error}</p></CardContent></Card>
   }
-  if (!data?.weight_classes?.length) {
+  if (!data) {
+    return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+  }
+  if (!data.weight_classes?.length) {
     return (
-      <Card><CardContent className="p-6"><p className="text-muted-foreground">No ranking data available. Run: python -m app.services.ranking_service</p></CardContent></Card>
+      <Card><CardContent className="p-6">
+        <p className="text-muted-foreground">No ranking data available. Run: python -m app.services.ufc.tapology_rankings</p>
+      </CardContent></Card>
     )
   }
 
+  const mens = data.weight_classes.filter((wc) => !wc.key.startsWith('w_') && wc.key !== 'p4p_women')
+  const womens = data.weight_classes.filter((wc) => wc.key.startsWith('w_') || wc.key === 'p4p_women')
   const activeDiv = data.weight_classes.find((wc) => wc.key === activeWc)
+  const movementDays = data.movement_days ?? 90
+  // Pound-for-pound is not a division and has no belt, so its top row is #1, not a belt.
+  const hasChampion = !!activeWc && !activeWc.startsWith('p4p')
+
+  const WcButton = ({ wc }) => {
+    const active = activeWc === wc.key
+    const gold = wc.key.startsWith('p4p')
+    return (
+      <button
+        onClick={() => { setActiveWc(wc.key); setWcOpen(false) }}
+        className={cn(
+          'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
+          active && gold && 'border-amber-500 bg-amber-500 text-white shadow-sm',
+          active && !gold && 'border-blue-500 bg-blue-600 text-white shadow-sm',
+          !active && 'border-border bg-card text-muted-foreground hover:border-blue-300 hover:bg-muted/50 hover:text-foreground',
+        )}
+      >
+        {wc.label}
+        <span className={cn('ml-1 tabular-nums', active ? (gold ? 'text-amber-200' : 'text-blue-200') : 'text-muted-foreground/60')}>
+          {wc.fighters.length}
+        </span>
+      </button>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Fixed header */}
       <div className="shrink-0 space-y-3 pb-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-                <TrendingUp className="h-5 w-5 text-white" />
-              </span>
-              Fighter Rankings
-              <span className="text-sm font-medium text-muted-foreground">— click any fighter to expand</span>
-            </h1>
+        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 shadow-sm">
+            <TrendingUp className="h-5 w-5 text-white" />
+          </span>
+          Rankings
+        </h1>
+
+        {/* Mobile: collapsible division picker. The table itself scrolls sideways with
+            the # and Fighter columns pinned, so it needs no separate mobile layout. */}
+        <div className="md:hidden">
+          <button
+            onClick={() => setWcOpen(!wcOpen)}
+            className="flex w-full items-center justify-between rounded-lg border bg-card px-3 py-2"
+          >
+            <span className="text-sm font-semibold">{activeDiv?.label || ''}</span>
+            <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', wcOpen && 'rotate-180')} />
+          </button>
+          {wcOpen && (
+            <div className="mt-2 space-y-2 rounded-lg border bg-card p-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Men</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">{mens.map((wc) => <WcButton key={wc.key} wc={wc} />)}</div>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Women</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">{womens.map((wc) => <WcButton key={wc.key} wc={wc} />)}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden space-y-1.5 md:block">
+          <div className="flex items-center gap-2">
+            <span className="w-10 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Men</span>
+            <div className="flex flex-wrap gap-1.5">{mens.map((wc) => <WcButton key={wc.key} wc={wc} />)}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-10 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Women</span>
+            <div className="flex flex-wrap gap-1.5">{womens.map((wc) => <WcButton key={wc.key} wc={wc} />)}</div>
           </div>
         </div>
-
-        {(() => {
-          const mens = data.weight_classes.filter((wc) => !wc.key.startsWith('w_') && wc.key !== 'p4p_women')
-          const womens = data.weight_classes.filter((wc) => wc.key.startsWith('w_') || wc.key === 'p4p_women')
-          const isPfp = (key) => key.startsWith('p4p')
-          const activeLabel = activeDiv?.label || ''
-          const WcButton = ({ wc }) => {
-            const active = activeWc === wc.key
-            const gold = isPfp(wc.key)
-            return (
-              <button
-                key={wc.key}
-                onClick={() => { setActiveWc(wc.key); setWcOpen(false) }}
-                className={cn(
-                  'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
-                  active && gold && 'border-amber-500 bg-amber-500 text-white shadow-sm',
-                  active && !gold && 'border-blue-500 bg-blue-600 text-white shadow-sm',
-                  !active && 'border-border bg-card text-muted-foreground hover:border-blue-300 hover:text-foreground',
-                )}
-              >
-                {wc.label}
-                <span className={cn('ml-1', active ? (gold ? 'text-amber-200' : 'text-blue-200') : 'text-muted-foreground/60')}>
-                  {wc.fighters.length}
-                </span>
-              </button>
-            )
-          }
-          return (
-            <>
-              {/* Mobile: collapsible division picker */}
-              <div className="md:hidden">
-                <button
-                  onClick={() => setWcOpen(!wcOpen)}
-                  className="flex w-full items-center justify-between rounded-lg border bg-card px-3 py-2"
-                >
-                  <span className="text-sm font-semibold">{activeLabel}</span>
-                  <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', wcOpen && 'rotate-180')} />
-                </button>
-                {wcOpen && (
-                  <div className="mt-2 space-y-2 rounded-lg border bg-card p-3">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Men</span>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {mens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Women</span>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {womens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Desktop: always visible */}
-              <div className="hidden md:block space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-10 shrink-0">Men</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {mens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-10 shrink-0">Women</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {womens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
-                  </div>
-                </div>
-              </div>
-            </>
-          )
-        })()}
       </div>
 
-      {/* Column header (fixed) */}
-      <div className={cn(ROW_GRID, 'shrink-0 border-y bg-muted/40 px-3 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:px-4')}>
-        <span className="text-center">Rank</span>
-        <span />
-        <span>Fighter</span>
-        <span className="md:hidden" />
-        <span className="hidden md:block">Record</span>
-        <span className="hidden md:block">Power score</span>
-        <span className="hidden md:block">Top skills</span>
-        <span />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Card className="overflow-hidden p-0 shadow-sm">
+          <CardContent className="p-0">
+            {activeDiv && (
+              <DivisionTable
+                fighters={activeDiv.fighters}
+                hasChampion={hasChampion}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={onSort}
+              />
+            )}
+          </CardContent>
+        </Card>
+        <p className="mt-3 px-1 text-[11.5px] leading-relaxed text-muted-foreground">
+          Click a column to sort · a bout box for the fight page · a row for the fighter profile. Form is
+          the six-fight window the rank is computed from, oldest first — hover it for the bouts. SOS is
+          Tapology&apos;s 1–99 strength-of-schedule figure, context only and not an input to the rank.
+          Movement compares each fighter against the standings published ~{movementDays} days ago. Skill
+          dimensions live on{' '}
+          <Link to="/ufc/fighters/skills" className="font-semibold text-blue-600 hover:underline">Fighter Skills</Link>.
+        </p>
       </div>
-
-      {/* Scrollable content */}
-      <ScrollArea className="flex-1">
-        <div>
-          <Card className="overflow-hidden rounded-t-none border-t-0 p-0">
-            <CardContent className="p-0">
-              {activeDiv && (
-                <DivisionTable fighters={activeDiv.fighters} label={activeDiv.label} />
-              )}
-            </CardContent>
-          </Card>
-
-        </div>
-      </ScrollArea>
     </div>
   )
 }

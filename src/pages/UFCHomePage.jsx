@@ -25,8 +25,9 @@ import { cn, formatDate } from '../lib/utils'
 const SECTIONS = [
   { label: 'Upcoming', icon: Clock, path: '/model/upcoming' },
   { label: 'Events & Fights', icon: Calendar, path: '/ufc/events' },
+  { label: 'Rankings', icon: TrendingUp, path: '/ufc/rankings' },
   { label: 'Fighter Stats', icon: BarChart3, path: '/ufc/fighters/stats' },
-  { label: 'Rankings', icon: Layers, path: '/ufc/fighters/decompositions' },
+  { label: 'Fighter Skills', icon: Layers, path: '/ufc/fighters/skills' },
 ]
 
 function P4PRow({ fighter, onClick }) {

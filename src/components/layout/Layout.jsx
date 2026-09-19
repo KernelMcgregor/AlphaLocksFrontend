@@ -29,8 +29,8 @@ function AppBreadcrumb() {
     crumbs.push({ label: 'Rankings', path: null })
   } else if (path === '/ufc/fighters/stats') {
     crumbs.push({ label: 'Fighter Stats', path: null })
-  } else if (path === '/ufc/fighters/decompositions') {
-    crumbs.push({ label: 'Decompositions', path: null })
+  } else if (path === '/ufc/fighters/skills' || path === '/ufc/fighters/decompositions') {
+    crumbs.push({ label: 'Fighter Skills', path: null })
   } else if (path.startsWith('/ufc/fighters/')) {
     crumbs.push({ label: 'Fighter Profile', path: null })
   } else if (path.startsWith('/ufc/fights/') && path.endsWith('/preview')) {

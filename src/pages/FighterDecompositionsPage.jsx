@@ -209,8 +209,8 @@ export default function FighterDecompositionsPage() {
       <div className="shrink-0 space-y-3 pb-3">
         <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600"><Layers className="h-5 w-5 text-white" /></span>
-          Fighter Rankings
-          <span className="text-sm font-medium text-muted-foreground">— all 13 model dimensions per fighter</span>
+          Fighter Skills
+          <span className="text-sm font-medium text-muted-foreground">— all 15 model dimensions per fighter</span>
         </h1>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
