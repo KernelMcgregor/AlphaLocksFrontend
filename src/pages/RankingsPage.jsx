@@ -10,7 +10,6 @@ import FighterImage from '../components/sports/FighterImage'
 // ---------------------------------------------------------------------------
 // Dimension model
 // ---------------------------------------------------------------------------
-const DIMS = ['pts', 'ko', 'kod', 'sub', 'subd', 'td', 'tdd', 'ctrl', 'str_vol', 'str_acc', 'str_def', 'dist', 'clinch', 'gnd', 'durability']
 
 // The 9 axes shown on the radial graphs (a readable subset of the 16 dims).
 const AXES = [
@@ -41,19 +40,14 @@ function ordinal(n) {
   return v + (s[(m - 20) % 10] || s[m] || s[0])
 }
 
-// Build a percentile lookup across every ranked fighter in a division.
-function buildPercentile(fighters) {
-  const cols = {}
-  DIMS.forEach((d) => {
-    cols[d] = fighters.map((f) => f.dimensions?.[d] ?? 0).sort((a, b) => a - b)
-  })
-  return (dim, val) => {
-    const arr = cols[dim]
-    if (!arr || arr.length < 2) return 50
-    let c = 0
-    for (const v of arr) if (v <= val) c++
-    return Math.round((c / arr.length) * 100)
-  }
+// The backend's `dimensions` are ALREADY percentiles (0-100), computed by
+// ranking_service.compute_dimension_profiles against the whole division. This used to
+// re-percentile them here, which is not a no-op: ranking a set of percentiles spreads
+// them back out to fill 0-100, so a division where everyone is genuinely close would
+// render as though it had a wide spread, and a fighter's number changed depending on how
+// many others happened to be loaded. Pass them through.
+function buildPercentile() {
+  return (dim, val) => Math.max(0, Math.min(100, Math.round(val ?? 0)))
 }
 
 function deriveProfile(fighter, pct) {
@@ -279,6 +273,85 @@ function PercentileBar({ label, value, tone }) {
 // ---------------------------------------------------------------------------
 // Detail panel (shown when a row is expanded)
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Score ledger — the per-bout decomposition of a fighter's rating
+// ---------------------------------------------------------------------------
+// The payoff of an objective ranking: every point of a fighter's standing traces back to
+// a specific bout, so the number can be audited instead of taken on faith. `points` is the
+// rating change that bout produced; `expected` is the pre-fight win probability, which is
+// what makes an upset visibly worth more than a formality.
+function ScoreLedger({ ledger }) {
+  if (!ledger?.length) return null
+
+  const fmtMethod = (m) => {
+    if (!m) return '—'
+    if (m.startsWith('Decision - ')) return m.slice(11)
+    if (m.includes('Doctor')) return 'TKO (dr)'
+    return m
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline gap-2">
+        <span className="text-xs font-bold uppercase tracking-wider text-blue-600">Score Breakdown</span>
+        <span className="text-xs text-muted-foreground">rating change per bout</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] text-[12px]">
+          <thead>
+            <tr className="border-b text-[10.5px] uppercase tracking-wide text-muted-foreground">
+              <th className="py-1.5 pr-2 text-left font-semibold">Date</th>
+              <th className="py-1.5 pr-2 text-left font-semibold">Opponent</th>
+              <th className="py-1.5 pr-2 text-left font-semibold">Method</th>
+              <th className="py-1.5 pr-2 text-right font-semibold">Exp</th>
+              <th className="py-1.5 text-right font-semibold">Pts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ledger.map((b) => (
+              <tr key={b.fight_id} className="border-b border-border/40 last:border-0">
+                <td className="py-1.5 pr-2 tabular-nums text-muted-foreground">{b.date}</td>
+                <td className="py-1.5 pr-2">
+                  <span
+                    className={cn(
+                      'mr-1.5 inline-block w-[14px] text-center text-[10px] font-bold',
+                      b.won ? 'text-emerald-600' : 'text-rose-600',
+                    )}
+                  >
+                    {b.won ? 'W' : 'L'}
+                  </span>
+                  <span className="font-semibold">{b.opponent_name || '—'}</span>
+                  <span className="ml-1.5 rounded bg-muted px-1 py-px text-[9.5px] font-semibold text-muted-foreground">
+                    T{b.tier}
+                  </span>
+                </td>
+                <td className="py-1.5 pr-2 text-muted-foreground">{fmtMethod(b.method)}</td>
+                <td className="py-1.5 pr-2 text-right tabular-nums text-muted-foreground">
+                  {Math.round((b.expected ?? 0) * 100)}%
+                </td>
+                <td
+                  className={cn(
+                    'py-1.5 text-right font-bold tabular-nums',
+                    b.points > 0 ? 'text-emerald-600' : b.points < 0 ? 'text-rose-600' : 'text-muted-foreground',
+                  )}
+                >
+                  {b.points > 0 ? '+' : ''}
+                  {b.points?.toFixed(1)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+        Tier is the opponent&apos;s strength <em>at the time of the fight</em>, so a bout&apos;s credit never
+        changes later. Exp is the pre-fight win probability — beating a heavy favourite is worth more
+        than beating someone you were supposed to beat.
+      </p>
+    </div>
+  )
+}
+
 function DetailPanel({ fighter, profile, division }) {
   const [graph, setGraph] = useState('radar')
   return (
@@ -388,6 +461,14 @@ function DetailPanel({ fighter, profile, division }) {
           </p>
         </div>
       </div>
+
+      {/* Score ledger spans the full panel — it is the audit trail for the rank itself,
+          not a property of the skill radar above it. */}
+      {fighter.ledger?.length > 0 && (
+        <div className="border-t px-5 pb-6 pt-4">
+          <ScoreLedger ledger={fighter.ledger} />
+        </div>
+      )}
     </div>
   )
 }
@@ -471,7 +552,7 @@ function DivisionTable({ fighters, label }) {
   const [showAll, setShowAll] = useState(false)
 
   const { pct, scores } = useMemo(() => {
-    const pct = buildPercentile(fighters)
+    const pct = buildPercentile()
     const vals = fighters.map((f) => f.score)
     const min = Math.min(...vals, 0)
     const max = Math.max(...vals, 1)
