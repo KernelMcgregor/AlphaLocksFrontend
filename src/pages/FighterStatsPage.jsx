@@ -8,7 +8,8 @@ import { Card, CardContent } from '../components/ui/card'
 import { ScrollArea } from '../components/ui/scroll-area'
 // NOTE: add `export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)`
 // to src/lib/api.js — the endpoint already exists in routers/ufc.py.
-import { fetchFighterFights, fetchFighterStats, fetchRankings } from '../lib/api'
+import PageLoader from '../components/PageLoader'
+import { fetchFighterFights, fetchFighterStats, fetchRankings, peekCached } from '../lib/api'
 import { cn, formatRecord } from '../lib/utils'
 import { aggregateCareer } from '../lib/fighterAnalytics'
 
@@ -67,10 +68,18 @@ function Avatar({ fighter }) {
   )
 }
 
+// Lightweight, else the first real division, else whatever comes first.
+function defaultDivision(d) {
+  const wcs = d?.weight_classes
+  if (!wcs?.length) return null
+  return (wcs.find((w) => w.key === 'lightweight') || wcs.find((w) => !w.key.startsWith('p4p')) || wcs[0]).key
+}
+
 export default function FighterStatsPage() {
-  const [data, setData] = useState(null)
+  // Seeded from the client cache, so a return visit renders on the first frame.
+  const [data, setData] = useState(() => peekCached('/ufc/rankings'))
   const [error, setError] = useState(null)
-  const [activeWc, setActiveWc] = useState(null)
+  const [activeWc, setActiveWc] = useState(() => defaultDivision(peekCached('/ufc/rankings')))
   const [aggByWc, setAggByWc] = useState({})       // { [wcKey]: { [fighterId]: career } }
   const [loadingAgg, setLoadingAgg] = useState(false)
   const [sortKey, setSortKey] = useState('rank')
@@ -80,10 +89,7 @@ export default function FighterStatsPage() {
     fetchRankings()
       .then((d) => {
         setData(d)
-        if (d?.weight_classes?.length) {
-          const lw = d.weight_classes.find((w) => w.key === 'lightweight') || d.weight_classes.find((w) => !w.key.startsWith('p4p')) || d.weight_classes[0]
-          setActiveWc(lw.key)
-        }
+        setActiveWc((cur) => cur ?? defaultDivision(d))
       })
       .catch((e) => setError(e.message))
   }, [])
@@ -146,7 +152,7 @@ export default function FighterStatsPage() {
   }, [activeDiv, agg, sortKey, sortDir])
 
   if (error) return <Card><CardContent className="p-6"><p className="text-destructive">Failed to load: {error}</p></CardContent></Card>
-  if (!data) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+  if (!data) return <PageLoader />
 
   const mens = data.weight_classes.filter((wc) => !wc.key.startsWith('w_') && wc.key !== 'p4p_women')
   const womens = data.weight_classes.filter((wc) => wc.key.startsWith('w_') || wc.key === 'p4p_women')

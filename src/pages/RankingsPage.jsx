@@ -15,7 +15,7 @@
 // This page deliberately shows NO skill dimensions — those live on Fighter Skills. The
 // split is the point: this page answers "where does this fighter stand", that one
 // answers "what is this fighter good at".
-import { ChevronDown, Loader2, Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import { ChevronDown, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
@@ -23,7 +23,8 @@ import FighterImage from '../components/sports/FighterImage'
 import BeltIcon from '../components/ui/belt-icon'
 import { Card, CardContent } from '../components/ui/card'
 import { Tip } from '../components/ui/tip'
-import { fetchRankings } from '../lib/api'
+import PageLoader from '../components/PageLoader'
+import { fetchRankings, peekCached } from '../lib/api'
 import { cn, formatRecord } from '../lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -461,9 +462,10 @@ function DivisionTable({ fighters, hasChampion, sortKey, sortDir, onSort }) {
 // Page
 // ---------------------------------------------------------------------------
 export default function RankingsPage() {
-  const [data, setData] = useState(null)
+  // Seeded from the client cache, so a return visit renders on the first frame.
+  const [data, setData] = useState(() => peekCached('/ufc/rankings'))
   const [error, setError] = useState(null)
-  const [activeWc, setActiveWc] = useState(null)
+  const [activeWc, setActiveWc] = useState(() => peekCached('/ufc/rankings')?.weight_classes?.[0]?.key ?? null)
   const [wcOpen, setWcOpen] = useState(false)
   const [sortKey, setSortKey] = useState('rank')
   const [sortDir, setSortDir] = useState('asc')
@@ -472,7 +474,7 @@ export default function RankingsPage() {
     fetchRankings()
       .then((d) => {
         setData(d)
-        if (d?.weight_classes?.length) setActiveWc(d.weight_classes[0].key)
+        setActiveWc((cur) => cur ?? d?.weight_classes?.[0]?.key ?? null)
       })
       .catch((e) => setError(e.message))
   }, [])
@@ -489,7 +491,7 @@ export default function RankingsPage() {
     return <Card><CardContent className="p-6"><p className="text-destructive">Failed to load rankings: {error}</p></CardContent></Card>
   }
   if (!data) {
-    return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+    return <PageLoader />
   }
   if (!data.weight_classes?.length) {
     return (

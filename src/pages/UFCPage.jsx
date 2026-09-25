@@ -8,7 +8,8 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { Separator } from '../components/ui/separator'
-import { fetchEventDetail, fetchEventPredictions, fetchEvents } from '../lib/api'
+import PageLoader from '../components/PageLoader'
+import { fetchEventDetail, fetchEventPredictions, fetchEvents, peekCached } from '../lib/api'
 import { ScrollArea } from '../components/ui/scroll-area'
 import { cn, formatDate } from '../lib/utils'
 
@@ -236,10 +237,15 @@ function DateRangeFilter({ dateRange, onApply }) {
   )
 }
 
+// A sorted copy: the array is the api cache's own, shared with every other reader.
+const newestFirst = (events) => [...events].sort((a, b) => new Date(b.date) - new Date(a.date))
+
 export default function UFCPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [allEvents, setAllEvents] = useState([])
+  // Seeded from the client cache, so a return visit renders on the first frame. The
+  // path must match what fetchEvents({ limit: 500 }) requests.
+  const [allEvents, setAllEvents] = useState(() => newestFirst(peekCached('/ufc/events?limit=500') || []))
   const [dateRange, setDateRange] = useState(defaultDateRange)
   const selectedEventId = searchParams.get('event') || null
   const setSelectedEventId = (id) => {
@@ -248,16 +254,12 @@ export default function UFCPage() {
   const [eventDetail, setEventDetail] = useState(null)
   const [predictions, setPredictions] = useState({})
   const [eventLoading, setEventLoading] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !peekCached('/ufc/events?limit=500'))
   const [eventsExpanded, setEventsExpanded] = useState(true)
 
   useEffect(() => {
-    setLoading(true)
     fetchEvents({ limit: 500 })
-      .then((all) => {
-        all.sort((a, b) => new Date(b.date) - new Date(a.date))
-        setAllEvents(all)
-      })
+      .then((all) => setAllEvents(newestFirst(all)))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -296,13 +298,7 @@ export default function UFCPage() {
       .finally(() => setEventLoading(false))
   }, [selectedEventId])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
-  }
+  if (loading) return <PageLoader />
 
   const selectedEvent = events.find(e => e.id === selectedEventId)
 

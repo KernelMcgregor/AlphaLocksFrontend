@@ -11,6 +11,7 @@ import FighterImage from '../components/sports/FighterImage'
 import FightRingCard from '../components/sports/FightRingCard'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { CardRing } from '../components/ui/card-ring'
+import PageLoader from '../components/PageLoader'
 import { ScrollArea } from '../components/ui/scroll-area'
 import {
   fetchEventDetail,
@@ -18,6 +19,7 @@ import {
   fetchEvents,
   fetchRankings,
   fetchUpcomingEvents,
+  peekCached,
 } from '../lib/api'
 import { cn, formatDate } from '../lib/utils'
 
@@ -64,14 +66,16 @@ function P4PRow({ fighter, onClick }) {
 
 export default function UFCHomePage() {
   const navigate = useNavigate()
-  const [upcoming, setUpcoming] = useState([])
-  const [rankings, setRankings] = useState(null)
+  // Seeded from the client cache (both are warmed at app start by Layout), so the page
+  // usually renders on the first frame.
+  const [upcoming, setUpcoming] = useState(() => peekCached('/ufc/upcoming') || [])
+  const [rankings, setRankings] = useState(() => peekCached('/ufc/rankings'))
   const [lastEvent, setLastEvent] = useState(null)
   const [lastPredictions, setLastPredictions] = useState({})
   const [division, setDivision] = useState('p4p_men')
   const [eventMode, setEventMode] = useState('next')
   const [active, setActive] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !(peekCached('/ufc/upcoming') && peekCached('/ufc/rankings')))
 
   useEffect(() => {
     Promise.all([
@@ -150,13 +154,7 @@ export default function UFCHomePage() {
 
   const hasWomensP4P = !!rankings?.weight_classes?.some((w) => w.key === 'p4p_women')
 
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
-  }
+  if (loading) return <PageLoader />
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-auto lg:overflow-hidden">

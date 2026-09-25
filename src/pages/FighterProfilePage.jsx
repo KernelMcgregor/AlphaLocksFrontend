@@ -1,5 +1,5 @@
 // src/pages/FighterProfilePage.jsx
-import { ArrowLeft, ChevronRight, Crown, Flame, Loader2, Swords, Timer, TrendingUp } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Crown, Flame, Swords, Timer, TrendingUp } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
@@ -28,6 +28,7 @@ import StatTile from '../components/viz/StatTile'
 import { useScrollSpy, useSlidingWindow } from '../components/viz/hooks'
 // NOTE: add `export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)`
 // to src/lib/api.js — the endpoint already exists in routers/ufc.py.
+import PageLoader from '../components/PageLoader'
 import { fetchEvents, fetchFighter, fetchFighterCareerStats, fetchFighterFights, fetchFighterRankHistory, fetchFighterStats, fetchRankings } from '../lib/api'
 import { clock, cn, formatDate, formatRecord } from '../lib/utils'
 import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, deriveRoundPacing, deriveRoundSurvival, deriveTwoWay, methodLabel } from '../lib/fighterAnalytics'
@@ -437,7 +438,7 @@ export default function FighterProfilePage() {
     }
   }, [fighter, fights])
 
-  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+  if (loading) return <PageLoader />
   if (error) return <Card><CardContent className="p-6"><p className="text-destructive">Failed to load fighter: {error}</p></CardContent></Card>
   if (!fighter) return null
 

@@ -8,11 +8,14 @@ import { ArrowRight, Brain } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import WeightClassBadge from '../components/WeightClassBadge'
-import { fetchPreviews } from '../lib/api'
+import PageLoader from '../components/PageLoader'
+import { fetchPreviews, peekCached } from '../lib/api'
 import { formatDate } from '../lib/utils'
 
 export default function ArticlesPage() {
-  const [rows, setRows] = useState(null)
+  // Seeded from the client cache, so a return visit renders on the first frame.
+  // The path must match what fetchPreviews({ limit: 120 }) requests.
+  const [rows, setRows] = useState(() => peekCached('/ufc/previews?limit=120'))
 
   useEffect(() => {
     let cancelled = false
@@ -35,13 +38,7 @@ export default function ArticlesPage() {
     return [...byEvent.values()]
   }, [rows])
 
-  if (!groups) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
-  }
+  if (!groups) return <PageLoader />
 
   if (!groups.length) {
     return (

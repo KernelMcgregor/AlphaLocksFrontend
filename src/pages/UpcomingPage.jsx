@@ -11,7 +11,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import EventTabs from '../components/sports/EventTabs'
 import FeaturedFight from '../components/sports/FeaturedFight'
 import FightRailCard from '../components/sports/FightRailCard'
-import { fetchFightContext, fetchUpcomingEvents } from '../lib/api'
+import PageLoader from '../components/PageLoader'
+import { fetchFightContext, fetchUpcomingEvents, peekCached } from '../lib/api'
 import { runQueue } from '../lib/prefetch'
 import { daysUntil, parseLocation, summarizeEvent } from '../lib/upcomingSummary'
 import { cn, formatDate } from '../lib/utils'
@@ -127,7 +128,9 @@ function StatusBar({ event }) {
 }
 
 export default function UpcomingPage() {
-  const [events, setEvents] = useState(null)
+  // Seeded from the client cache (warmed at app start by Layout), so the landing page
+  // renders on the first frame whenever the data is already here.
+  const [events, setEvents] = useState(() => peekCached('/ufc/upcoming'))
   const [selectedId, setSelectedId] = useState(null)
   const railRef = useRef(null)
   const groupRefs = useRef({})
@@ -172,13 +175,7 @@ export default function UpcomingPage() {
     if (rail && el) rail.scrollTo({ top: el.offsetTop, behavior: 'smooth' })
   }
 
-  if (!events) {
-    return (
-      <div className="flex h-32 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
-  }
+  if (!events) return <PageLoader />
 
   if (!events.length) {
     return (

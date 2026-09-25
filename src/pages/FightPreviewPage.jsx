@@ -9,7 +9,8 @@ import { useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Link, useParams } from 'react-router-dom'
-import { fetchFight } from '../lib/api'
+import PageLoader from '../components/PageLoader'
+import { fetchFight, peekCached } from '../lib/api'
 import { formatDate } from '../lib/utils'
 
 const fullName = (f) => (f ? `${f.first_name} ${f.last_name}`.trim() : 'TBA')
@@ -27,15 +28,11 @@ export default function FightPreviewPage() {
     return () => { cancelled = true }
   }, [id])
 
-  if (state.id !== id) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    )
-  }
-
-  const fight = state.fight
+  // A fight already in the cache (visited before, or opened from its preview page
+  // or vice versa) renders on the first frame instead of after the effect resolves.
+  const cached = state.id === id ? null : peekCached(`/ufc/fights/${id}`)
+  if (state.id !== id && !cached) return <PageLoader />
+  const fight = state.id === id ? state.fight : cached
   const preview = fight?.preview
 
   if (!preview?.content) {

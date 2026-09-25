@@ -10,6 +10,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '../ui/breadcrumb'
+import { fetchRankings, fetchUpcomingEvents } from '../../lib/api'
 import Sidebar from './Sidebar'
 
 function AppBreadcrumb() {
@@ -84,6 +85,15 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     document.documentElement.classList.remove('dark')
+  }, [])
+
+  // Warm the two payloads most pages open with — the upcoming slate (Upcoming, UFC home)
+  // and rankings (Rankings, Fighter Stats/Skills, every fighter profile) — into the api
+  // cache at app start, so whichever page is visited next renders from memory. Failures
+  // are ignored: the page fetches again on its own and shows its loader.
+  useEffect(() => {
+    fetchUpcomingEvents().catch(() => {})
+    fetchRankings().catch(() => {})
   }, [])
 
   return (

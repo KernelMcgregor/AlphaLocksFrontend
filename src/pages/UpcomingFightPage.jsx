@@ -38,10 +38,7 @@ import Section from '../components/viz/Section'
 import SkillCallout from '../components/viz/SkillCallout'
 import SplitBar from '../components/viz/SplitBar'
 import { useScrollSpy } from '../components/viz/hooks'
-import {
-  fetchEvents, fetchFighter, fetchFighterCareerStats, fetchFighterFights,
-  fetchFighterStats, fetchFightContext, fetchMarketHistory,
-} from '../lib/api'
+import { fetchFighter } from '../lib/api'
 import {
   AXES, DIMS, aggregateCareer, deriveForm, deriveRoundPacing, deriveRoundSurvival,
   deriveTwoWay, ordinal,
@@ -663,11 +660,11 @@ function Empty({ children }) {
 }
 
 // ---------------------------------------------------------------------------
-export default function UpcomingFightPage({ fight }) {
+export default function UpcomingFightPage({ fight, matchup }) {
   const navigate = useNavigate()
   const { red_fighter: red, blue_fighter: blue, prediction, method_prediction, odds, method_odds, shap_values, preview, event } = fight
   // Exchange quotes ride along on the fight payload; the price *curves* do not —
-  // see the second effect below.
+  // lib/matchup.js fetches those.
   const exchanges = fight.prediction_markets || null
   const marketConsensus = fight.market_consensus || null
   const hasExchange = marketConsensus?.red_prob != null
@@ -681,67 +678,19 @@ export default function UpcomingFightPage({ fight }) {
     return Object.keys(out).length ? out : null
   }, [exchanges])
 
-  // Keyed by fight id: a payload for a different fight reads as "not loaded yet"
-  // rather than needing an effect to clear it first.
-  const [loadedFor, setLoadedFor] = useState(null)
-  const [data, setData] = useState({ ctx: null, perFighter: {} })
+  // `matchup` is loaded before this page mounts (lib/matchup.js), so every
+  // section renders complete on the first frame instead of flashing "Loading…".
+  const { ctx, perFighter, eventMap, marketHistory } = matchup
   const [oppData, setOppData] = useState({})         // { [id]: { name, image_url, ... } }
-  const [eventMap, setEventMap] = useState({})
   const [strikeMode, setStrikeMode] = useState('pct')
-  const [marketHistory, setMarketHistory] = useState(null)
 
   const redId = red?.id
   const blueId = blue?.id
 
-  // Wave one: matchup context + the two fighters' logs, in parallel. Each call
-  // degrades to an empty value rather than failing the page — a debuting fighter
-  // legitimately has no career-stats row.
-  useEffect(() => {
-    let cancelled = false
-    if (!redId || !blueId) return undefined
-
-    const forFighter = (id) => Promise.all([
-      fetchFighterFights(id).catch(() => []),
-      fetchFighterStats(id).catch(() => []),
-      fetchFighterCareerStats(id).catch(() => null),
-    ]).then(([fights, stats, careerStats]) => ({ fights, stats, careerStats }))
-
-    Promise.all([
-      fetchFightContext(fight.id).catch(() => null),
-      forFighter(redId),
-      forFighter(blueId),
-      // 500 is the endpoint cap and matches what UFCPage/FighterProfilePage ask
-      // for, so this shares their cache entry rather than adding a request.
-      fetchEvents({ limit: 500 }).catch(() => []),
-    ]).then(([context, redData, blueData, events]) => {
-      if (cancelled) return
-      setData({ ctx: context, perFighter: { [redId]: redData, [blueId]: blueData } })
-      setEventMap(Object.fromEntries((events || []).map((e) => [String(e.id), e.name])))
-      setLoadedFor(fight.id)
-    })
-
-    return () => { cancelled = true }
-  }, [fight.id, redId, blueId])
-
-  // Wave two: the price curves, on their own effect so a few hundred points per
-  // venue never delay the rest of the page. A fight with no exchange coverage
-  // simply resolves to an empty object and the panel does not render.
-  useEffect(() => {
-    let cancelled = false
-    setMarketHistory(null)
-    fetchMarketHistory(fight.id)
-      .then((r) => { if (!cancelled) setMarketHistory(r?.series || {}) })
-      .catch(() => { if (!cancelled) setMarketHistory({}) })
-    return () => { cancelled = true }
-  }, [fight.id])
-
-  const fresh = loadedFor === fight.id
-  const ctx = fresh ? data.ctx : null
-
   const derive = useMemo(() => {
     const out = {}
     for (const id of [redId, blueId]) {
-      const d = fresh ? data.perFighter[id] : null
+      const d = perFighter[id]
       if (!d) { out[id] = null; continue }
       const statsByFight = {}
       for (const r of d.stats || []) {
@@ -762,7 +711,7 @@ export default function UpcomingFightPage({ fight }) {
       }
     }
     return out
-  }, [data, fresh, redId, blueId])
+  }, [perFighter, redId, blueId])
 
   const redD = derive[redId]
   const blueD = derive[blueId]
