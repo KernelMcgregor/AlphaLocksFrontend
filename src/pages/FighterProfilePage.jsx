@@ -513,7 +513,7 @@ export default function FighterProfilePage() {
                   ['Last activity', form?.daysSinceLast != null ? `${form.daysSinceLast} days` : null],
                 ],
                 [['From', val(fighter.birthplace)]],
-                [['Gym', val(fighter.trains_at)]],
+                [['Team', val(fighter.trains_at)]],
               ].map((row) => row.filter(([, v]) => v)).filter((row) => row.length).map((row) => (
                 <div key={row.map(([k]) => k).join('-')} className="flex gap-2">
                   {row.map(([k, v]) => (

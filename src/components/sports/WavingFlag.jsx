@@ -21,6 +21,49 @@ const FLAG_ASPECT = 4 / 3
 // sampling a 1:1 buffer through that made the colour boundaries mushy.
 const SUPERSAMPLE = 2
 
+// Is every column of the flag a single colour down its height?
+//
+// This decides how a flag is fitted into a box much taller than 4:3. Cover-fitting such a
+// box crops to a ~10% central slice — fine for the USA or Brazil, where that slice still
+// reads as the flag, but on a vertical tricolour (France, Italy, Ireland, Nigeria,
+// Belgium, Romania) the slice is one flat band and reads as no flag at all.
+//
+// The fix for those is to show the full width and stretch vertically — and on a flag that
+// passes this test the stretch is *invisible*, because there is nothing along the y axis
+// to distort. Anything with horizontal structure fails and keeps the aspect-preserving
+// cover-fit, so the flags that already look right are untouched.
+//
+// Band boundaries blur under downsampling, but a blurred boundary column is still uniform
+// down its height, so it passes. A flag with a central emblem (Mexico, Spain, Portugal)
+// does not, and correctly keeps cover-fit.
+const UNIFORM_TOLERANCE = 18
+
+function isVerticallyUniform(img) {
+  const W = 48
+  const H = 36
+  const c = document.createElement('canvas')
+  c.width = W
+  c.height = H
+  const cx = c.getContext('2d', { willReadFrequently: true })
+  cx.drawImage(img, 0, 0, W, H)
+  let data
+  // A tainted canvas throws here. Treating that as "not uniform" keeps the current
+  // cover-fit, which is the safe direction to fail in.
+  try { data = cx.getImageData(0, 0, W, H).data } catch { return false }
+  for (let x = 0; x < W; x++) {
+    const top = x * 4
+    for (let y = 1; y < H; y++) {
+      const i = (y * W + x) * 4
+      if (
+        Math.abs(data[i] - data[top]) > UNIFORM_TOLERANCE ||
+        Math.abs(data[i + 1] - data[top + 1]) > UNIFORM_TOLERANCE ||
+        Math.abs(data[i + 2] - data[top + 2]) > UNIFORM_TOLERANCE
+      ) return false
+    }
+  }
+  return true
+}
+
 export default function WavingFlag({ countryCode }) {
   const canvasRef = useRef(null)
 
@@ -36,6 +79,8 @@ export default function WavingFlag({ countryCode }) {
     // The rasterised flag, rebuilt only when the box it has to cover changes.
     let buf = null
     let bufFor = ''
+    // Set once the image is decoded; see isVerticallyUniform.
+    let uniform = false
 
     let frame
     let t = 0
@@ -54,12 +99,28 @@ export default function WavingFlag({ countryCode }) {
       // never reveal an edge. Scaling W and H independently (the previous
       // behaviour) stretched the flag whenever the container's aspect changed —
       // which it now does constantly, since the portrait flexes with the column.
-      const scale = 1.3
-      const boxAspect = W / H
-      const baseW = boxAspect > FLAG_ASPECT ? W : H * FLAG_ASPECT
-      const baseH = boxAspect > FLAG_ASPECT ? W / FLAG_ASPECT : H
-      const flagW = baseW * scale
-      const flagH = baseH * scale
+      //
+      // The width-fit branch applies only to a flag with no horizontal structure in a
+      // box taller than 4:3 — see isVerticallyUniform. Both conditions matter: the
+      // stretch is only invisible on such a flag, and only needed in such a box.
+      let flagW
+      let flagH
+      if (uniform && W / H < FLAG_ASPECT) {
+        flagW = W * 1.04
+        flagH = H * 1.18
+      } else {
+        // The oversize exists only so the wave can never expose an edge, and the wave
+        // needs very little: a strip is squashed to at most ~0.945 of flagH, so 1.08
+        // guarantees coverage (0.945 * 1.08 > 1). It used to be 1.3, which on a tall
+        // column magnified the flag by a further 20% for no reason — aspect-preserving
+        // cover already crops hard there, and every extra bit of scale crops more.
+        const scale = 1.08
+        const boxAspect = W / H
+        const baseW = boxAspect > FLAG_ASPECT ? W : H * FLAG_ASPECT
+        const baseH = boxAspect > FLAG_ASPECT ? W / FLAG_ASPECT : H
+        flagW = baseW * scale
+        flagH = baseH * scale
+      }
       const ox = (W - flagW) / 2
       const oy = (H - flagH) / 2
 
@@ -125,8 +186,12 @@ export default function WavingFlag({ countryCode }) {
       frame = requestAnimationFrame(draw)
     }
 
-    img.onload = () => { frame = requestAnimationFrame(draw) }
-    if (img.complete) frame = requestAnimationFrame(draw)
+    const start = () => {
+      uniform = isVerticallyUniform(img)
+      frame = requestAnimationFrame(draw)
+    }
+    img.onload = start
+    if (img.complete && img.naturalWidth) start()
 
     return () => cancelAnimationFrame(frame)
   }, [countryCode])

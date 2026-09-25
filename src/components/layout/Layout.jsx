@@ -17,8 +17,10 @@ function AppBreadcrumb() {
   const path = location.pathname
 
   // The UFC landing page titles itself; a one-item 'UFC' breadcrumb above it just
-  // repeats the heading.
-  if (path === '/ufc') return null
+  // repeats the heading. Upcoming is the same case one level down — the sidebar marks
+  // the section and the page carries its own 'Upcoming' title, so "UFC » Upcoming" is
+  // a third statement of the same thing, and the card grid wants the vertical space.
+  if (path === '/ufc' || path === '/' || path.startsWith('/model/upcoming')) return null
 
   // Build breadcrumb segments
   const crumbs = [{ label: 'UFC', path: '/' }]

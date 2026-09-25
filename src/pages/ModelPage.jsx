@@ -1,5 +1,5 @@
-import { Calendar, CalendarIcon, Clock, Trophy } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Calendar, CalendarIcon, ChevronDown, Clock, Trophy } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '../components/ui/badge'
 import WeightClassBadge from '../components/WeightClassBadge'
@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import { Separator } from '../components/ui/separator'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import CountryFlag from '../components/CountryFlag'
-import MethodPrediction from '../components/sports/MethodPrediction'
+import UpcomingFightCard from '../components/sports/UpcomingFightCard'
 import { fetchEvents, fetchEventDetail, fetchEventPredictions, fetchModelMetrics, fetchUpcomingEvents } from '../lib/api'
 import { ScrollArea } from '../components/ui/scroll-area'
 import { cn, formatDate } from '../lib/utils'
@@ -130,6 +130,164 @@ function PastFightCard({ fight, prediction }) {
           No prediction
         </div>
       )}
+    </div>
+  )
+}
+
+/** Gap between filter chips, in px. Must match the `gap-2` on the row below. */
+const TAB_GAP = 8
+
+/**
+ * Event filter chips that fill one row and spill the remainder into a "More" menu.
+ *
+ * The cut-off is measured, not guessed: event names vary from "UFC 333" to
+ * "UFC Fight Night: Volkanovski vs. Evloev", so a fixed count would either wrap on a
+ * laptop or leave half the row empty on a wide monitor. A hidden copy of the full row
+ * supplies each chip's natural width; a ResizeObserver supplies the space available.
+ *
+ * Until the first measurement lands, `widths` is empty and every chip renders — the row
+ * may wrap for one frame, which is preferable to flashing an empty filter bar.
+ */
+function EventTabs({ events, value, onChange }) {
+  const containerRef = useRef(null)
+  const measureRef = useRef(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+  const [widths, setWidths] = useState([])
+  const [moreOpen, setMoreOpen] = useState(false)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([entry]) => setContainerWidth(entry.contentRect.width))
+    ro.observe(el)
+    setContainerWidth(el.getBoundingClientRect().width)
+    return () => ro.disconnect()
+  }, [])
+
+  // Re-measure whenever the card list changes: names drive chip width.
+  useEffect(() => {
+    const el = measureRef.current
+    if (!el) return
+    setWidths(Array.from(el.children).map((c) => c.getBoundingClientRect().width))
+  }, [events])
+
+  // widths = [All, ...events, More]. The All chip is never hidden; it is the reset.
+  const visibleCount = (() => {
+    if (!containerWidth || widths.length !== events.length + 2) return events.length
+    const allW = widths[0]
+    const moreW = widths[widths.length - 1]
+    let used = allW
+    for (let i = 0; i < events.length; i++) {
+      const next = used + TAB_GAP + widths[i + 1]
+      // Every chip past this one must still leave room for the More button, unless this
+      // is the last chip — then More isn't rendered and its width is free.
+      const needsMore = i < events.length - 1
+      if (next + (needsMore ? TAB_GAP + moreW : 0) > containerWidth) return i
+      used = next
+    }
+    return events.length
+  })()
+
+  const shown = events.slice(0, visibleCount)
+  const overflow = events.slice(visibleCount)
+  const selectedHidden = overflow.some((e) => e.id === value)
+
+  // shrink-0 is load-bearing twice over: it keeps a chip at its natural width in the
+  // visible row (flex children default to shrinking, which squeezed every name into an
+  // unreadable stub), and it makes the hidden row measure natural widths rather than
+  // squeezed ones — without it every chip measured small, the arithmetic concluded all
+  // eight fit, and the row overflowed instead of spilling into the menu.
+  const chipClass = 'shrink-0 whitespace-nowrap'
+
+  return (
+    <div className="relative hidden md:block shrink-0">
+      {/* Hidden mirror of the full row, used only for width measurement. `w-max` keeps it
+          out of the parent's width so the chips report their natural size. */}
+      <div
+        ref={measureRef}
+        aria-hidden
+        className="pointer-events-none absolute left-0 top-0 flex w-max gap-2"
+        style={{ visibility: 'hidden' }}
+      >
+        <Button variant="outline" size="sm" className={chipClass}>All</Button>
+        {events.map((event) => (
+          <Button key={event.id} variant="outline" size="sm" className={chipClass}>
+            {event.name}
+          </Button>
+        ))}
+        <Button variant="outline" size="sm" className={cn(chipClass, 'gap-1')}>
+          More (0) <ChevronDown className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      <div ref={containerRef} className="flex gap-2 overflow-hidden">
+        <Button
+          variant={value === 'all' ? 'default' : 'outline'}
+          size="sm"
+          className={chipClass}
+          onClick={() => onChange('all')}
+        >
+          All
+        </Button>
+        {shown.map((event) => (
+          <Button
+            key={event.id}
+            variant={value === event.id ? 'default' : 'outline'}
+            size="sm"
+            className={chipClass}
+            onClick={() => onChange(event.id)}
+          >
+            {event.name}
+          </Button>
+        ))}
+        {overflow.length > 0 && (
+          <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={selectedHidden ? 'default' : 'outline'}
+                size="sm"
+                // Bounded: when the selection lives in the menu this shows the event's
+                // name, which is longer than the "More (N)" the layout was measured
+                // against and would otherwise push the row wider than it budgeted for.
+                className="max-w-[15rem] shrink-0 gap-1"
+              >
+                <span className="truncate">
+                  {selectedHidden
+                    ? events.find((e) => e.id === value)?.name
+                    : `More (${overflow.length})`}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-1.5">
+              <div className="flex flex-col">
+                {overflow.map((event) => (
+                  <button
+                    key={event.id}
+                    onClick={() => { onChange(event.id); setMoreOpen(false) }}
+                    className={cn(
+                      'flex flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors',
+                      event.id === value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-accent hover:text-accent-foreground',
+                    )}
+                  >
+                    <span className="text-sm font-medium leading-tight">{event.name}</span>
+                    <span
+                      className={cn(
+                        'text-[11px]',
+                        event.id === value ? 'text-primary-foreground/70' : 'text-muted-foreground',
+                      )}
+                    >
+                      {formatDate(event.date)} · {event.fights.length} bout{event.fights.length === 1 ? '' : 's'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
     </div>
   )
 }
@@ -310,140 +468,37 @@ export default function ModelPage({ tab = 'upcoming' }) {
                   <span className="text-sm font-medium text-muted-foreground">— click any fight to view details</span>
                 </h1>
               </div>
-              <div className="hidden md:flex flex-wrap gap-2 shrink-0">
-                <Button
-                  variant={upcomingFilter === 'all' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setUpcomingFilter('all')}
-                >
-                  All
-                </Button>
-                {upcoming.map(event => (
-                  <Button
-                    key={event.id}
-                    variant={upcomingFilter === event.id ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setUpcomingFilter(event.id)}
-                  >
-                    {event.name}
-                  </Button>
-                ))}
-              </div>
+              <EventTabs
+                events={upcoming}
+                value={upcomingFilter}
+                onChange={setUpcomingFilter}
+              />
               <Card className="flex flex-col flex-1 min-h-0 overflow-hidden">
                 <CardContent className="flex-1 min-h-0 pt-4">
                 <ScrollArea className="h-full">
-                  {upcoming.filter(e => upcomingFilter === 'all' || e.id === upcomingFilter).map((event, idx, arr) => (
-                    <div key={event.id}>
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-semibold">{event.name}</h3>
+                  {upcoming.filter(e => upcomingFilter === 'all' || e.id === upcomingFilter).map((event, idx) => (
+                    // A full-width rule above every event but the first. Cards carry their
+                    // own borders, so the gap alone did not read as a section break once
+                    // a card grid sat on both sides of it.
+                    <div
+                      key={event.id}
+                      className={cn(idx > 0 && 'mt-6 border-t-2 border-border pt-5')}
+                    >
+                      <div className="flex items-center justify-between mb-2.5">
+                        <h3 className="text-[15px] font-bold tracking-tight">{event.name}</h3>
                         <span className="text-xs text-muted-foreground">
                           {formatDate(event.date)}{event.location ? ` — ${event.location}` : ''}
                         </span>
                       </div>
-                      <div className="grid gap-2 grid-cols-1 xl:grid-cols-2 mb-4">
-                        {event.fights.map(fight => {
-                          const pred = fight.prediction
-                          const r = fight.red_fighter
-                          const b = fight.blue_fighter
-                          const oddsArr = fight.odds || []
-                          const fmtOdds = (v) => v > 0 ? `+${v}` : `${v}`
-                          const bookPref = ['DraftKings', 'FanDuel', 'Caesars', 'BetRivers']
-                          const bookAbbr = { FanDuel: 'FD', Caesars: 'Cae', BetRivers: 'BR' }
-                          const pickedBook = bookPref.find(b => oddsArr.some(o => o.bookmaker === b))
-                          const pickedOdds = pickedBook ? oddsArr.find(o => o.bookmaker === pickedBook) : null
-                          const isDK = pickedBook === 'DraftKings'
-                          const abbrTag = !isDK && pickedBook ? bookAbbr[pickedBook] || pickedBook : null
-                          const pickedRed = pred?.predicted_winner === 'red'
-                          const prob = pred ? (pickedRed ? pred.red_prob : 1 - pred.red_prob) : null
-                          // Volume-weighted Kalshi/Polymarket price, oriented to the side the
-                          // model picked so it sits directly beside the model's own number.
-                          const exch = fight.exchange
-                          const exchProb = exch ? (pickedRed ? exch.red_prob : 1 - exch.red_prob) : null
-                          // Model minus market. Meaningful without a de-vig step, unlike the
-                          // American prices above, because exchange quotes carry no vig.
-                          const exchEdge = exchProb != null && prob != null ? (prob - exchProb) * 100 : null
-
-                          return (
-                            <div key={fight.id} className="rounded-lg border border-border bg-card p-3 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate(`/ufc/fights/${fight.id}`)}>
-                              {fight.weight_class && (
-                                <div className="mb-2">
-                                  <WeightClassBadge weightClass={fight.weight_class} />
-                                </div>
-                              )}
-                              <div className="space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
-                                    <CountryFlag countryCode={r.country_code} />
-                                    <span className="text-sm font-semibold">{r.first_name} {r.last_name}</span>
-                                    {r.nickname && <span className="text-xs text-muted-foreground">"{r.nickname}"</span>}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground tabular-nums">
-                                      {r.wins}-{r.losses}{r.draws > 0 ? `-${r.draws}` : ''}
-                                    </span>
-                                    {pickedOdds && (
-                                      <span className={cn('text-xs font-semibold tabular-nums', pickedOdds.red_odds < 0 ? 'text-emerald-500' : 'text-muted-foreground')}>
-                                        {fmtOdds(pickedOdds.red_odds)}{abbrTag && <span className="text-[9px] font-normal text-muted-foreground ml-0.5">({abbrTag})</span>}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
-                                    <CountryFlag countryCode={b.country_code} />
-                                    <span className="text-sm font-semibold">{b.first_name} {b.last_name}</span>
-                                    {b.nickname && <span className="text-xs text-muted-foreground">"{b.nickname}"</span>}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground tabular-nums">
-                                      {b.wins}-{b.losses}{b.draws > 0 ? `-${b.draws}` : ''}
-                                    </span>
-                                    {pickedOdds && (
-                                      <span className={cn('text-xs font-semibold tabular-nums', pickedOdds.blue_odds < 0 ? 'text-emerald-500' : 'text-muted-foreground')}>
-                                        {fmtOdds(pickedOdds.blue_odds)}{abbrTag && <span className="text-[9px] font-normal text-muted-foreground ml-0.5">({abbrTag})</span>}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              {pred && (
-                                <div className="mt-2 pt-2 border-t border-border flex items-center gap-1.5 text-xs">
-                                  <span className={cn(
-                                    'h-2 w-2 rounded-full',
-                                    pickedRed ? 'bg-red-500' : 'bg-blue-500'
-                                  )} />
-                                  <span className="text-muted-foreground">Pick:</span>
-                                  <span className="font-semibold">
-                                    {pickedRed ? `${r.first_name} ${r.last_name}` : `${b.first_name} ${b.last_name}`}
-                                  </span>
-                                  <span className="text-muted-foreground">({(prob * 100) | 0}%)</span>
-                                  {exchProb != null && (
-                                    <span
-                                      className="ml-auto flex items-center gap-1 tabular-nums"
-                                      title={`Exchange consensus across ${exch.venues} venue${exch.venues === 1 ? '' : 's'}, volume-weighted. No vig.`}
-                                    >
-                                      <span className="text-muted-foreground">mkt</span>
-                                      <span className="font-semibold">{(exchProb * 100) | 0}%</span>
-                                      <span className={cn(
-                                        'font-semibold',
-                                        exchEdge > 2 ? 'text-emerald-500' : 'text-muted-foreground',
-                                      )}>
-                                        {exchEdge > 0 ? '+' : ''}{exchEdge.toFixed(0)}
-                                      </span>
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              {fight.method_prediction && (
-                                <MethodPrediction methodPrediction={fight.method_prediction} />
-                              )}
-                            </div>
-                          )
-                        })}
+                      <div className="grid gap-2.5 grid-cols-1 md:grid-cols-2 2xl:grid-cols-3">
+                        {event.fights.map(fight => (
+                          <UpcomingFightCard
+                            key={fight.id}
+                            fight={fight}
+                            onOpen={() => navigate(`/ufc/fights/${fight.id}`)}
+                          />
+                        ))}
                       </div>
-                      {idx < arr.length - 1 && <Separator className="mb-4" />}
                     </div>
                   ))}
                 </ScrollArea>

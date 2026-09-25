@@ -47,6 +47,7 @@ import {
   deriveTwoWay, ordinal,
 } from '../lib/fighterAnalytics'
 import { cn, formatDate, formatOdds } from '../lib/utils'
+import { divisionAbbr } from '../lib/upcomingSummary'
 
 // Corner identity, literal: the red corner is red and the blue corner is blue.
 // Classes are spelled out rather than built from a token — Tailwind scans source
@@ -58,30 +59,6 @@ const CORNERS = [
 
 const fullName = (f) => (f ? `${f.first_name} ${f.last_name}`.trim() : 'TBA')
 
-// A bare "#1" doesn't say #1 of what, and Flyweight/Featherweight collide at any
-// two-letter abbreviation — so flyweight is FLW and featherweight FW, the same
-// split the promotion itself uses. Women's divisions take a W prefix.
-const DIVISION_ABBR = [
-  ['light heavyweight', 'LHW'],
-  ['heavyweight', 'HW'],
-  ['welterweight', 'WW'],
-  ['middleweight', 'MW'],
-  ['lightweight', 'LW'],
-  ['featherweight', 'FW'],
-  ['flyweight', 'FLW'],
-  ['bantamweight', 'BW'],
-  ['strawweight', 'SW'],
-  ['catchweight', 'CW'],
-]
-
-function divisionAbbr(weightClass) {
-  const wc = (weightClass || '').toLowerCase()
-  const hit = DIVISION_ABBR.find(([name]) => wc.includes(name))
-  if (!hit) return null
-  // "Women's Flyweight Title Bout" → WFLW. The apostrophe varies by source.
-  const womens = wc.includes('women')
-  return `${womens ? 'W' : ''}${hit[1]}`
-}
 
 // Method segments, most-likely first. Spelled out rather than built at runtime
 // — Tailwind scans source text for class names.
@@ -306,7 +283,7 @@ function MatchupCard({ red, blue, ctx, weightClass }) {
     { label: 'Leg', r: legReach(red.leg_reach), b: legReach(blue.leg_reach), cmp: reachInches, tier: 1 },
     { label: 'Stance', r: val(red.stance), b: val(blue.stance) },
     { label: 'Style', r: val(red.fighting_style), b: val(blue.fighting_style), tier: 1 },
-    { label: 'Gym', r: val(red.trains_at), b: val(blue.trains_at), tier: 2 },
+    { label: 'Team', r: val(red.trains_at), b: val(blue.trains_at), tier: 2 },
     {
       label: 'Layoff',
       r: ctx?.red?.days_since_last_fight,

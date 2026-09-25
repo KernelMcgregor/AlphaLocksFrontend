@@ -28,13 +28,26 @@ async function request(path, options = {}) {
   return res.json()
 }
 
-async function cachedRequest(path, ttl = DEFAULT_TTL) {
+// In-flight requests, so N callers for the same path share one network round trip.
+// Without this the background prefetcher and a click on the same fight both fire, and
+// the click waits on its own duplicate request rather than the one already running.
+const inflight = new Map()
+
+function cachedRequest(path, ttl = DEFAULT_TTL) {
   const cached = getCached(path)
-  if (cached) return cached
-  const data = await request(path)
-  setCache(path, data, ttl)
-  return data
+  if (cached) return Promise.resolve(cached)
+  const pending = inflight.get(path)
+  if (pending) return pending
+  const p = request(path)
+    .then((data) => { setCache(path, data, ttl); return data })
+    .finally(() => inflight.delete(path))
+  inflight.set(path, p)
+  return p
 }
+
+/** Cached value for a path, or null — a synchronous read, so a warm cache can be
+ *  rendered on the first frame instead of after an effect resolves. */
+export const peekCached = (path) => getCached(path)
 
 // Headshot URL for an <img src>. Points at our own endpoint, which serves the cached
 // copy when scripts/cache_fighter_images.py has stored one and redirects to UFC.com
