@@ -388,20 +388,20 @@ function EventLine({ event, weightClass, scheduledRounds }) {
   )
 }
 
-// The written preview, folded into the Matchup section as a box of fixed height —
-// the height the career-rates box used to have. Nothing is truncated in the text
-// itself: the article is clipped by the box and faded out, and "Read more" opens
-// the full piece on its own page. Clipping rather than slicing the markdown keeps
-// tables and headings intact instead of cutting one in half.
-function PreviewBox({ preview, fightId }) {
+// The written preview, in the rail under the model's pick, taking whatever height
+// the rail has left. Nothing is truncated in the text itself: the article is
+// clipped by the box and faded out, and "Read all" opens the full piece on its own
+// page. Clipping rather than slicing the markdown keeps tables and headings intact
+// instead of cutting one in half.
+function PreviewBox({ preview, fightId, className }) {
   const written = preview.generated_at ? formatDate(String(preview.generated_at).slice(0, 10)) : null
 
   return (
-    // The article must not decide how tall this box is — the column beside it does.
-    // An absolutely positioned card contributes nothing to the grid row, so the row
-    // is sized by the keys list and the preview fills exactly that, whether that is
-    // three keys or ten. The min-height is the floor for a fight with no keys at all.
-    <div className="relative min-h-[240px]">
+    // The article must not decide how tall this box is — the rail does. An absolutely
+    // positioned card contributes nothing to its parent's height, so the box is
+    // exactly the space left under the cards above it. The min-height is the floor
+    // for a short screen, where the rail scrolls instead.
+    <div className={cn('relative min-h-[240px]', className)}>
     <div className="absolute inset-0 flex flex-col rounded-lg border border-border p-3">
       <div className="mb-2 flex shrink-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
         <div className="flex items-baseline gap-2">
@@ -528,15 +528,11 @@ function ModelVerdict({ prediction, methodPrediction, red, blue }) {
   )
 }
 
-// The skill profile, in the rail: it is identity, not analysis — the same reason
-// the portraits and the tale of the tape live here. The prices moved down to the
-// Model & Market section, where the model's number is there to judge them against.
-//
-// Takes the rail's leftover height and centres the chart in it, so the column runs
-// corner to corner without a bordered box full of white under the ink.
+// The skill profile, in the Matchup section beside the keys to victory — the radar
+// is the whole-profile view of the same percentiles the keys pick pairs out of.
 function RadarPanel({ series }) {
   return (
-    <div className="flex min-h-0 flex-col rounded-lg border border-border p-2.5 lg:flex-1">
+    <div className="flex min-w-0 flex-col rounded-lg border border-border p-2.5">
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-[9px] font-bold uppercase tracking-wide text-foreground/70">Skill Radar</span>
         {series.map((sr) => (
@@ -548,10 +544,10 @@ function RadarPanel({ series }) {
       </div>
       {series.length ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          {/* `fit` — the chart scales to the height left over instead of sizing
-              itself by width and spilling out of the panel. */}
-          <div className="min-h-0 flex-1">
-            <RadarChart series={series} fit />
+          {/* Width-driven (capped at 300px) and centred in whatever height the
+              keys column gives the row. */}
+          <div className="flex flex-1 items-center">
+            <RadarChart series={series} />
           </div>
         </div>
       ) : (
@@ -952,8 +948,7 @@ export default function UpcomingFightPage({ fight, matchup }) {
 
       {/* ---------------- LEFT: the fight itself ---------------- */}
       {/* 320px, down from 360: the tale of the tape and both odds boards still
-          fit, and the 40px go to the sections, where the charts and the preview
-          actually use them. */}
+          fit, and the 40px go to the sections, where the charts actually use them. */}
       <div className="flex min-h-0 shrink-0 flex-col gap-3 overflow-y-auto lg:w-[320px] lg:overflow-hidden">
         <MatchupCard red={red} blue={blue} ctx={ctx} weightClass={fight.weight_class} />
         <ModelVerdict
@@ -962,7 +957,7 @@ export default function UpcomingFightPage({ fight, matchup }) {
           red={red}
           blue={blue}
         />
-        <RadarPanel series={radarSeries} />
+        {preview?.content && <PreviewBox preview={preview} fightId={fight.id} className="lg:flex-1" />}
       </div>
 
       {/* ---------------- RIGHT: one scroll, many sections ---------------- */}
@@ -974,14 +969,13 @@ export default function UpcomingFightPage({ fight, matchup }) {
             <Section
               id="matchup"
               title="Matchup"
-              note="The written read, both profiles, and where each corner can win it"
+              note="Both skill profiles, and where each corner can win it"
               register={register}
             >
-              {/* The written read beside the routes to a win, then both careers
-                  across the full width. The keys column sets the height of that
-                  first row and the preview clips to it — see PreviewBox. */}
+              {/* The skill radar beside the routes to a win, then both careers
+                  across the full width. */}
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                {preview?.content && <PreviewBox preview={preview} fightId={fight.id} />}
+                <RadarPanel series={radarSeries} />
 
                 {/* ---- Keys to victory ---- */}
                 <div className="min-w-0 rounded-lg border border-border p-3">
