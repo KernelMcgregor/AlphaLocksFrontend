@@ -1553,6 +1553,59 @@ export default function UpcomingFightPage({ fight, matchup }) {
                       </Empty>
                     )}
 
+                    {/* Winner x method grid (method_v2). Each cell is P(fighter wins AND by this
+                        method); the six cells sum to 100% and each row sums to that fighter's win
+                        probability, so it can never contradict the moneyline above. Market column
+                        per cell: Polymarket where the prop has traded, else Bovada's raw implied
+                        price (not de-vigged, so it runs high: these markets carry ~20% hold). */}
+                    {method_prediction?.red_ko_prob != null && (() => {
+                      const implied = (o) => (o == null ? null : o > 0 ? 100 / (o + 100) : -o / (-o + 100))
+                      const pmProps = exchanges?.polymarket?.fighter_props || {}
+                      const cols = [['ko', 'KO/TKO', 'ko_tko'], ['sub', 'Sub', 'submission'], ['dec', 'Dec', 'decision']]
+                      const rows = [['red', red], ['blue', blue]]
+                      return (
+                        <div className="mt-2.5 rounded-md bg-muted/40 p-2">
+                          <div className="mb-1 flex items-baseline justify-between">
+                            <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                              Winner × method
+                            </span>
+                            {method_prediction.distance_prob != null && (
+                              <span className="text-[10px] text-muted-foreground">
+                                Goes the distance {(method_prediction.distance_prob * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-[1fr_repeat(3,56px)] gap-1 border-b pb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                            <span />
+                            {cols.map(([, label]) => <span key={label} className="text-center">{label}</span>)}
+                          </div>
+                          {rows.map(([side, f]) => (
+                            <div key={side} className="grid grid-cols-[1fr_repeat(3,56px)] items-center gap-1 py-0.5">
+                              <span className="truncate text-[11px] font-semibold">{f?.last_name || f?.name || side}</span>
+                              {cols.map(([key, , pmKey]) => {
+                                const model = method_prediction[`${side}_${key}_prob`]
+                                const pm = pmProps[side]?.[pmKey]
+                                const mkt = pm?.traded && pm.price != null ? pm.price
+                                  : implied(method_odds?.[`${side}_${key}_odds`])
+                                return (
+                                  <span key={key} className="text-center leading-tight">
+                                    <span className="block text-[11px] font-bold tabular-nums">
+                                      {model != null ? `${(model * 100).toFixed(0)}%` : '—'}
+                                    </span>
+                                    {mkt != null && (
+                                      <span className="block text-[9.5px] tabular-nums text-muted-foreground">
+                                        mkt {(mkt * 100).toFixed(0)}%
+                                      </span>
+                                    )}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+
                     {/* Polymarket's method and round markets. Kept in this panel rather than a
                         new one because they answer the same question as the Bovada block above,
                         and kept visually after it because Bovada is the priced market the model
