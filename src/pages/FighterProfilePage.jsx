@@ -31,7 +31,7 @@ import { useScrollSpy, useSlidingWindow } from '../components/viz/hooks'
 import PageLoader from '../components/PageLoader'
 import { fetchEvents, fetchFighter, fetchFighterCareerStats, fetchFighterFights, fetchFighterRankHistory, fetchFighterStats, fetchRankings } from '../lib/api'
 import { clock, cn, formatDate, formatRecord } from '../lib/utils'
-import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, deriveRoundPacing, deriveRoundSurvival, deriveTwoWay, methodLabel } from '../lib/fighterAnalytics'
+import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, deriveRoundPacing, deriveRoundSurvival, deriveTwoWay, methodLabel, resultCode, RESULT_BADGE } from '../lib/fighterAnalytics'
 import FighterImage from '../components/sports/FighterImage'
 import logoSrc from '../assets/alocks-logo.png'
 
@@ -634,8 +634,8 @@ function MobileFighterProfile({
                         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggleFight(r.id))}
                         className={cn('flex min-h-14 cursor-pointer items-center gap-2.5 px-3 py-2.5', open && 'bg-muted/40')}
                       >
-                        <span className={cn('flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-xs font-extrabold text-white', r.win ? 'bg-emerald-500' : 'bg-rose-500')}>
-                          {r.win ? 'W' : 'L'}
+                        <span className={cn('flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-xs font-extrabold text-white', RESULT_BADGE[r.result])}>
+                          {r.result}
                         </span>
                         <FighterImage fighter={opp} className="h-8 w-8 shrink-0 rounded-full bg-muted" />
                         <div className="min-w-0 flex-1">
@@ -795,9 +795,10 @@ export default function FighterProfilePage() {
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
       .map((f) => {
         const win = String(f.winner_id) === String(fighter.id)
+        const result = resultCode(f, fighter.id)
         const oppId = String(f.red_fighter_id) === String(fighter.id) ? f.blue_fighter_id : f.red_fighter_id
         const eventName = state.eventMap?.[String(f.event_id)] || null
-        return { id: f.id, win, oppId, method: methodLabel(f.method), detail: f.details || '', round: f.finish_round, time: f.finish_time, date: f.date, eventName }
+        return { id: f.id, win, result, oppId, method: methodLabel(f.method), detail: f.details || '', round: f.finish_round, time: f.finish_time, date: f.date, eventName }
       })
   }, [fights, fighter, state.eventMap])
 
@@ -1442,8 +1443,8 @@ export default function FighterProfilePage() {
                               <ChevronRight className={cn('h-3.5 w-3.5 transition-transform duration-200', open && 'rotate-90')} />
                             </td>
                             <td className="py-1.5">
-                              <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-extrabold text-white', r.win ? 'bg-emerald-500' : 'bg-rose-500')}>
-                                {r.win ? 'W' : 'L'}
+                              <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-extrabold text-white', RESULT_BADGE[r.result])}>
+                                {r.result}
                               </span>
                             </td>
                             <td className="py-1.5 pr-2">

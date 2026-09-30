@@ -184,6 +184,25 @@ export function aggregateCareer(statRows, fights, fighterId) {
 }
 
 // ---------------------------------------------------------------------------
+// Result of one bout from a fighter's side: 'W' | 'L' | 'D' | 'NC'.
+// ufcstats stores draws AND no-contests with a null winner_id, so the method is
+// what tells them apart (a draw keeps its "Decision - …" method).
+// ---------------------------------------------------------------------------
+const NC_METHODS = /No Contest|Overturned|Could Not Continue/i
+
+export function resultCode(f, fighterId) {
+  if (f.winner_id == null) return NC_METHODS.test(f.method || '') ? 'NC' : 'D'
+  return String(f.winner_id) === String(fighterId) ? 'W' : 'L'
+}
+
+export const RESULT_BADGE = {
+  W: 'bg-emerald-500',
+  L: 'bg-rose-500',
+  D: 'bg-slate-400',
+  NC: 'bg-slate-400',
+}
+
+// ---------------------------------------------------------------------------
 // Form / trend data derived purely from the fight log — streaks, octagon time,
 // method splits for both wins AND losses, and activity per year.
 // ---------------------------------------------------------------------------
@@ -199,7 +218,8 @@ export function deriveForm(fights, fighterId) {
   const results = done.map((f) => ({
     id: f.id,
     win: String(f.winner_id) === String(fighterId),
-    draw: f.winner_id == null,
+    draw: resultCode(f, fighterId) === 'D',
+    nc: resultCode(f, fighterId) === 'NC',
     method: methodLabel(f.method),
     round: f.finish_round,
     date: f.date,
@@ -209,10 +229,12 @@ export function deriveForm(fights, fighterId) {
     eventId: f.event_id,
   }))
 
-  // current streak (most recent run of the same outcome, draws break it)
+  // current streak (most recent run of the same outcome, draws break it; no-contests
+  // are skipped, so an NC as the latest bout no longer shows as "0L")
+  const rated = results.filter((r) => !r.nc)
   let streak = 0
-  let streakWin = results[0].win
-  for (const r of results) {
+  let streakWin = rated.length ? rated[0].win : false
+  for (const r of rated) {
     if (r.draw || r.win !== streakWin) break
     streak++
   }
@@ -220,12 +242,12 @@ export function deriveForm(fights, fighterId) {
   // longest win streak across the whole log
   let longestWin = 0
   let run = 0
-  for (const r of [...results].reverse()) {
+  for (const r of [...rated].reverse()) {
     if (r.win && !r.draw) { run++; longestWin = Math.max(longestWin, run) } else run = 0
   }
 
-  const wins = results.filter((r) => r.win && !r.draw)
-  const losses = results.filter((r) => !r.win && !r.draw)
+  const wins = results.filter((r) => r.win && !r.draw && !r.nc)
+  const losses = results.filter((r) => !r.win && !r.draw && !r.nc)
   const count = (arr, label) => arr.filter((r) => r.method === label).length
 
   const timed = results.filter((r) => r.seconds > 0)
