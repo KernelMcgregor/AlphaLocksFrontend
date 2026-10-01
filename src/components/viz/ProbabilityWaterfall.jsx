@@ -13,11 +13,14 @@ import { cn } from '../../lib/utils'
 // individual family steps — often a point or two each — were invisible next to the
 // prior, which defeated the purpose.
 //
-// Everything is stated toward the red corner: right-growing bars favour red, left
-// favour blue, matching every other mark on the fight page.
+// Everything is stated toward `side` — the page passes the favourite — so the walk
+// ends on the bigger number. Right-growing bars favour that corner, left the other;
+// bars keep the corner colours either way, matching every other mark on the page.
 export default function ProbabilityWaterfall({
-  base, steps, final, market, calibration, redName, blueName,
+  base, steps, final, market, calibration, redName, blueName, side = 'red',
 }) {
+  const subject = side === 'red' ? redName : blueName
+  const other = side === 'red' ? blueName : redName
   const points = [
     base, final,
     ...steps.flatMap((s) => [s.from, s.to]),
@@ -58,7 +61,8 @@ export default function ProbabilityWaterfall({
       </Row>
 
       {steps.map((s) => {
-        const favorsRed = s.to > s.from
+        const favorsSubject = s.to > s.from
+        const favorsRed = favorsSubject === (side === 'red')
         const left = Math.min(s.from, s.to)
         const width = Math.abs(s.to - s.from)
         return (
@@ -74,7 +78,7 @@ export default function ProbabilityWaterfall({
               className={cn('absolute top-1/2 h-[13px] -translate-y-1/2 rounded-[3px]',
                 favorsRed ? 'bg-corner-red/80' : 'bg-corner-blue/80')}
               style={{ left: x(left), width: `calc(${x(Math.max(left + width, left))} - ${x(left)} + 1px)` }}
-              title={`${s.label}: ${pct(s.from)} → ${pct(s.to)} (${favorsRed ? redName : blueName})`}
+              title={`${s.label}: ${pct(s.from)} → ${pct(s.to)} (${favorsSubject ? subject : other})`}
             />
             <span
               className="absolute top-1/2 h-[13px] w-px -translate-y-1/2 bg-foreground/30"
@@ -101,13 +105,6 @@ export default function ProbabilityWaterfall({
         </Row>
       )}
 
-      <p className="mt-1.5 text-[9.5px] leading-snug text-muted-foreground/80">
-        Read as {redName}&apos;s win probability, axis zoomed to the range walked. Each step is a
-        family of model inputs, converted from log-odds to points; the base rate carries the
-        division-wide starting point and every input not itemised here. Market is the best
-        available price with vig included, so it flatters the favourite slightly. Red bars
-        favour {redName}, blue {blueName}.
-      </p>
     </div>
   )
 }

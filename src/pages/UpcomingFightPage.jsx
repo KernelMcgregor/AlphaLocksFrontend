@@ -12,7 +12,7 @@
 // route.
 //
 // Completed fights are NOT handled here — see CompletedFightPage.
-import { ArrowLeft, ArrowRight, Brain, Flame, Info, Timer, Trophy, Zap } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Brain, Flame, Info, Timer, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -31,9 +31,11 @@ import FormStrip from '../components/viz/FormStrip'
 import HeroTile from '../components/viz/HeroTile'
 import MarketMovement from '../components/viz/MarketMovement'
 import MirrorBars from '../components/viz/MirrorBars'
+import OutcomeGrid from '../components/viz/OutcomeGrid'
 import ProbabilityWaterfall from '../components/viz/ProbabilityWaterfall'
 import RadarChart from '../components/viz/RadarChart'
 import RoundPacing from '../components/viz/RoundPacing'
+import SurvivalCurve from '../components/viz/SurvivalCurve'
 import Section from '../components/viz/Section'
 import SkillCallout from '../components/viz/SkillCallout'
 import SplitBar from '../components/viz/SplitBar'
@@ -655,6 +657,17 @@ function Empty({ children }) {
   return <p className="py-6 text-center text-[11.5px] text-muted-foreground">{children}</p>
 }
 
+// Column header for a corner: a colour dot plus the name, so the column reads as
+// that fighter without the numbers under it having to be painted red or blue.
+function CornerHead({ css, name }) {
+  return (
+    <span className="flex min-w-0 items-center justify-center gap-1 normal-case">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: css }} />
+      <span className="truncate">{name}</span>
+    </span>
+  )
+}
+
 // ---------------------------------------------------------------------------
 export default function UpcomingFightPage({ fight, matchup }) {
   const navigate = useNavigate()
@@ -663,7 +676,7 @@ export default function UpcomingFightPage({ fight, matchup }) {
   // lib/matchup.js fetches those.
   const exchanges = fight.prediction_markets || null
   const marketConsensus = fight.market_consensus || null
-  const hasExchange = marketConsensus?.red_prob != null
+  const propMarkets = fight.prop_markets || null
   // Polymarket's fight-level method markets, kept only where something has actually traded —
   // an untouched prop quotes a meaningless 0.50 (see the `traded` flag in the serving layer).
   const pmMethodProbs = useMemo(() => {
@@ -822,24 +835,107 @@ export default function UpcomingFightPage({ fight, matchup }) {
       steps.push({ key: fam.key, label: fam.label, from, to, points: (to - from) * 100 })
     }
 
+    const calibration = prediction.va_prob_low != null && prediction.va_prob_high != null
+      ? { low: prediction.va_prob_low, high: prediction.va_prob_high }
+      : null
+    // Told from the favourite's side: the walk ends on the bigger number, and the
+    // headline reads "why Talbott is 84%" rather than "why Figueiredo is only 16%".
+    // Every probability is mirrored, so steps keep their size and flip direction.
+    const side = pFinal >= 0.5 ? 'red' : 'blue'
+    if (side === 'red') return { side, steps, final: sigmoid(cum), calibration }
+    const f = (p) => 1 - p
     return {
-      steps,
-      final: sigmoid(cum),
-      calibration: prediction.va_prob_low != null && prediction.va_prob_high != null
-        ? { low: prediction.va_prob_low, high: prediction.va_prob_high }
-        : null,
+      side,
+      steps: steps.map((st) => ({ ...st, from: f(st.from), to: f(st.to), points: -st.points })),
+      final: f(sigmoid(cum)),
+      calibration: calibration && { low: f(calibration.high), high: f(calibration.low) },
     }
   }, [prediction, shap_values])
 
-  const methodValue = useMemo(() => {
-    if (!method_prediction || !method_odds || method_odds.ko_prob == null) return null
-    const rows = [
-      { label: 'KO/TKO', model: method_prediction.ko_prob, market: method_odds.ko_prob },
-      { label: 'Submission', model: method_prediction.sub_prob, market: method_odds.sub_prob },
-      { label: 'Decision', model: method_prediction.dec_prob, market: method_odds.dec_prob },
-    ].map((r) => ({ ...r, edge: (r.model - r.market) * 100 }))
-    return rows.reduce((a, b) => (a.edge > b.edge ? a : b))
-  }, [method_prediction, method_odds])
+  // Market side of the outcome grid, sportsbooks first. Per cell: the BestFightOdds
+  // consensus across books (de-vigged, with the best real price), else Bovada's six-way
+  // price, else Polymarket where that prop has traded. Bovada's raw implied probabilities
+  // carry ~20% hold, so an edge against them is mostly vig; they are de-vigged
+  // proportionally, which needs all six prices — with any missing, Bovada is skipped.
+  // A cell that falls back to Polymarket is tagged, so a mixed grid says which is which.
+  const outcomeMarket = useMemo(() => {
+    if (method_prediction?.red_ko_prob == null) return null
+    const pmProps = exchanges?.polymarket?.fighter_props || {}
+    const pmKey = { ko: 'ko_tko', sub: 'submission', dec: 'decision' }
+    const cells = ['red', 'blue'].flatMap((side) => ['ko', 'sub', 'dec'].map((k) => [side, k]))
+    const raw = cells.map(([side, k]) => method_odds?.[`${side}_${k}_odds`])
+    const bovada = raw.every((o) => o != null) ? raw.map(impliedFromOdds) : null
+    const hold = bovada ? bovada.reduce((a, b) => a + b, 0) : null
+    const sources = new Set()
+    const market = { red: {}, blue: {} }
+    cells.forEach(([side, k], i) => {
+      const pm = pmProps[side]?.[pmKey[k]]
+      const bfo = propMarkets?.[`${side}_${k}`]
+      if (bfo?.prob != null) {
+        market[side][k] = { prob: bfo.prob, american: bfo.best_american, source: 'books' }; sources.add('Sportsbooks, no vig')
+      } else if (bovada) {
+        market[side][k] = { prob: bovada[i] / hold, american: raw[i], source: 'bovada' }; sources.add('Bovada, no vig')
+      } else if (pm?.traded && pm.price != null) {
+        market[side][k] = { prob: pm.price, american: null, source: 'polymarket' }; sources.add('Polymarket')
+      } else market[side][k] = null
+    })
+    // Column totals: the fight-level method market, same order. With no fight-level book
+    // price, the de-vigged Bovada cells summed down the column are the book's own total.
+    const methodMarket = {}
+    for (const [j, k] of ['ko', 'sub', 'dec'].entries()) {
+      const bfo = k === 'dec' ? propMarkets?.dec_yes : null
+      const pm = pmMethodProbs?.[pmKey[k]]
+      if (bfo?.prob != null) methodMarket[k] = { prob: bfo.prob, american: bfo.best_american, source: 'books' }
+      else if (method_odds?.[`${k}_prob`] != null) methodMarket[k] = { prob: method_odds[`${k}_prob`], american: method_odds[`${k}_odds`] ?? null, source: 'bovada' }
+      else if (bovada) methodMarket[k] = { prob: (bovada[j] + bovada[j + 3]) / hold, american: null, source: 'bovada' }
+      else if (pm != null) methodMarket[k] = { prob: pm, american: null, source: 'polymarket' }
+      else methodMarket[k] = null
+    }
+    return { market, methodMarket, source: [...sources].join(' · ') || null }
+  }, [method_prediction, method_odds, exchanges, pmMethodProbs, propMarkets])
+
+  // Moneyline market for the grid's Win column, sportsbooks first: each book's two prices
+  // de-vigged against each other, averaged across books. The exchange consensus (no vig)
+  // only when no book has priced the fight.
+  const winMarket = useMemo(() => {
+    if (odds?.length) {
+      const reds = odds.map((o) => {
+        const r = impliedFromOdds(o.red_odds)
+        return r / (r + impliedFromOdds(o.blue_odds))
+      })
+      const red = reds.reduce((a, b) => a + b, 0) / reds.length
+      return { red: { prob: red, source: 'books' }, blue: { prob: 1 - red, source: 'books' } }
+    }
+    if (marketConsensus?.red_prob != null) {
+      return { red: { prob: marketConsensus.red_prob, source: 'exchange' }, blue: { prob: 1 - marketConsensus.red_prob, source: 'exchange' } }
+    }
+    return null
+  }, [odds, marketConsensus])
+
+  // Market prices on the survival curve: P(still going at t). O/U x.5 rounds is the curve
+  // at x.5 × 5 minutes, "goes the distance" its end. Books' consensus first (de-vigged),
+  // else Polymarket where traded.
+  const survivalMarkets = useMemo(() => {
+    const pmRounds = exchanges?.polymarket?.rounds || {}
+    const pmDistance = exchanges?.polymarket?.method?.distance
+    const end = fight.round_prediction?.curve?.at(-1)?.t ?? 15
+    const out = []
+    for (const line of [0.5, 1.5, 2.5, 3.5, 4.5]) {
+      const t = line * 5
+      if (t >= end) continue
+      const bfo = propMarkets?.[`ou_${line}_over`]
+      const pm = pmRounds[`ou_${line}`]
+      if (bfo?.prob != null) out.push({ t, prob: bfo.prob, label: `O/U ${line}`, source: `Books (${bfo.n_books ?? '?'}), no vig` })
+      else if (pm?.traded && pm.price != null) out.push({ t, prob: pm.price, label: `O/U ${line}`, source: 'Polymarket' })
+    }
+    const dec = propMarkets?.dec_yes
+    if (dec?.prob != null) out.push({ t: end, prob: dec.prob, label: 'Distance', source: 'Books, no vig' })
+    else if (pmDistance?.traded && pmDistance.price != null) out.push({ t: end, prob: pmDistance.price, label: 'Distance', source: 'Polymarket' })
+    return out
+  }, [exchanges, propMarkets, fight.round_prediction])
+
+  // Which outcome the grid is pointing at, lit up on the survival curve.
+  const [outcomeFocus, setOutcomeFocus] = useState(null)
 
   // Skill series, straight off the Glicko snapshot percentiles.
   const radarSeries = useMemo(() => {
@@ -1250,224 +1346,88 @@ export default function UpcomingFightPage({ fight, matchup }) {
                 note="Where the probability comes from, and what the market is paying"
                 register={register}
               >
-                {waterfall && (
-                  <div className="mb-3 rounded-lg border border-border p-3">
-                    <div className="mb-2 flex flex-wrap items-baseline gap-2">
-                      <span className="text-[13px] font-extrabold tracking-tight">How the probability is built</span>
-                      <Tip content={<span className="text-[11px]">One step per family of features, in probability points, ending on the model&apos;s number for {red.last_name}. The market marker is the best available price with vig included.</span>}>
-                        <Info className="h-3 w-3 cursor-help text-muted-foreground/60" />
-                      </Tip>
-                      <span className="ml-auto flex items-center gap-3 text-[10px] font-semibold text-muted-foreground">
-                        <span className="flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full" style={{ background: CORNERS[0].css }} />{red.last_name}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full" style={{ background: CORNERS[1].css }} />{blue.last_name}
-                        </span>
-                      </span>
-                    </div>
-                    <ProbabilityWaterfall
-                      base={0.5}
-                      steps={waterfall.steps}
-                      final={waterfall.final}
-                      market={value?.sides?.[0]?.implied ?? null}
-                      calibration={waterfall.calibration}
-                      redName={red.last_name}
-                      blueName={blue.last_name}
-                    />
-                  </div>
-                )}
-
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <div className="flex flex-col gap-3">
-                    <div className="rounded-lg border border-border p-3">
-                      <div className="mb-2 flex items-baseline justify-between gap-2">
-                        <span className="text-[13px] font-extrabold tracking-tight">Method</span>
-                        {pmMethodProbs && (
-                          <span className="text-[10px] text-muted-foreground">model bar · Polymarket price</span>
-                        )}
-                      </div>
-                      {method_prediction ? (
-                        <div className="space-y-2">
-                          {[
-                            { label: 'KO/TKO', prob: method_prediction.ko_prob, pm: pmMethodProbs?.ko_tko },
-                            { label: 'Submission', prob: method_prediction.sub_prob, pm: pmMethodProbs?.submission },
-                            { label: 'Decision', prob: method_prediction.dec_prob, pm: pmMethodProbs?.decision },
-                          ].sort((a, b) => b.prob - a.prob).map((m) => (
-                            <div key={m.label} className="flex items-center gap-2">
-                              <span className="w-[74px] shrink-0 text-[11px]">{m.label}</span>
-                              <div className="relative h-5 flex-1 overflow-hidden rounded-md bg-secondary">
-                                <div
-                                  className={cn('h-full rounded-md', m.label === method_prediction.predicted_method ? 'bg-primary' : 'bg-muted-foreground/30')}
-                                  style={{ width: `${m.prob * 100}%` }}
-                                />
-                                {/* The traded price as a tick on the model's own bar, so the gap
-                                    between belief and market is a distance rather than two
-                                    numbers to subtract by eye. */}
-                                {m.pm != null && (
-                                  <span
-                                    className="absolute inset-y-0 w-[2px] bg-foreground/70"
-                                    style={{ left: `calc(${(m.pm * 100).toFixed(1)}% - 1px)` }}
-                                    title={`Polymarket ${(m.pm * 100).toFixed(0)}%`}
-                                  />
-                                )}
-                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold">
-                                  {(m.prob * 100).toFixed(1)}%
-                                </span>
-                              </div>
-                              <span className="w-9 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
-                                {m.pm != null ? `${(m.pm * 100).toFixed(0)}%` : ''}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <Empty>No method prediction.</Empty>
-                      )}
-                    </div>
-
-                    {value && (
-                      <div className="rounded-lg border border-border p-3">
-                        <div className="mb-2 flex items-center gap-1.5">
-                          <Zap className="h-3.5 w-3.5 text-sky-500" />
-                          <span className="text-[13px] font-extrabold tracking-tight">Model vs market</span>
-                          <Tip content={<span className="text-[11px]">Book is the best available price with vig removed. Exchange is the volume-weighted Kalshi/Polymarket price, which carries no vig — so that edge needs no de-vig assumption.</span>}>
-                            <Info className="h-3 w-3 cursor-help text-muted-foreground/60" />
-                          </Tip>
-                        </div>
-                        <div className={cn(
-                          'mb-0.5 grid items-center gap-2 border-b pb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground',
-                          hasExchange ? 'grid-cols-[1fr_38px_46px_46px_46px]' : 'grid-cols-[1fr_38px_46px]',
+                {waterfall && (() => {
+                  const fav = waterfall.side === 'red' ? red : blue
+                  const favMarket = value?.sides?.[waterfall.side === 'red' ? 0 : 1]?.implied ?? null
+                  return (
+                    <div className="mb-3 rounded-lg border border-border p-3">
+                      <div className="mb-2 flex flex-wrap items-baseline gap-2">
+                        <span className="text-[13px] font-extrabold tracking-tight">Winner model attribution</span>
+                        <span className="text-[9.5px] text-muted-foreground">{fav.last_name} win probability</span>
+                        <Tip content={(
+                          <span className="text-[11px]">
+                            Each row is one family of model inputs and how many points it moved{' '}
+                            {fav.last_name}&apos;s win probability (the favourite). Base rate carries the
+                            division-wide starting point and every input not listed. Market is the best
+                            available price with vig included, so it flatters the favourite slightly.
+                          </span>
                         )}>
-                          <span />
-                          <span className="text-center normal-case">Model</span>
-                          <span className="text-center normal-case">Book</span>
-                          {hasExchange && <span className="text-center normal-case">Exch</span>}
-                          <span className="text-center normal-case">Edge</span>
-                        </div>
-                        {value.sides.map((s) => (
-                          <div key={s.key} className={cn(
-                            'grid items-center gap-2 border-t border-border/60 py-1.5 first:border-t-0',
-                            hasExchange ? 'grid-cols-[1fr_38px_46px_46px_46px]' : 'grid-cols-[1fr_38px_46px]',
-                          )}>
-                            <span className="flex min-w-0 items-center gap-1.5">
-                              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.key === 'red' ? CORNERS[0].css : CORNERS[1].css }} />
-                              <span className="truncate text-[11.5px] font-bold">{s.fighter.last_name}</span>
-                            </span>
-                            <span className="text-center text-[11px] font-bold tabular-nums">{(s.model * 100).toFixed(0)}%</span>
-                            <span className="text-center text-[10.5px] tabular-nums text-muted-foreground">{(s.implied * 100).toFixed(0)}%</span>
-                            {hasExchange && (
-                              <span className="text-center text-[10.5px] tabular-nums text-muted-foreground">
-                                {s.exchange == null ? '—' : `${(s.exchange * 100).toFixed(0)}%`}
-                              </span>
-                            )}
-                            <span className={cn(
-                              'text-center text-[11px] font-bold tabular-nums',
-                              s.edge > 0 ? 'text-emerald-600' : 'text-muted-foreground',
-                            )}>
-                              {s.edge > 0 ? '+' : ''}{s.edge.toFixed(1)}
-                            </span>
-                          </div>
-                        ))}
-                        {hasExchange && (
-                          <p className="mt-1 text-[9.5px] leading-snug text-muted-foreground/80">
-                            Edge is model minus book. Against the exchange it is{' '}
-                            {value.sides.map((s, i) => (
-                              <span key={s.key}>
-                                {i ? ' and ' : ''}
-                                <span className={s.exchangeEdge > 0 ? 'font-semibold text-emerald-600' : ''}>
-                                  {s.exchangeEdge > 0 ? '+' : ''}{s.exchangeEdge?.toFixed(1)}
-                                </span>
-                                {' '}on {s.fighter.last_name}
-                              </span>
-                            ))}
-                            {' '}— no vig to remove, so that comparison is the cleaner one.
-                          </p>
-                        )}
-                        {methodValue && (
-                          <div className="mt-1.5 flex items-center gap-2 border-t pt-1.5">
-                            <span className="truncate text-[11.5px] font-bold">{methodValue.label}</span>
-                            <span className="ml-auto shrink-0 text-[10px] tabular-nums text-muted-foreground">
-                              {(methodValue.model * 100).toFixed(0)}% vs {(methodValue.market * 100).toFixed(0)}%
-                            </span>
-                            <span className={cn(
-                              'w-12 shrink-0 text-right text-[11px] font-bold tabular-nums',
-                              methodValue.edge > 0 ? 'text-emerald-600' : 'text-muted-foreground',
-                            )}>
-                              {methodValue.edge > 0 ? '+' : ''}{methodValue.edge.toFixed(1)}%
-                            </span>
-                          </div>
-                        )}
-                        <p className="mt-1.5 text-[9.5px] leading-snug text-muted-foreground/80">
-                          Market probability from the best available price, vig included.
-                        </p>
+                          <Info className="h-3 w-3 cursor-help text-muted-foreground/60" />
+                        </Tip>
+                        <span className="ml-auto flex items-center gap-3 text-[9.5px] font-semibold text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full" style={{ background: CORNERS[0].css }} />{red.last_name}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full" style={{ background: CORNERS[1].css }} />{blue.last_name}
+                          </span>
+                        </span>
                       </div>
+                      <ProbabilityWaterfall
+                        base={0.5}
+                        steps={waterfall.steps}
+                        final={waterfall.final}
+                        market={favMarket}
+                        calibration={waterfall.calibration}
+                        redName={red.last_name}
+                        blueName={blue.last_name}
+                        side={waterfall.side}
+                      />
+                    </div>
+                  )
+                })()}
+
+                {/* Who wins and how, next to the prices it is judged against. The grid's Win
+                    column carries the moneyline edge and its headers the method edge, so the
+                    separate "model vs market" and "method market" panels are gone; the board
+                    stays for per-book prices. */}
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="flex flex-col rounded-lg border border-border p-3">
+                    {method_prediction?.red_ko_prob != null ? (
+                      <OutcomeGrid
+                        rows={[
+                          { side: 'red', name: red.last_name, css: CORNERS[0].css, cells: { ko: method_prediction.red_ko_prob, sub: method_prediction.red_sub_prob, dec: method_prediction.red_dec_prob } },
+                          { side: 'blue', name: blue.last_name, css: CORNERS[1].css, cells: { ko: method_prediction.blue_ko_prob, sub: method_prediction.blue_sub_prob, dec: method_prediction.blue_dec_prob } },
+                        ]}
+                        market={outcomeMarket?.market}
+                        methodMarket={outcomeMarket?.methodMarket}
+                        winMarket={winMarket}
+                        source={outcomeMarket?.source}
+                        onHighlight={fight.round_prediction ? setOutcomeFocus : undefined}
+                      />
+                    ) : (
+                      <>
+                        <span className="text-[13px] font-extrabold tracking-tight">Method</span>
+                        <Empty>No method prediction for this fight yet.</Empty>
+                      </>
                     )}
                   </div>
-                </div>
 
-                {/* The market sits in this section rather than in its own: the
-                    board is what the model's number is being judged against, and
-                    reading them a page apart made that comparison a memory test.
-                    The rail keeps the live prices for reference while scrolling. */}
-                <div className="mt-3 grid gap-3 lg:grid-cols-2">
                   <div className="rounded-lg border border-border p-3">
                     <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                       <span className="text-[13px] font-extrabold tracking-tight">Moneyline board</span>
-                      <span className="text-[10.5px] text-muted-foreground">
-                        {odds?.length || 0} {odds?.length === 1 ? 'book' : 'books'} · best price in colour
+                      <span className="text-[9.5px] text-muted-foreground">
+                        {odds?.length || 0} {odds?.length === 1 ? 'book' : 'books'} · best price in bold
                       </span>
                     </div>
 
-                    {/* Exchanges sit above the sportsbooks and in their own block, because the
-                        two are not the same kind of number. A book quotes American odds with a
-                        hold baked in; an exchange quotes a traded probability with no vig, where
-                        the cost of transacting is the bid/ask spread. Showing a "vig" column for
-                        an exchange would be meaningless, and averaging the two together would be
-                        worse. */}
-                    {exchanges && Object.keys(exchanges).length > 0 && (
-                      <div className="mb-2 rounded-md bg-muted/40 p-1.5">
-                        <div className="mb-1 grid grid-cols-[1fr_58px_58px_54px] gap-1.5 border-b pb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                          <span>Exchange</span>
-                          <span className="truncate text-center" style={{ color: CORNERS[0].css }}>{red.last_name}</span>
-                          <span className="truncate text-center" style={{ color: CORNERS[1].css }}>{blue.last_name}</span>
-                          <span className="text-center normal-case">Spread</span>
-                        </div>
-                        {Object.entries(exchanges).map(([venue, payload]) => {
-                          const ml = payload?.moneyline
-                          if (!ml || ml.red_prob == null) return null
-                          const spread = ml.red?.spread
-                          const vol = ml.volume
-                          return (
-                            <div key={venue} className="grid grid-cols-[1fr_58px_58px_54px] items-center gap-1.5 py-0.5">
-                              <span className="truncate text-[11px] capitalize text-muted-foreground">
-                                {venue}
-                                {vol ? (
-                                  <span className="ml-1 text-[9.5px] opacity-70">
-                                    {vol >= 1e6 ? `$${(vol / 1e6).toFixed(1)}M` : `$${Math.round(vol / 1e3)}k`}
-                                  </span>
-                                ) : null}
-                              </span>
-                              {[[ml.red_prob, CORNERS[0].css], [ml.blue_prob, CORNERS[1].css]].map(([v, css], i) => (
-                                <span key={i} className="text-center font-mono text-[11px] font-bold tabular-nums" style={{ color: css }}>
-                                  {v != null ? `${(v * 100).toFixed(1)}%` : '—'}
-                                </span>
-                              ))}
-                              <span className="text-center font-mono text-[10.5px] tabular-nums text-muted-foreground">
-                                {spread != null ? `${(spread * 100).toFixed(0)}¢` : '—'}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
                     {odds?.length ? (
                       <>
-                        <div className="mb-1 grid grid-cols-[1fr_58px_58px_54px] gap-1.5 border-b pb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                          <span />
-                          <span className="truncate text-center" style={{ color: CORNERS[0].css }}>{red.last_name}</span>
-                          <span className="truncate text-center" style={{ color: CORNERS[1].css }}>{blue.last_name}</span>
-                          <span className="text-center normal-case">Vig</span>
+                        <div className="mb-1 grid grid-cols-[1fr_72px_72px_48px] gap-1.5 border-b pb-1 text-[9.5px] font-bold uppercase tracking-wide text-muted-foreground">
+                          <span>Book</span>
+                          <CornerHead css={CORNERS[0].css} name={red.last_name} />
+                          <CornerHead css={CORNERS[1].css} name={blue.last_name} />
+                          <span className="text-right">Vig</span>
                         </div>
                         {(() => {
                           const bestRed = Math.max(...odds.map((o) => o.red_odds))
@@ -1478,18 +1438,17 @@ export default function UpcomingFightPage({ fight, matchup }) {
                             // hold. It is the one number that says which book to use.
                             const vig = (impliedFromOdds(o.red_odds) + impliedFromOdds(o.blue_odds) - 1) * 100
                             return (
-                              <div key={o.bookmaker} className="grid grid-cols-[1fr_58px_58px_54px] items-center gap-1.5 py-0.5">
-                                <span className="truncate text-[11px] text-muted-foreground" title={o.bookmaker}>{o.bookmaker}</span>
-                                {[[o.red_odds, o.red_odds === bestRed, CORNERS[0].css], [o.blue_odds, o.blue_odds === bestBlue, CORNERS[1].css]].map(([v, isBest, css], i) => (
+                              <div key={o.bookmaker} className="grid grid-cols-[1fr_72px_72px_48px] items-center gap-1.5 py-0.5 text-[11px]">
+                                <span className="truncate text-muted-foreground" title={o.bookmaker}>{o.bookmaker}</span>
+                                {[[o.red_odds, o.red_odds === bestRed], [o.blue_odds, o.blue_odds === bestBlue]].map(([v, isBest], i) => (
                                   <span
                                     key={i}
-                                    className={cn('text-center font-mono text-[11px] tabular-nums', isBest ? 'font-bold' : 'text-muted-foreground')}
-                                    style={isBest ? { color: css } : undefined}
+                                    className={cn('text-center tabular-nums', isBest ? 'font-bold text-foreground' : 'text-muted-foreground')}
                                   >
                                     {formatOdds(v)}
                                   </span>
                                 ))}
-                                <span className="text-center font-mono text-[10.5px] tabular-nums text-muted-foreground">
+                                <span className="text-right tabular-nums text-muted-foreground">
                                   {vig.toFixed(1)}%
                                 </span>
                               </div>
@@ -1500,173 +1459,70 @@ export default function UpcomingFightPage({ fight, matchup }) {
                     ) : (
                       <Empty>No prices posted for this fight yet.</Empty>
                     )}
-                  </div>
-
-                  <div className="rounded-lg border border-border p-3">
-                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="text-[13px] font-extrabold tracking-tight">Method market</span>
-                      <span className="text-[10.5px] text-muted-foreground">
-                        {method_odds ? `${method_odds.bookmaker || 'Bovada'} · model vs price` : 'not posted yet'}
-                      </span>
-                    </div>
-                    {method_odds ? (
-                      <>
-                        <div className="mb-1 grid grid-cols-[64px_1fr_58px_58px_52px] gap-1.5 border-b pb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                          <span />
-                          <span />
-                          <span className="text-center normal-case">Model</span>
-                          <span className="text-center normal-case">Market</span>
-                          <span className="text-center normal-case">Edge</span>
+                    {/* Exchanges sit below the sportsbooks and in their own block, because the
+                        two are not the same kind of number. A book quotes American odds with a
+                        hold baked in; an exchange quotes a traded probability with no vig, where
+                        the cost of transacting is the bid/ask spread. Showing a "vig" column for
+                        an exchange would be meaningless, and averaging the two together would be
+                        worse. */}
+                    {exchanges && Object.keys(exchanges).length > 0 && (
+                      <div className="mt-2 rounded-md bg-muted/40 p-1.5">
+                        <div className="mb-1 grid grid-cols-[1fr_72px_72px_48px] gap-1.5 border-b pb-1 text-[9.5px] font-bold uppercase tracking-wide text-muted-foreground">
+                          <span>Exchange</span>
+                          <CornerHead css={CORNERS[0].css} name={red.last_name} />
+                          <CornerHead css={CORNERS[1].css} name={blue.last_name} />
+                          <span className="text-right">Spread</span>
                         </div>
-                        {[
-                          { label: 'KO/TKO', model: method_prediction?.ko_prob, market: method_odds.ko_prob, odds: method_odds.ko_odds },
-                          { label: 'Submission', model: method_prediction?.sub_prob, market: method_odds.sub_prob, odds: method_odds.sub_odds },
-                          { label: 'Decision', model: method_prediction?.dec_prob, market: method_odds.dec_prob, odds: method_odds.dec_odds },
-                        ].map((m) => {
-                          const edge = m.model != null && m.market != null ? (m.model - m.market) * 100 : null
+                        {Object.entries(exchanges).map(([venue, payload]) => {
+                          const ml = payload?.moneyline
+                          if (!ml || ml.red_prob == null) return null
+                          const spread = ml.red?.spread
+                          const vol = ml.volume
                           return (
-                            <div key={m.label} className="grid grid-cols-[64px_1fr_58px_58px_52px] items-center gap-1.5 py-0.5">
-                              <span className="truncate text-[11px] font-semibold">{m.label}</span>
-                              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">{formatOdds(m.odds)}</span>
-                              <span className="text-center text-[11px] font-bold tabular-nums">
-                                {m.model != null ? `${(m.model * 100).toFixed(0)}%` : '—'}
+                            <div key={venue} className="grid grid-cols-[1fr_72px_72px_48px] items-center gap-1.5 py-0.5 text-[11px]">
+                              <span className="truncate capitalize text-muted-foreground">
+                                {venue}
+                                {vol ? (
+                                  <span className="ml-1 text-[9.5px] tabular-nums opacity-70">
+                                    {vol >= 1e6 ? `$${(vol / 1e6).toFixed(1)}M` : `$${Math.round(vol / 1e3)}k`}
+                                  </span>
+                                ) : null}
                               </span>
-                              <span className="text-center text-[11px] tabular-nums text-muted-foreground">
-                                {m.market != null ? `${(m.market * 100).toFixed(0)}%` : '—'}
-                              </span>
-                              <span className={cn('text-center text-[11px] font-bold tabular-nums',
-                                edge == null ? 'text-muted-foreground' : edge > 0 ? 'text-emerald-600' : 'text-muted-foreground')}>
-                                {edge == null ? '—' : `${edge > 0 ? '+' : ''}${edge.toFixed(1)}`}
+                              {[ml.red_prob, ml.blue_prob].map((v, i) => (
+                                <span key={i} className="text-center font-bold tabular-nums">
+                                  {v != null ? `${(v * 100).toFixed(1)}%` : '—'}
+                                </span>
+                              ))}
+                              <span className="text-right tabular-nums text-muted-foreground">
+                                {spread != null ? `${(spread * 100).toFixed(0)}¢` : '—'}
                               </span>
                             </div>
                           )
                         })}
-                        <p className="mt-1.5 text-[9.5px] leading-snug text-muted-foreground/80">
-                          Market column is the book&apos;s de-vigged &quot;how will the fight end&quot; price;
-                          per-fighter method prices are on the rail board.
-                        </p>
-                      </>
-                    ) : (
-                      <Empty>
-                        Bovada posts method markets for the imminent card only, so this fills in
-                        during fight week.
-                      </Empty>
+                      </div>
                     )}
-
-                    {/* Winner x method grid (method_v2). Each cell is P(fighter wins AND by this
-                        method); the six cells sum to 100% and each row sums to that fighter's win
-                        probability, so it can never contradict the moneyline above. Market column
-                        per cell: Polymarket where the prop has traded, else Bovada's raw implied
-                        price (not de-vigged, so it runs high: these markets carry ~20% hold). */}
-                    {method_prediction?.red_ko_prob != null && (() => {
-                      const implied = (o) => (o == null ? null : o > 0 ? 100 / (o + 100) : -o / (-o + 100))
-                      const pmProps = exchanges?.polymarket?.fighter_props || {}
-                      const cols = [['ko', 'KO/TKO', 'ko_tko'], ['sub', 'Sub', 'submission'], ['dec', 'Dec', 'decision']]
-                      const rows = [['red', red], ['blue', blue]]
-                      return (
-                        <div className="mt-2.5 rounded-md bg-muted/40 p-2">
-                          <div className="mb-1 flex items-baseline justify-between">
-                            <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                              Winner × method
-                            </span>
-                            {method_prediction.distance_prob != null && (
-                              <span className="text-[10px] text-muted-foreground">
-                                Goes the distance {(method_prediction.distance_prob * 100).toFixed(0)}%
-                              </span>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-[1fr_repeat(3,56px)] gap-1 border-b pb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                            <span />
-                            {cols.map(([, label]) => <span key={label} className="text-center">{label}</span>)}
-                          </div>
-                          {rows.map(([side, f]) => (
-                            <div key={side} className="grid grid-cols-[1fr_repeat(3,56px)] items-center gap-1 py-0.5">
-                              <span className="truncate text-[11px] font-semibold">{f?.last_name || f?.name || side}</span>
-                              {cols.map(([key, , pmKey]) => {
-                                const model = method_prediction[`${side}_${key}_prob`]
-                                const pm = pmProps[side]?.[pmKey]
-                                const mkt = pm?.traded && pm.price != null ? pm.price
-                                  : implied(method_odds?.[`${side}_${key}_odds`])
-                                return (
-                                  <span key={key} className="text-center leading-tight">
-                                    <span className="block text-[11px] font-bold tabular-nums">
-                                      {model != null ? `${(model * 100).toFixed(0)}%` : '—'}
-                                    </span>
-                                    {mkt != null && (
-                                      <span className="block text-[9.5px] tabular-nums text-muted-foreground">
-                                        mkt {(mkt * 100).toFixed(0)}%
-                                      </span>
-                                    )}
-                                  </span>
-                                )
-                              })}
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    })()}
-
-                    {/* Polymarket's method and round markets. Kept in this panel rather than a
-                        new one because they answer the same question as the Bovada block above,
-                        and kept visually after it because Bovada is the priced market the model
-                        was compared against historically. Kalshi has no props for UFC. */}
-                    {(() => {
-                      const pm = exchanges?.polymarket
-                      const pmMethod = pm?.method || {}
-                      const pmRounds = pm?.rounds || {}
-                      const methodRows = [
-                        ['KO/TKO', pmMethod.ko_tko, method_prediction?.ko_prob],
-                        ['Submission', pmMethod.submission, method_prediction?.sub_prob],
-                        ['Decision', pmMethod.decision, method_prediction?.dec_prob],
-                        ['Distance', pmMethod.distance, null],
-                        // `traded` gates these, not just `price != null`. Polymarket seeds an
-                        // untouched prop at 0.50 with no volume, so every prop on a freshly
-                        // opened card quotes a confident 50% that means nothing — showing it
-                        // next to a real model number would invent a market view.
-                      ].filter(([, q]) => q?.price != null && q.traded)
-                      const roundRows = Object.entries(pmRounds)
-                        .filter(([k, q]) => k.startsWith('ou_') && q?.price != null && q.traded)
-                        .sort()
-                      if (!methodRows.length && !roundRows.length) return null
-                      return (
-                        <div className="mt-2.5 rounded-md bg-muted/40 p-2">
-                          <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                            Polymarket props
-                          </div>
-                          {methodRows.map(([label, q, model]) => {
-                            const edge = model != null ? (model - q.price) * 100 : null
-                            return (
-                              <div key={label} className="grid grid-cols-[1fr_52px_52px] items-center gap-1.5 py-0.5">
-                                <span className="truncate text-[11px]">{label}</span>
-                                <span className="text-center font-mono text-[11px] tabular-nums">
-                                  {(q.price * 100).toFixed(0)}%
-                                </span>
-                                <span className={cn('text-center font-mono text-[10.5px] tabular-nums',
-                                  edge == null ? 'text-muted-foreground/50' : edge > 0 ? 'text-emerald-600' : 'text-muted-foreground')}>
-                                  {edge == null ? '—' : `${edge > 0 ? '+' : ''}${edge.toFixed(0)}`}
-                                </span>
-                              </div>
-                            )
-                          })}
-                          {roundRows.map(([key, q]) => (
-                            <div key={key} className="grid grid-cols-[1fr_52px_52px] items-center gap-1.5 py-0.5">
-                              <span className="truncate text-[11px] text-muted-foreground">
-                                Over {key.replace('ou_', '')} rounds
-                              </span>
-                              <span className="text-center font-mono text-[11px] tabular-nums">
-                                {(q.price * 100).toFixed(0)}%
-                              </span>
-                              <span className="text-center text-[10.5px] text-muted-foreground/50">—</span>
-                            </div>
-                          ))}
-                          <p className="mt-1.5 text-[9.5px] leading-snug text-muted-foreground/80">
-                            Traded probabilities, no vig to remove. Round totals have no model
-                            counterpart yet, so no edge is shown.
-                          </p>
-                        </div>
-                      )
-                    })()}
                   </div>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-border p-3">
+                  {fight.round_prediction?.curve?.length ? (
+                    <SurvivalCurve
+                      prediction={fight.round_prediction}
+                      markets={survivalMarkets}
+                      names={{ red: red.last_name, blue: blue.last_name }}
+                      css={{ red: CORNERS[0].css, blue: CORNERS[1].css }}
+                      decSplit={method_prediction?.red_dec_prob != null ? {
+                        red: method_prediction.red_dec_prob / ((method_prediction.red_dec_prob + method_prediction.blue_dec_prob) || 1),
+                        blue: method_prediction.blue_dec_prob / ((method_prediction.red_dec_prob + method_prediction.blue_dec_prob) || 1),
+                      } : null}
+                      highlight={outcomeFocus}
+                    />
+                  ) : (
+                    <>
+                      <span className="text-[13px] font-extrabold tracking-tight">How long will it last?</span>
+                      <Empty>Round predictions appear once the card is set.</Empty>
+                    </>
+                  )}
                 </div>
 
                 {marketHistory && Object.keys(marketHistory).length > 0 && (
