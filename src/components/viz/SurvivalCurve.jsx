@@ -252,21 +252,18 @@ export default function SurvivalCurve({ prediction, markets = [], names, css, de
                             <span>{atEnd ? 'Ends early (KO or sub)' : 'Already finished (KO or sub)'}</span>
                             <b className="text-[13px] tabular-nums">{pct(over)}</b>
                           </div>
-                          <div className="mb-0.5 mt-1 grid grid-cols-[1fr_auto_auto] gap-x-3 text-[9.5px] text-muted-foreground">
-                            {/* Two readings of the same finishes: share of every outcome (sums to the
-                                line above) and share of the early finishes only (sums to 100%). */}
+                          <div className="mb-0.5 mt-1 grid grid-cols-[1fr_auto] gap-x-3 text-[9.5px] text-muted-foreground">
+                            {/* Share of every outcome; the rows sum to the line above. */}
                             <span>{atEnd ? 'How it ends' : 'How it ended'}</span>
-                            <span className="text-right" title="Chance out of every possible outcome">overall</span>
-                            <span className="text-right" title="Share of the fights that end early (KO or sub)">of finishes</span>
+                            <span className="text-right">chance</span>
                           </div>
                           {ways.map((c) => (
-                            <div key={c} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 tabular-nums">
+                            <div key={c} className="grid grid-cols-[1fr_auto] items-center gap-x-3 tabular-nums">
                               <span className="flex min-w-0 items-center gap-1.5">
                                 <span className="h-2 w-3 shrink-0 rounded-sm" style={bands[c].swatch} />
                                 <span className="truncate">{bands[c].name}</span>
                               </span>
                               <span className="text-right">{pct(p[c])}</span>
-                              <span className="text-right text-muted-foreground">{pct(p[c] / over)}</span>
                             </div>
                           ))}
                         </div>
