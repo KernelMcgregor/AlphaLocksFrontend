@@ -248,11 +248,16 @@ export default function SurvivalCurve({ prediction, markets = [], names, css, de
                       {over > 0.005 && (
                         <div className="mt-1.5 border-t pt-1.5">
                           <div className="flex items-baseline justify-between gap-3">
-                            <span>Fight has ended</span>
+                            {/* At the final bell every fight has "ended", so name the outcome. */}
+                            <span>{atEnd ? 'Ends early (KO or sub)' : 'Already finished (KO or sub)'}</span>
                             <b className="text-[13px] tabular-nums">{pct(over)}</b>
                           </div>
                           <div className="mb-0.5 mt-1 grid grid-cols-[1fr_auto_auto] gap-x-3 text-[9.5px] text-muted-foreground">
-                            <span>How it ended</span><span className="text-right">chance</span><span className="text-right">if ended</span>
+                            {/* Two readings of the same finishes: share of every outcome (sums to the
+                                line above) and share of the early finishes only (sums to 100%). */}
+                            <span>{atEnd ? 'How it ends' : 'How it ended'}</span>
+                            <span className="text-right" title="Chance out of every possible outcome">overall</span>
+                            <span className="text-right" title="Share of the fights that end early (KO or sub)">of finishes</span>
                           </div>
                           {ways.map((c) => (
                             <div key={c} className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 tabular-nums">
