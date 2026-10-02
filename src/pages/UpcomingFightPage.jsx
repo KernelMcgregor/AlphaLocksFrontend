@@ -26,6 +26,7 @@ import { SlideTabs } from '../components/ui/slide-tabs'
 import { Tip } from '../components/ui/tip'
 import ActivityBars from '../components/viz/ActivityBars'
 import DimBar from '../components/viz/DimBar'
+import FightFlow from '../components/viz/FightFlow'
 import { DumbbellRow, TwoWayLegend } from '../components/viz/Dumbbell'
 import FormStrip from '../components/viz/FormStrip'
 import HeroTile from '../components/viz/HeroTile'
@@ -45,6 +46,7 @@ import {
   AXES, DIMS, aggregateCareer, deriveForm, deriveRoundPacing, deriveRoundSurvival,
   deriveTwoWay, ordinal,
 } from '../lib/fighterAnalytics'
+import { buildProjectedKeys, deriveFightFlow } from '../lib/fightProjection'
 import { cn, formatDate, formatOdds } from '../lib/utils'
 import { divisionAbbr } from '../lib/upcomingSummary'
 
@@ -73,8 +75,11 @@ const impliedFromOdds = (american) =>
   american > 0 ? 100 / (american + 100) : Math.abs(american) / (Math.abs(american) + 100)
 
 // ---------------------------------------------------------------------------
-// Keys to victory
+// Keys to victory — Glicko fallback
 // ---------------------------------------------------------------------------
+// Used only when a bout has no expected-stats projection yet (see
+// lib/fightProjection.buildProjectedKeys, which is the primary source).
+//
 // A key is a mismatch, not a strength: one corner rating well in a skill the OTHER
 // corner has no answer to. The pairs below are what answers what — takedowns are
 // answered by takedown defence, knockout power by the chin, volume by strike
@@ -86,7 +91,7 @@ const impliedFromOdds = (american) =>
 // cage. The Glicko percentiles are per-division and directional, which is exactly
 // what a tactical read needs.
 const VICTORY_KEYS = [
-  { attack: 'ko', defend: 'kod', label: 'Knockout power', against: 'chin', how: 'Land clean early and he is in trouble' },
+  { attack: 'ko', defend: 'kod', label: 'Knockout power', against: 'chin', how: 'Land clean early and the chin may not hold' },
   { attack: 'td', defend: 'tdd', label: 'Takedowns', against: 'takedown defence', how: 'Change levels and take it to the mat' },
   { attack: 'ctrl', defend: 'tdd', label: 'Control time', against: 'takedown defence', how: 'Hold top position and drain the clock' },
   { attack: 'sub', defend: 'subd', label: 'Submission threat', against: 'submission defence', how: 'Hunt the finish once it hits the ground' },
@@ -94,8 +99,8 @@ const VICTORY_KEYS = [
   { attack: 'str_acc', defend: 'str_def', label: 'Accuracy', against: 'strike defence', how: 'Pick the openings rather than trade' },
   { attack: 'dist', defend: 'str_def', label: 'Distance striking', against: 'strike defence', how: 'Keep it long and fight behind the jab' },
   { attack: 'clinch', defend: 'tdd', label: 'Clinch work', against: 'takedown defence', how: 'Close the distance and work the fence' },
-  { attack: 'gnd', defend: 'subd', label: 'Ground striking', against: 'guard', how: 'Pass, posture and make him carry weight' },
-  { attack: 'pts', defend: 'durability', label: 'Pace', against: 'durability', how: 'Push a pace he cannot answer late' },
+  { attack: 'gnd', defend: 'subd', label: 'Ground striking', against: 'guard', how: 'Pass, posture and make them carry weight' },
+  { attack: 'pts', defend: 'durability', label: 'Pace', against: 'durability', how: 'Push a pace that cannot be answered late' },
 ]
 
 // A key has to be a real edge on both sides of the pair: good enough to lean on,
@@ -614,6 +619,79 @@ function FighterIcon({ fighter, info, linkTo, className }) {
   return info ? <Tip content={<FighterMini f={info} />}>{node}</Tip> : node
 }
 
+// One key to victory, read top to bottom: who and what, what the model projects, then
+// why — the attacker's strength beside the opponent's matching weakness. The edge is a
+// labelled three-step meter rather than a bare number; "+32" never said 32 of what.
+const EDGE_STEPS = [
+  { min: 0.5, label: 'Strong edge' },
+  { min: 0.3, label: 'Clear edge' },
+  { min: 0, label: 'Slight edge' },
+]
+
+function KeyWhy({ icon, who, verb, career, pctValue, skill }) {
+  const tone = pctValue == null ? 'text-muted-foreground'
+    : pctValue >= 60 ? 'text-emerald-600' : pctValue <= 40 ? 'text-rose-600' : 'text-muted-foreground'
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5 text-[10.5px]">
+      <span className={cn('shrink-0 font-bold', tone)}>{icon}</span>
+      <span className="min-w-0 text-muted-foreground">
+        <span className="font-semibold text-foreground">{who}</span>{' '}{verb}
+        {career && <> <span className="font-semibold tabular-nums text-foreground">{career}</span></>}
+        {pctValue != null && (
+          <> · <span className={cn('font-semibold tabular-nums', tone)}>{ordinal(pctValue)}</span> pct {skill}</>
+        )}
+      </span>
+    </div>
+  )
+}
+
+function VictoryKey({ k, corner, mine, theirs }) {
+  const stepIdx = EDGE_STEPS.findIndex((st) => k.edge >= st.min)
+  const filled = EDGE_STEPS.length - stepIdx
+  const lift = k.lift != null && Math.abs(k.lift) >= 0.1 ? k.lift : null
+  return (
+    <div className="flex min-w-0 gap-2 rounded-md border border-border/70 p-2">
+      <span className="mt-[4px] h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: corner.css }} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-1.5">
+          <span className="truncate text-[12px] font-extrabold">{mine.last_name}</span>
+          <span className="truncate text-[12px] font-bold text-foreground/80">{k.title}</span>
+          <span className="ml-auto flex shrink-0 items-center gap-1 text-[9.5px] font-semibold text-muted-foreground">
+            <span className="flex gap-[2px]">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className={cn('h-2 w-1.5 rounded-sm', i >= filled && 'bg-muted')}
+                  style={i < filled ? { background: corner.css } : undefined}
+                />
+              ))}
+            </span>
+            {EDGE_STEPS[stepIdx].label}
+          </span>
+        </div>
+        {k.projection && (
+          <p className="mt-0.5 text-[11px] leading-snug text-foreground/80">
+            {k.projection.replaceAll('{opp}', theirs.last_name).replace(/\.\.$/, '.')}
+          </p>
+        )}
+        <div className="mt-1 grid gap-0.5 border-t border-border/60 pt-1">
+          <KeyWhy icon="▲" who={mine.last_name} verb={k.strength.career ? 'averages' : 'rates'}
+            career={k.strength.career} pctValue={k.strength.pct} skill={k.strength.label} />
+          <KeyWhy icon="▼" who={theirs.last_name} verb={k.weakness.career ? 'allows' : 'rates'}
+            career={k.weakness.career} pctValue={k.weakness.pct} skill={k.weakness.label} />
+          {lift != null && (
+            <p className="text-[10px] italic text-muted-foreground">
+              {lift > 0
+                ? `Projected ${Math.round(lift * 100)}% above ${mine.last_name}'s usual rate — ${theirs.last_name}'s defence is the reason.`
+                : `Still ${Math.round(-lift * 100)}% below ${mine.last_name}'s usual rate: ${theirs.last_name} slows it down, just not enough.`}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CommonOpponent({ row, red, blue, oppData }) {
   const info = oppData?.[String(row.opponent_id)]
   return (
@@ -1011,7 +1089,32 @@ export default function UpcomingFightPage({ fight, matchup }) {
   const targetRows = useMemo(() => mirror('target'), [redD, blueD])   // eslint-disable-line react-hooks/exhaustive-deps
   const positionRows = useMemo(() => mirror('position'), [redD, blueD]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const victoryKeys = useMemo(() => buildVictoryKeys(ctx), [ctx])
+  // Fight Flow and the keys both read the expected-stats projection. A bout without
+  // one (announced before the last serving run) falls back to the Glicko skill pairs,
+  // put into the same card shape so one renderer handles both.
+  const xs = fight.expected_stats
+  const flow = useMemo(
+    () => deriveFightFlow(xs, fight.round_prediction, ctx?.scheduled_rounds),
+    [xs, fight.round_prediction, ctx],
+  )
+  const victoryKeys = useMemo(() => {
+    const projected = buildProjectedKeys(xs, ctx, {
+      red: perFighter[redId]?.careerStats,
+      blue: perFighter[blueId]?.careerStats,
+    })
+    if (projected.length || flow) return projected
+    return buildVictoryKeys(ctx).map((k) => ({
+      id: k.id,
+      side: k.side,
+      title: k.label,
+      edge: k.gap / 100,
+      projection: k.how,
+      strength: { label: k.label.toLowerCase(), career: null, pct: k.attack },
+      weakness: { label: k.against, career: null, pct: k.defend },
+      lift: null,
+    }))
+  }, [xs, ctx, perFighter, redId, blueId, flow])
+  const keysFromProjection = Boolean(flow)
 
   const hasSkills = radarSeries.length > 0
   const loaded = Boolean(redD && blueD)
@@ -1022,10 +1125,11 @@ export default function UpcomingFightPage({ fight, matchup }) {
   // Odds are not here: the market lives in the rail, not the scrolling column.
   const sections = useMemo(() => [
     { key: 'matchup', label: 'Matchup' },
+    flow && { key: 'flow', label: 'Fight Flow' },
     { key: 'form', label: 'Form' },
     { key: 'tendencies', label: 'Tendencies' },
     prediction && { key: 'model', label: 'Model & Market' },
-  ].filter(Boolean), [prediction])
+  ].filter(Boolean), [prediction, flow])
 
   const { scrollRef, register, active, scrollTo } = useScrollSpy(sections)
 
@@ -1077,48 +1181,36 @@ export default function UpcomingFightPage({ fight, matchup }) {
                 <div className="min-w-0 rounded-lg border border-border p-3">
                   <div className="mb-2 flex flex-wrap items-baseline gap-2">
                     <span className="text-[13px] font-extrabold tracking-tight">Keys to victory</span>
-                    <Tip content={<span className="text-[11px]">A skill one corner rates well in, paired against the specific skill the other corner would have to stop it with. Both numbers are divisional percentiles: the attack is {KEY_ATTACK_FLOOR}th or better, the answer to it {KEY_DEFEND_CEILING}th or worse.</span>}>
+                    <Tip content={(
+                      <span className="text-[11px]">
+                        {keysFromProjection
+                          ? 'Each key is a part of this fight one corner is projected to win, from the expected-stats model (their offence against this opponent\'s defence). Underneath: what they do well, and what the opponent tends to allow. Percentiles are divisional skill ratings.'
+                          : `No stat projection for this bout yet, so these are skill mismatches: one corner ${KEY_ATTACK_FLOOR}th percentile or better in a skill the other is ${KEY_DEFEND_CEILING}th or worse at defending.`}
+                      </span>
+                    )}>
                       <Info className="h-3 w-3 cursor-help text-muted-foreground/60" />
                     </Tip>
-                    <span className="text-[10.5px] text-muted-foreground">strength against a hole, widest gap first</span>
+                    <span className="text-[10.5px] text-muted-foreground">their strength, the other side&apos;s weakness</span>
                   </div>
                   {victoryKeys.length ? (
                     <div className="grid gap-2">
-                      {victoryKeys.slice(0, 6).map((k) => {
-                        const corner = k.side === 'red' ? CORNERS[0] : CORNERS[1]
-                        const mine = k.side === 'red' ? red : blue
-                        const theirs = k.side === 'red' ? blue : red
-                        return (
-                          <div key={k.id} className="flex min-w-0 gap-2 rounded-md border border-border/70 p-2">
-                            <span className="mt-[3px] h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: corner.css }} />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-baseline gap-1.5">
-                                <span className="truncate text-[12px] font-extrabold" style={{ color: corner.css }}>
-                                  {mine.last_name}
-                                </span>
-                                <span className="truncate text-[12px] font-bold">{k.label}</span>
-                                <span className="ml-auto shrink-0 text-[11px] font-bold tabular-nums text-emerald-600">
-                                  +{Math.round(k.gap)}
-                                </span>
-                              </div>
-                              <div className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
-                                <span className="tabular-nums">{ordinal(k.attack)}</span>
-                                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                                  <span className="block h-full rounded-full" style={{ width: `${k.gap}%`, background: corner.css }} />
-                                </span>
-                                <span className="truncate">{theirs.last_name} {k.against} {ordinal(k.defend)}</span>
-                              </div>
-                              <p className="mt-0.5 truncate text-[10.5px] text-foreground/70" title={k.how}>{k.how}</p>
-                            </div>
-                          </div>
-                        )
-                      })}
+                      {victoryKeys.slice(0, 6).map((k) => (
+                        <VictoryKey
+                          key={k.id}
+                          k={k}
+                          corner={k.side === 'red' ? CORNERS[0] : CORNERS[1]}
+                          mine={k.side === 'red' ? red : blue}
+                          theirs={k.side === 'red' ? blue : red}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <Empty>
-                      {hasSkills
-                        ? 'No clear mismatch: neither corner rates well in a skill the other is weak against.'
-                        : 'No pre-fight skill ratings for this bout yet.'}
+                      {keysFromProjection
+                        ? 'No phase of this fight clearly belongs to either corner.'
+                        : hasSkills
+                          ? 'No clear mismatch: neither corner rates well in a skill the other is weak against.'
+                          : 'No pre-fight skill ratings for this bout yet.'}
                     </Empty>
                   )}
                 </div>
@@ -1156,6 +1248,22 @@ export default function UpcomingFightPage({ fight, matchup }) {
                 )}
               </div>
             </Section>
+
+            {/* ---- Fight Flow: the expected-stats projection ---- */}
+            {flow && (
+              <Section
+                id="flow"
+                title="Fight Flow"
+                note="How the fight is projected to play out, stat by stat"
+                register={register}
+              >
+                <FightFlow
+                  flow={flow}
+                  names={{ red: red.last_name, blue: blue.last_name }}
+                  css={{ red: CORNERS[0].css, blue: CORNERS[1].css }}
+                />
+              </Section>
+            )}
 
             {/* ---- Form: what they are made of, who they have shared, how they
                  have been going ---- */}
