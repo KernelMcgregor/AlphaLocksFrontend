@@ -124,6 +124,12 @@ export const fetchUpcomingEvents = () => cachedRequest('/ufc/upcoming', 10 * 60 
 export const fetchRankings = () => cachedRequest('/ufc/rankings', 30 * 60 * 1000) // 30 min
 export const fetchArbitrage = () => cachedRequest('/ufc/arbitrage')
 export const fetchPicks = () => cachedRequest('/ufc/picks')
+// Every market on a card (default: the next event), each with its pick, EV and grade.
+// Short TTL: prices move through fight week.
+export const fetchPicksV2 = (eventId) =>
+  cachedRequest(`/ufc/picks/v2${eventId ? `?event_id=${eventId}` : ''}`, 2 * 60 * 1000)
+// Every upcoming card in one batched request: a list of per-event payloads.
+export const fetchPicksAll = () => cachedRequest('/ufc/picks/v2?all=true', 2 * 60 * 1000)
 
 // Admin
 export const fetchAdminStats = () => request('/admin/stats')

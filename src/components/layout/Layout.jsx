@@ -26,7 +26,9 @@ function AppBreadcrumb() {
   // Build breadcrumb segments
   const crumbs = [{ label: 'UFC', path: '/' }]
 
-  if (path.startsWith('/arbitrage')) {
+  if (path === '/picks') {
+    crumbs.push({ label: 'Picks', path: null })
+  } else if (path.startsWith('/arbitrage')) {
     crumbs.push({ label: 'Arbitrage', path: null })
   } else if (path.startsWith('/ufc/rankings')) {
     crumbs.push({ label: 'Rankings', path: null })

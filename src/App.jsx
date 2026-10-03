@@ -7,6 +7,7 @@ import FighterDecompositionsPage from './pages/FighterDecompositionsPage'
 import FighterProfilePage from './pages/FighterProfilePage'
 import FighterStatsPage from './pages/FighterStatsPage'
 import RankingsPage from './pages/RankingsPage'
+import PicksPage from './pages/PicksPage'
 import UFCHomePage from './pages/UFCHomePage'
 import UFCPage from './pages/UFCPage'
 import UpcomingPage from './pages/UpcomingPage'
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/ufc/fights/:id/preview" element={<FightPreviewPage />} />
         <Route path="/ufc/rankings" element={<RankingsPage />} />
         <Route path="/model/upcoming" element={<UpcomingPage />} />
+        <Route path="/picks" element={<PicksPage />} />
         <Route path="/ufc/fighters/:id" element={<FighterProfilePage />} />
         <Route path="/ufc/fighters/stats" element={<FighterStatsPage />} />
         <Route path="/ufc/fighters/skills" element={<FighterDecompositionsPage />} />
