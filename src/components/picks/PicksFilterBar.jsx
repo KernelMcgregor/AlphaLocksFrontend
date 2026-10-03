@@ -106,7 +106,10 @@ function MarketsDropdown({ selected, counts, onToggle, onAll }) {
   )
 }
 
-export default function PicksFilterBar({ filters, setFilters, events, eventId, onEvent, books, counts, shown }) {
+export default function PicksFilterBar({
+  filters, setFilters, events, eventId, onEvent, books, counts, shown,
+  view = 'picks', onView, arbCount = 0, stake, onStake,
+}) {
   const set = (patch) => setFilters((f) => ({ ...f, ...patch }))
   // groups = [] means every market. Unticking one from "all" keeps the rest; ticking the
   // last missing one collapses back to [] so "All markets" reads as ticked again.
@@ -134,6 +137,32 @@ export default function PicksFilterBar({ filters, setFilters, events, eventId, o
           </Field>
         )}
 
+        <Field label="View">
+          <Segmented
+            label="Picks or arbitrage"
+            value={view}
+            onChange={onView}
+            options={[
+              { key: 'picks', label: 'Picks' },
+              { key: 'arbs', label: `Arbitrage${arbCount ? ` (${arbCount})` : ''}` },
+            ]}
+          />
+        </Field>
+
+        {view === 'arbs' ? (
+          <Field label="Total stake ($)">
+            <input
+              type="number"
+              min="1"
+              step="10"
+              aria-label="Total stake"
+              value={stake}
+              onChange={(e) => onStake(Math.max(1, Number(e.target.value) || 0))}
+              className={cn(inputCls, 'w-28 font-semibold tabular-nums')}
+            />
+          </Field>
+        ) : (
+        <>
         <Field label="Markets">
           <MarketsDropdown
             selected={filters.groups}
@@ -211,10 +240,12 @@ export default function PicksFilterBar({ filters, setFilters, events, eventId, o
             options={SORTS}
           />
         </Field>
+        </>
+        )}
 
         <span className="ml-auto flex items-center gap-3 self-center pt-4 text-[11px] text-muted-foreground">
           <span className="tabular-nums">{shown} shown</span>
-          {dirty && (
+          {view === 'picks' && dirty && (
             <button type="button" onClick={() => setFilters(DEFAULT_FILTERS)} className="font-semibold text-primary hover:underline">
               Reset
             </button>

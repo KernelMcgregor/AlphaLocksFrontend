@@ -6,8 +6,12 @@
 // The grade is not a function of edge size. It is the realised ROI of that edge band in
 // that market's walk-forward backtest (backend: app/services/ufc/grading.py), which is why
 // a 10% edge on the moneyline and a 10% edge on "by KO" can land letters apart.
+//
+// The Arbitrage view lists markets where backing every outcome at its best bettable price
+// locks in a profit (backend: find_arb in picks_v2.py; fight.arbs in the same payload).
 import { Target } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ArbCard from '../components/picks/ArbCard'
 import PickCard from '../components/picks/PickCard'
 import PicksFilterBar from '../components/picks/PicksFilterBar'
 import { fetchPicksAll, fetchPicksV2, fetchUpcomingEvents, peekCached } from '../lib/api'
@@ -21,6 +25,15 @@ import { formatDate } from '../lib/utils'
 const FILTER_KEY = 'picks.filters.v3'
 // "All events" is several hundred cards, each with portraits; render them in pages.
 const PAGE = 60
+const VIEW_KEY = 'picks.view'
+const STAKE_KEY = 'picks.arbStake'
+
+function loadPref(k, fallback) {
+  try { return localStorage.getItem(k) ?? fallback } catch { return fallback }
+}
+function savePref(k, v) {
+  try { localStorage.setItem(k, v) } catch { /* storage unavailable */ }
+}
 
 function loadFilters() {
   try {
@@ -67,6 +80,10 @@ export default function PicksPage() {
   // instead of the previous card, without resetting state inside the effect.
   const [result, setResult] = useState(null)
   const [filters, setFilters] = useState(loadFilters)
+  const [view, setView] = useState(() => (loadPref(VIEW_KEY, 'picks') === 'arbs' ? 'arbs' : 'picks'))
+  const [stake, setStake] = useState(() => Number(loadPref(STAKE_KEY, '100')) || 100)
+  useEffect(() => savePref(VIEW_KEY, view), [view])
+  useEffect(() => savePref(STAKE_KEY, String(stake)), [stake])
 
   useEffect(() => {
     fetchUpcomingEvents().then(setEvents).catch(() => setEvents([]))
@@ -137,6 +154,17 @@ export default function PicksPage() {
     [rows],
   )
 
+  // Every arb on the loaded card(s), best margin first.
+  const arbs = useMemo(() => {
+    const out = []
+    for (const d of data || []) {
+      for (const fight of d.fights || []) {
+        for (const a of fight.arbs || []) out.push({ arb: a, fight, event: d.event, id: `${fight.fight_id}:${a.market_key}` })
+      }
+    }
+    return out.sort((a, b) => b.arb.margin - a.arb.margin)
+  }, [data])
+
   // The upcoming list when it has loaded, else the cards the all-events payload carries.
   const eventList = useMemo(() => {
     if (events?.length) return events.map((e) => ({ id: String(e.id), name: e.name }))
@@ -178,8 +206,38 @@ export default function PicksPage() {
         onEvent={(id) => setEventId(id)}
         books={books}
         counts={counts}
-        shown={visible.length}
+        shown={view === 'arbs' ? arbs.length : visible.length}
+        view={view}
+        onView={setView}
+        arbCount={arbs.length}
+        stake={stake}
+        onStake={setStake}
       />
+
+      {view === 'arbs' ? (
+        <>
+          <p className="-mt-1 px-1 text-[11.5px] text-muted-foreground">
+            Back every outcome at the listed book and stake and every result pays the same. Pinnacle is excluded
+            (US bettors can’t take it). Exchange prices are the contract price, with American odds after fees.
+          </p>
+          {error ? (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-500/5 px-4 py-6 text-center text-[13px] text-rose-700">
+              Couldn’t load prices: {error}
+            </div>
+          ) : !data ? (
+            <Skeleton />
+          ) : !arbs.length ? (
+            <div className="rounded-xl border border-dashed border-border px-4 py-12 text-center text-[13px] text-muted-foreground">
+              No arbitrage right now. Books usually agree closely; gaps open briefly when one book is slow to move.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+              {arbs.map((a) => <ArbCard key={a.id} {...a} total={stake} showEvent={!single} />)}
+            </div>
+          )}
+        </>
+      ) : (
+      <>
 
       {error ? (
         <div className="rounded-xl border border-rose-500/40 bg-rose-500/5 px-4 py-6 text-center text-[13px] text-rose-700">
@@ -210,6 +268,8 @@ export default function PicksPage() {
             Show more ({visible.length - limit} left)
           </button>
         </div>
+      )}
+      </>
       )}
 
       <p className="text-center text-[11px] text-muted-foreground">
