@@ -9,34 +9,41 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import PageLoader from '../components/PageLoader'
 import { fetchFight } from '../lib/api'
-import { loadMatchup } from '../lib/matchup'
+import { loadMatchup, loadReview } from '../lib/matchup'
 import CompletedFightPage from './CompletedFightPage'
 import UpcomingFightPage from './UpcomingFightPage'
+
+// A result is a winner or, for draws and no contests, a recorded method — keying on
+// the winner alone sent every draw to the upcoming-fight page.
+const isPlayed = (fight) => Boolean(fight.winner || fight.method)
 
 export default function FightDetailPage() {
   const { id } = useParams()
   // Keyed by the id it holds, so switching fights reads as "loading" immediately
   // without an effect having to clear the previous fight first.
-  const [state, setState] = useState({ id: null, fight: null, matchup: null })
+  const [state, setState] = useState({ id: null, fight: null, matchup: null, review: null })
 
   useEffect(() => {
     // Navigating between two fights reuses this component, so a slow response for
     // the fight we just left could land after the new one and overwrite it.
     let cancelled = false
     fetchFight(id)
-      // An upcoming fight's page also needs both fighters' histories, the matchup
-      // context and the market curves. They are awaited HERE, before the page
-      // mounts, so it opens complete rather than section by section.
-      .then((fight) => (fight && !fight.winner
-        ? loadMatchup(fight).then((matchup) => ({ fight, matchup }))
-        : { fight, matchup: null }))
-      .then(({ fight, matchup }) => { if (!cancelled) setState({ id, fight, matchup }) })
-      .catch(() => { if (!cancelled) setState({ id, fight: null, matchup: null }) })
+      // Both pages need more than the fight payload (histories, the matchup context,
+      // the market curves). It is awaited HERE, before the page mounts, so the page
+      // opens complete rather than section by section.
+      .then((fight) => {
+        if (!fight) return { fight, matchup: null, review: null }
+        return isPlayed(fight)
+          ? loadReview(fight).then((review) => ({ fight, matchup: null, review }))
+          : loadMatchup(fight).then((matchup) => ({ fight, matchup, review: null }))
+      })
+      .then((loaded) => { if (!cancelled) setState({ id, ...loaded }) })
+      .catch(() => { if (!cancelled) setState({ id, fight: null, matchup: null, review: null }) })
     return () => { cancelled = true }
   }, [id])
 
   if (state.id !== id) return <PageLoader />
-  const { fight, matchup } = state
+  const { fight, matchup, review } = state
 
   if (!fight) {
     return (
@@ -47,7 +54,7 @@ export default function FightDetailPage() {
     )
   }
 
-  return fight.winner
-    ? <CompletedFightPage fight={fight} />
+  return isPlayed(fight)
+    ? <CompletedFightPage fight={fight} review={review} />
     : <UpcomingFightPage fight={fight} matchup={matchup} />
 }

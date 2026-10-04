@@ -41,3 +41,25 @@ export function loadMatchup(fight) {
     marketHistory,
   }))
 }
+
+/**
+ * What the completed-fight page needs beyond the fight payload: the matchup context
+ * (pre-fight Glicko snapshot — keyed to this fight, so it is as the corners stood going
+ * in), both fight logs for the records going in, and the prediction-market curves.
+ * Same degrade-to-empty rule as loadMatchup.
+ */
+export function loadReview(fight) {
+  const redId = fight.red_fighter?.id
+  const blueId = fight.blue_fighter?.id
+  const logOf = (id) => (id ? fetchFighterFights(id).catch(() => []) : Promise.resolve([]))
+  return Promise.all([
+    fetchFightContext(fight.id).catch(() => null),
+    logOf(redId),
+    logOf(blueId),
+    fetchMarketHistory(fight.id).then((r) => r?.series || {}).catch(() => ({})),
+  ]).then(([ctx, redFights, blueFights, marketHistory]) => ({
+    ctx,
+    fights: { red: redFights, blue: blueFights },
+    marketHistory,
+  }))
+}

@@ -12,16 +12,12 @@
 // route.
 //
 // Completed fights are NOT handled here — see CompletedFightPage.
-import { ArrowLeft, ArrowRight, Brain, Flame, Info, Timer, Trophy } from 'lucide-react'
+import { ArrowLeft, Brain, Flame, Info, Timer, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { Link, useNavigate } from 'react-router-dom'
-import WeightClassBadge from '../components/WeightClassBadge'
 import HeaderActions from '../components/layout/HeaderActions'
 import FighterImage from '../components/sports/FighterImage'
 import FighterMini from '../components/sports/FighterMini'
-import WavingFlag from '../components/sports/WavingFlag'
 import { SlideTabs } from '../components/ui/slide-tabs'
 import { Tip } from '../components/ui/tip'
 import ActivityBars from '../components/viz/ActivityBars'
@@ -48,31 +44,21 @@ import {
 } from '../lib/fighterAnalytics'
 import { buildProjectedKeys, deriveFightFlow } from '../lib/fightProjection'
 import { cn, formatDate, formatOdds } from '../lib/utils'
-import { divisionAbbr } from '../lib/upcomingSummary'
+import { buildShapWaterfall } from '../lib/shapWaterfall'
+import EventLine from '../components/fight/EventLine'
+import MatchupCard from '../components/fight/MatchupCard'
+import PreviewBox from '../components/fight/PreviewBox'
+import { CORNERS, fullName, impliedFromOdds } from '../components/fight/corners'
+import { CornerColumns, CornerHead, Empty } from '../components/fight/layout'
 
-// Corner identity, literal: the red corner is red and the blue corner is blue.
-// Classes are spelled out rather than built from a token — Tailwind scans source
-// text, so a class assembled at runtime is not guaranteed to be in the stylesheet.
-const CORNERS = [
-  { key: 'red', css: 'var(--color-corner-red)', bar: 'bg-corner-red', border: 'border-corner-red', tint: 'bg-corner-red/10' },
-  { key: 'blue', css: 'var(--color-corner-blue)', bar: 'bg-corner-blue', border: 'border-corner-blue', tint: 'bg-corner-blue/10' },
-]
 
-const fullName = (f) => (f ? `${f.first_name} ${f.last_name}`.trim() : 'TBA')
 
 
 // Method segments, most-likely first. Spelled out rather than built at runtime
 // — Tailwind scans source text for class names.
 const METHOD_TINTS = ['bg-primary', 'bg-muted-foreground/55', 'bg-muted-foreground/30']
 
-// UFC.com writes "--" for a missing measurement rather than leaving it blank.
-function val(v) {
-  const t = typeof v === 'string' ? v.trim() : v
-  return !t || t === '--' ? null : t
-}
 
-const impliedFromOdds = (american) =>
-  american > 0 ? 100 / (american + 100) : Math.abs(american) / (Math.abs(american) + 100)
 
 // ---------------------------------------------------------------------------
 // Keys to victory — Glicko fallback
@@ -141,315 +127,7 @@ function buildVictoryKeys(ctx) {
   return [...perSide.red, ...perSide.blue].sort((a, b) => b.gap - a.gap)
 }
 
-// ---------------------------------------------------------------------------
-// Model attribution
-// ---------------------------------------------------------------------------
-// The stored SHAP values are per-feature and named for the model's own columns.
-// Twelve rows of `diff_age_x_log_layoff` is not an explanation, so features are
-// folded into families a reader can argue with. Order is fixed rather than sorted
-// by size: the same fight read twice, and two fights read side by side, should put
-// the same family in the same place.
-const SHAP_FAMILIES = [
-  { key: 'market', label: 'Market signal', test: (n) => n.includes('odds') },
-  { key: 'skills', label: 'Rated skills', test: (n) => n.includes('glicko') },
-  { key: 'rating', label: 'Rating & résumé', test: (n) => /elo|resume|career|streak|win_pct/.test(n) },
-  { key: 'age', label: 'Age & prime', test: (n) => /age|peak|years/.test(n) },
-  { key: 'activity', label: 'Layoff & activity', test: (n) => /layoff|days_since|fights_seen|rounds_seen/.test(n) },
-  { key: 'physical', label: 'Physical', test: (n) => /height|reach|weight|stance/.test(n) },
-  { key: 'output', label: 'Fight output', test: (n) => /sig_str|str_|td_|ctrl|kd|sub_att|ground|clinch|dist|pace|output/.test(n) },
-  { key: 'finishing', label: 'Finishing', test: (n) => /ko_|sub_rate|dec_rate|finish/.test(n) },
-  { key: 'other', label: 'Everything else', test: () => true },
-]
 
-const shapFamily = (name) => SHAP_FAMILIES.find((f) => f.test(name)).key
-
-const logit = (p) => Math.log(p / (1 - p))
-const sigmoid = (x) => 1 / (1 + Math.exp(-x))
-
-// Heights are stored as `6' 2"`, reach as `74.0"`. Parsed to inches only so the
-// tale of the tape can mark which side holds the physical edge.
-function heightInches(v) {
-  const m = /(\d+)\s*'\s*(\d+)?/.exec(val(v) || '')
-  return m ? Number(m[1]) * 12 + Number(m[2] || 0) : null
-}
-
-function reachInches(v) {
-  const n = parseFloat(val(v) || '')
-  return Number.isFinite(n) ? n : null
-}
-
-// ---------------------------------------------------------------------------
-// Left rail
-// ---------------------------------------------------------------------------
-// One half of the matchup box: the portrait over its waving flag, then the name
-// and record beneath.
-//
-// The portrait sits flush with the card's top and outer edge — no padding, no
-// frame — so the image gets every pixel of a narrow rail. Corner identity is the
-// 2px rule under the image instead of a box around it, which is the only edge
-// that was doing any work once the two halves met in the middle.
-//
-// The scale-up is the zoom: UFC's portraits are full-body, which at 150px wide
-// left the head the size of a pea. Scaling from the top crops the shins and feet
-// — the standard crop for a fight card — and never touches the face, which is
-// the one part of the portrait that has to survive.
-function CornerHalf({ fighter, corner, ctx, rounded, weightClass }) {
-  const glicko = ctx?.glicko
-  const division = divisionAbbr(weightClass)
-  return (
-    <Link
-      to={`/ufc/fighters/${fighter.id}`}
-      className="group flex min-w-0 flex-1 flex-col"
-    >
-      <div
-        className={cn(
-          'relative h-[156px] overflow-hidden border-b-[3px]',
-          corner.border, corner.tint, rounded,
-        )}
-      >
-        <WavingFlag countryCode={fighter.country_code} />
-        <FighterImage
-          fighter={fighter}
-          fit="contain"
-          alt={fullName(fighter)}
-          className="relative z-10 h-full w-full"
-          imgClassName="origin-top scale-[1.2]"
-        />
-      </div>
-
-      {/* Names wrap rather than truncate — "Christian Leroy Duncan" cut off
-          mid-word in a column this narrow, and a second line costs less than a
-          lost name. The flag is on the portrait now, so it is not repeated here. */}
-      <div className="mt-1.5 px-1.5 text-center text-[12.5px] font-extrabold leading-tight group-hover:underline">
-        {fullName(fighter)}
-      </div>
-      {fighter.nickname && (
-        <div className="truncate px-1.5 text-center text-[10px] italic leading-tight text-muted-foreground">
-          &quot;{fighter.nickname}&quot;
-        </div>
-      )}
-
-      <div className="mt-1 flex flex-wrap justify-center gap-1 px-1.5">
-        <span className="rounded-md border bg-background px-1.5 py-px text-[10.5px] font-bold tabular-nums">
-          {fighter.wins}-{fighter.losses}{fighter.draws > 0 ? `-${fighter.draws}` : ''}
-        </span>
-        {glicko?.division_rank != null && (
-          <span
-            className="rounded-md px-1.5 py-px text-[10.5px] font-bold text-white"
-            style={{ background: corner.css }}
-            title={weightClass || undefined}
-          >
-            #{glicko.division_rank}{division ? ` ${division}` : ''}
-          </span>
-        )}
-      </div>
-    </Link>
-  )
-}
-
-// Both corners in one box: portraits side by side over a shared tale of the tape.
-// The attributes are one centred column with each fighter's value flanking it, so
-// every row is a direct comparison — two separate bio grids made the reader hold
-// one number in their head while finding its counterpart.
-// Rows past the core five only appear when the viewport is tall enough to hold
-// them without squeezing the odds boards — height-based media queries rather than
-// width, because what runs out on a laptop is vertical space. Spelled out as
-// literal class strings: Tailwind scans source text, so a variant assembled at
-// runtime would never make it into the stylesheet.
-const TIER_CLASS = {
-  0: 'flex',
-  1: 'hidden [@media(min-height:820px)]:flex',
-  2: 'hidden [@media(min-height:900px)]:flex',
-  3: 'hidden [@media(min-height:1000px)]:flex',
-}
-
-// "35.00" — the UFC.com bio figure, which unlike reach carries no inch mark.
-const legReach = (v) => {
-  const n = parseFloat(val(v) || '')
-  return Number.isFinite(n) ? `${n.toFixed(1)}"` : null
-}
-
-// Share of wins that came by stoppage — the one number that says whether a
-// fighter's record was built by finishing people.
-const finishPct = (f) => {
-  const wins = f?.total_wins
-  if (!wins) return null
-  const rate = (f.ko_rate || 0) + (f.sub_rate || 0)
-  return `${Math.round(rate * 100)}%`
-}
-
-function MatchupCard({ red, blue, ctx, weightClass }) {
-  const rows = [
-    { label: 'Age', r: ctx?.red?.age, b: ctx?.blue?.age, fmt: (v) => `${v} yrs` },
-    { label: 'Height', r: val(red.height), b: val(blue.height), cmp: heightInches },
-    // reach already carries its own inch mark ('74.0"')
-    { label: 'Reach', r: val(red.reach), b: val(blue.reach), cmp: reachInches },
-    { label: 'Leg', r: legReach(red.leg_reach), b: legReach(blue.leg_reach), cmp: reachInches, tier: 1 },
-    { label: 'Stance', r: val(red.stance), b: val(blue.stance) },
-    { label: 'Style', r: val(red.fighting_style), b: val(blue.fighting_style), tier: 1 },
-    { label: 'Team', r: val(red.trains_at), b: val(blue.trains_at), tier: 2 },
-    {
-      label: 'Layoff',
-      r: ctx?.red?.days_since_last_fight,
-      b: ctx?.blue?.days_since_last_fight,
-      fmt: (v) => `${v} days`,
-      tier: 2,
-    },
-    { label: 'From', r: val(red.birthplace), b: val(blue.birthplace) },
-    {
-      label: 'Finish',
-      r: finishPct(ctx?.red?.finish_rates),
-      b: finishPct(ctx?.blue?.finish_rates),
-      tier: 3,
-    },
-    {
-      label: 'Debut',
-      r: red.octagon_debut ? formatDate(red.octagon_debut) : null,
-      b: blue.octagon_debut ? formatDate(blue.octagon_debut) : null,
-      tier: 3,
-    },
-    // A row where neither side has a value drops out rather than showing dashes.
-  ].filter((row) => row.r != null || row.b != null)
-
-  return (
-    // No padding at the top: the portraits are the card's top edge, corner to
-    // corner. `overflow-hidden` lets them square off against the card's radius.
-    <div className="shrink-0 overflow-hidden rounded-lg border border-border pb-2.5">
-      {/* The two portraits meet in the middle with no gap, so the red and blue
-          rules butt against each other and read as one matchup rather than two
-          cards. VS sits on the seam rather than between them. */}
-      <div className="relative flex items-stretch">
-        <CornerHalf fighter={red} corner={CORNERS[0]} ctx={ctx?.red} rounded="rounded-tl-md" weightClass={weightClass} />
-        <CornerHalf fighter={blue} corner={CORNERS[1]} ctx={ctx?.blue} rounded="rounded-tr-md" weightClass={weightClass} />
-        <span className="pointer-events-none absolute left-1/2 top-[78px] z-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border bg-background px-1.5 py-px text-[9px] font-black uppercase tracking-wider text-muted-foreground shadow-sm">
-          vs
-        </span>
-      </div>
-
-      {rows.length > 0 && (
-        <div className="mx-2.5 mt-2 border-t pt-1.5">
-          {rows.map((row) => {
-            // Only height and reach get an advantage mark: they have an
-            // unambiguous direction. Younger is not strictly better and stance
-            // has no ordering, so those rows stay neutral.
-            const a = row.cmp ? row.cmp(row.r) : null
-            const b = row.cmp ? row.cmp(row.b) : null
-            const edge = a != null && b != null && a !== b ? (a > b ? 'r' : 'b') : null
-            const side = (v, which) => {
-              const text = v == null ? '—' : (row.fmt ? row.fmt(v) : v)
-              return (
-                <span
-                  // Hometowns and gyms run long; truncate with the full value on hover
-                  // rather than wrapping, which would make row heights uneven.
-                  title={typeof text === 'string' && text !== '—' ? text : undefined}
-                  className={cn(
-                    'min-w-0 flex-1 truncate text-[11px] font-semibold tabular-nums',
-                    which === 'r' ? 'text-right' : 'text-left',
-                    edge === which ? 'font-extrabold' : 'text-foreground/75',
-                  )}
-                  style={edge === which ? { color: which === 'r' ? CORNERS[0].css : CORNERS[1].css } : undefined}
-                >
-                  {text}
-                </span>
-              )
-            }
-            return (
-              <div key={row.label} className={cn('items-center gap-1.5 py-[1px]', TIER_CLASS[row.tier || 0])}>
-                {side(row.r, 'r')}
-                <span className="w-[46px] shrink-0 text-center text-[8.5px] font-bold uppercase tracking-wide text-muted-foreground">
-                  {row.label}
-                </span>
-                {side(row.b, 'b')}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// What the bout is and where it is, in the breadcrumb row next to the section tabs
-// rather than in the left rail: it identifies the page, and on a short viewport the
-// rail's vertical space is better spent on the fight itself.
-function EventLine({ event, weightClass, scheduledRounds }) {
-  if (!event && !weightClass) return null
-  return (
-    <div className="mr-1 hidden min-w-0 items-center gap-2 border-r border-border pr-3 lg:flex">
-      <WeightClassBadge weightClass={weightClass} />
-      {scheduledRounds && (
-        <span className="shrink-0 rounded-md border bg-background px-1.5 py-px text-[10.5px] font-bold">
-          {scheduledRounds} rounds
-        </span>
-      )}
-      {event && (
-        <>
-          <span className="truncate text-[12.5px] font-extrabold tracking-tight">{event.name}</span>
-          <span className="shrink-0 whitespace-nowrap text-[10.5px] text-muted-foreground">
-            {formatDate(event.date)}
-            {event.location ? ` · ${event.location}` : ''}
-          </span>
-        </>
-      )}
-    </div>
-  )
-}
-
-// The written preview, in the rail under the model's pick, taking whatever height
-// the rail has left. Nothing is truncated in the text itself: the article is
-// clipped by the box and faded out, and "Read all" opens the full piece on its own
-// page. Clipping rather than slicing the markdown keeps tables and headings intact
-// instead of cutting one in half.
-function PreviewBox({ preview, fightId, className }) {
-  const written = preview.generated_at ? formatDate(String(preview.generated_at).slice(0, 10)) : null
-
-  return (
-    // The article must not decide how tall this box is — the rail does. An absolutely
-    // positioned card contributes nothing to its parent's height, so the box is
-    // exactly the space left under the cards above it. The min-height is the floor
-    // for a short screen, where the rail scrolls instead.
-    <div className={cn('relative min-h-[240px]', className)}>
-    <div className="absolute inset-0 flex flex-col rounded-lg border border-border p-3">
-      <div className="mb-2 flex shrink-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-[13px] font-extrabold tracking-tight">Preview</span>
-          <span className="text-[10.5px] text-muted-foreground">
-            Written by KernelMcGregor{written ? ` · ${written}` : ''}
-          </span>
-        </div>
-        {/* The corner link leaves for the index; getting the rest of *this*
-            article is the button under the text, where the reader runs out. */}
-        <Link
-          to="/ufc/articles"
-          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
-        >
-          See All Articles <ArrowRight className="h-3 w-3" />
-        </Link>
-      </div>
-
-      <div className="relative min-h-0 flex-1 overflow-hidden">
-        {/* Headings are knocked back to near body size in here: at the article's
-            own scale the h1 filled most of the box and the reader got a title
-            instead of a preview. The full-length page keeps the real scale. */}
-        <div className="prose prose-sm max-w-none text-foreground prose-headings:mb-1 prose-headings:mt-2 prose-headings:text-foreground prose-h1:text-[15px] prose-h1:leading-snug prose-h2:text-[13px] prose-h3:text-[12px] prose-p:my-1.5 prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground prose-table:text-sm prose-th:text-foreground prose-td:text-foreground">
-          <Markdown remarkPlugins={[remarkGfm]}>{preview.content}</Markdown>
-        </div>
-        {/* the article always overflows, so the fade is unconditional */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-card to-transparent" />
-      </div>
-
-      <div className="mt-2 flex shrink-0 justify-center">
-        <Link
-          to={`/ufc/fights/${fightId}/preview`}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1 text-[11.5px] font-bold transition-colors hover:border-primary/50 hover:text-primary"
-        >
-          Read all <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-    </div>
-    </div>
-  )
-}
 
 // Pinned so the model's read stays on screen while the sections scroll.
 function ModelVerdict({ prediction, methodPrediction, red, blue }) {
@@ -713,38 +391,6 @@ function CommonOpponent({ row, red, blue, oppData }) {
 
 
 
-// A two-column block where the same mark is repeated per corner, so the reader
-// compares across rather than reading two unrelated panels.
-function CornerColumns({ red, blue, children, className }) {
-  return (
-    <div className={cn('grid gap-3 lg:grid-cols-2', className)}>
-      {[[CORNERS[0], red], [CORNERS[1], blue]].map(([corner, fighter]) => (
-        <div key={corner.key} className="flex min-w-0 flex-col rounded-lg border border-border p-3">
-          <div className="mb-2 flex shrink-0 items-center gap-1.5">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: corner.css }} />
-            <span className="truncate text-[12px] font-extrabold">{fullName(fighter)}</span>
-          </div>
-          {children(corner.key)}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function Empty({ children }) {
-  return <p className="py-6 text-center text-[11.5px] text-muted-foreground">{children}</p>
-}
-
-// Column header for a corner: a colour dot plus the name, so the column reads as
-// that fighter without the numbers under it having to be painted red or blue.
-function CornerHead({ css, name }) {
-  return (
-    <span className="flex min-w-0 items-center justify-center gap-1 normal-case">
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: css }} />
-      <span className="truncate">{name}</span>
-    </span>
-  )
-}
 
 // ---------------------------------------------------------------------------
 export default function UpcomingFightPage({ fight, matchup }) {
@@ -870,65 +516,7 @@ export default function UpcomingFightPage({ fight, matchup }) {
     return { sides, ...top, hasEdge: top.edge >= 0.05, isUnderdog: top.implied < 0.5 }
   }, [prediction, odds, red, blue, marketConsensus])
 
-  // The prediction as a walk from a coin flip to the number on the card.
-  //
-  // SHAP values are log-odds contributions from the raw model, while `red_prob` is
-  // the calibrated probability, and only this fight's top 20 features are stored.
-  // So the walk is anchored at the END — `logit(red_prob)` minus the stored
-  // attributions is the starting point — and the difference between that and a coin
-  // flip is shown as its own first step, "prior & unlisted". Every other step is
-  // then exact, and the walk lands precisely on the displayed probability.
-  const waterfall = useMemo(() => {
-    if (!prediction?.red_prob || !shap_values?.length) return null
-    const pFinal = Math.min(0.999, Math.max(0.001, prediction.red_prob))
-    const stored = shap_values.reduce((a, v) => a + (v.shap_value || 0), 0)
-    const baseLogit = logit(pFinal) - stored
-
-    const sums = new Map()
-    for (const v of shap_values) {
-      const key = shapFamily(v.feature_name)
-      sums.set(key, (sums.get(key) || 0) + (v.shap_value || 0))
-    }
-
-    // The market family is folded into the opening step rather than drawn: the
-    // chart is a read of the fight, and a row saying the price is an input invites
-    // the reader to discount everything under it. The walk still lands on the same
-    // probability — nothing is dropped, only unlabelled.
-    const opening = baseLogit + (sums.get('market') || 0)
-    let cum = opening
-    const steps = [{
-      key: 'prior',
-      label: 'Base rate',
-      from: 0.5,
-      to: sigmoid(opening),
-      points: (sigmoid(opening) - 0.5) * 100,
-    }]
-    for (const fam of SHAP_FAMILIES) {
-      if (fam.key === 'market') continue
-      const v = sums.get(fam.key)
-      if (v == null || Math.abs(v) < 1e-9) continue
-      const from = sigmoid(cum)
-      cum += v
-      const to = sigmoid(cum)
-      steps.push({ key: fam.key, label: fam.label, from, to, points: (to - from) * 100 })
-    }
-
-    const calibration = prediction.va_prob_low != null && prediction.va_prob_high != null
-      ? { low: prediction.va_prob_low, high: prediction.va_prob_high }
-      : null
-    // Told from the favourite's side: the walk ends on the bigger number, and the
-    // headline reads "why Talbott is 84%" rather than "why Figueiredo is only 16%".
-    // Every probability is mirrored, so steps keep their size and flip direction.
-    const side = pFinal >= 0.5 ? 'red' : 'blue'
-    if (side === 'red') return { side, steps, final: sigmoid(cum), calibration }
-    const f = (p) => 1 - p
-    return {
-      side,
-      steps: steps.map((st) => ({ ...st, from: f(st.from), to: f(st.to), points: -st.points })),
-      final: f(sigmoid(cum)),
-      calibration: calibration && { low: f(calibration.high), high: f(calibration.low) },
-    }
-  }, [prediction, shap_values])
+  const waterfall = useMemo(() => buildShapWaterfall(prediction, shap_values), [prediction, shap_values])
 
   // Market side of the outcome grid, sportsbooks first. Per cell: the BestFightOdds
   // consensus across books (de-vigged, with the best real price), else Bovada's six-way
