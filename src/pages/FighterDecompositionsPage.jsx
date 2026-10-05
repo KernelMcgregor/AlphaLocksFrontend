@@ -1,5 +1,6 @@
 // src/pages/FighterDecompositionsPage.jsx
-import { Crown, Layers } from 'lucide-react'
+import { Layers } from 'lucide-react'
+import BeltIcon from '../components/ui/belt-icon'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
@@ -7,7 +8,7 @@ import FighterImage from '../components/sports/FighterImage'
 import { Card, CardContent } from '../components/ui/card'
 import PageLoader from '../components/PageLoader'
 import { fetchRankings, peekCached } from '../lib/api'
-import { cn, formatRecord } from '../lib/utils'
+import { cn, formatRecord, isChampion, displayRank } from '../lib/utils'
 import { DIMS, buildPercentile, deriveProfile } from '../lib/fighterAnalytics'
 
 const STRIKING = DIMS.filter((d) => d.group === 'striking')
@@ -23,8 +24,10 @@ function cellTone(v) {
   return 'font-extrabold text-rose-600'
 }
 
-function RankCell({ rank }) {
-  if (rank === 1) return <Crown className="mx-auto h-4 w-4 text-amber-500" />
+// The champion wears the belt; contenders are numbered from 1 (display_rank).
+function RankCell({ fighter }) {
+  if (isChampion(fighter)) return <BeltIcon className="mx-auto h-4 w-4 text-amber-500" />
+  const rank = displayRank(fighter)
   return (
     <span className={cn('tabular-nums', rank <= 5 ? 'font-extrabold text-blue-600' : 'font-semibold text-muted-foreground')}>
       {rank}
@@ -68,7 +71,7 @@ function Row({ fighter, profile, view }) {
   return (
     <tr className="group border-b last:border-b-0 hover:bg-muted/40">
       <td className="sticky left-0 z-[2] w-[46px] min-w-[46px] bg-card px-2 py-2 text-center group-hover:bg-muted/40">
-        <RankCell rank={fighter.rank} />
+        <RankCell fighter={fighter} />
       </td>
       <td className="sticky left-[46px] z-[2] w-[212px] min-w-[212px] border-r bg-card px-3 py-2 group-hover:bg-muted/40">
         <Link to={`/ufc/fighters/${fighter.id}`} className="flex items-center gap-2.5">

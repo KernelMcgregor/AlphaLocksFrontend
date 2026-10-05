@@ -117,6 +117,28 @@ function fmtClock(totalSeconds) {
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')
 }
 
+// ---------------------------------------------------------------------------
+// A ufc_fighter_career_stats row in the shape aggregateCareer returns, for the
+// stat keys the Fighter Stats table shows. The table stores shares and accuracies
+// as fractions; the page shows whole percents. ctrl15 is seconds per 15 min in both.
+// ---------------------------------------------------------------------------
+export function careerFromRow(r) {
+  const n = (v) => Number(v) || 0
+  const pct = (v) => Math.round(n(v) * 100)
+  const ctrl15 = n(r.ctrl15)
+  return {
+    fightCount: r.fight_count,
+    hasStats: r.fight_count > 0,
+    slpm: n(r.slpm), tslpm: n(r.tslpm), sigAcc: pct(r.sig_acc), kd15: n(r.kd15),
+    head: pct(r.head_pct), body: pct(r.body_pct), leg: pct(r.leg_pct),
+    distance: pct(r.dist_pct), clinch: pct(r.clinch_pct), ground: pct(r.ground_pct),
+    td15: n(r.td15), tdAcc: pct(r.td_acc), subAtt15: n(r.sub_att15), rev15: n(r.rev15),
+    ctrl15, ctrl15Str: fmtClock(ctrl15),
+    ko: r.ko_wins ?? 0, sub: r.sub_wins ?? 0, dec: r.dec_wins ?? 0,
+    finishRate: pct(r.finish_rate), winPct: pct(r.win_pct),
+  }
+}
+
 export function aggregateCareer(statRows, fights, fighterId) {
   const rows = statRows || []
   // Prefer per-fight totals rows (round_number === 0); else sum round rows.

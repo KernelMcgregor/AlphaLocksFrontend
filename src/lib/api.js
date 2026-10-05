@@ -69,6 +69,12 @@ export const fetchFighter = (id) => cachedRequest(`/ufc/fighters/${id}`)
 export const fetchFighterFights = (id) => cachedRequest(`/ufc/fighters/${id}/fights`)
 export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)
 export const fetchFighterCareerStats = (id) => cachedRequest(`/ufc/fighters/${id}/career-stats`)
+// Precomputed career stats for many fighters in one request (ufc_fighter_career_stats,
+// refreshed after each event). Ids are sorted so the cache key is stable.
+export const fetchCareerStatsFor = (ids) => {
+  const list = [...ids].map(String).sort()
+  return cachedRequest(`/ufc/career-stats?limit=2000&fighter_ids=${list.join(',')}`, 30 * 60 * 1000)
+}
 // Divisional rank after each bout. Served from the precomputed ufc_ranking_history
 // table; returns [] until `python -m app.services.ufc.rank_history_backfill` has run.
 export const fetchFighterRankHistory = (id) =>

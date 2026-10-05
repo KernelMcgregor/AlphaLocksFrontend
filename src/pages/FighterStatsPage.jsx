@@ -1,17 +1,17 @@
 // src/pages/FighterStatsPage.jsx
-import { BarChart3, Crown, Loader2 } from 'lucide-react'
+import { BarChart3, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
+import DivisionPicker from '../components/sports/DivisionPicker'
+import BeltIcon from '../components/ui/belt-icon'
 import FighterImage from '../components/sports/FighterImage'
 import { Card, CardContent } from '../components/ui/card'
 import { ScrollArea } from '../components/ui/scroll-area'
-// NOTE: add `export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)`
-// to src/lib/api.js — the endpoint already exists in routers/ufc.py.
 import PageLoader from '../components/PageLoader'
-import { fetchFighterFights, fetchFighterStats, fetchRankings, peekCached } from '../lib/api'
-import { cn, formatRecord } from '../lib/utils'
-import { aggregateCareer } from '../lib/fighterAnalytics'
+import { fetchCareerStatsFor, fetchRankings, peekCached } from '../lib/api'
+import { cn, formatRecord, isChampion, displayRank } from '../lib/utils'
+import { careerFromRow } from '../lib/fighterAnalytics'
 
 // Every tracked fight stat, grouped. dir = best-is direction.
 const GROUPS = [
@@ -81,7 +81,6 @@ export default function FighterStatsPage() {
   const [error, setError] = useState(null)
   const [activeWc, setActiveWc] = useState(() => defaultDivision(peekCached('/ufc/rankings')))
   const [aggByWc, setAggByWc] = useState({})       // { [wcKey]: { [fighterId]: career } }
-  const [loadingAgg, setLoadingAgg] = useState(false)
   const [sortKey, setSortKey] = useState('rank')
   const [sortDir, setSortDir] = useState('asc')
 
@@ -94,24 +93,20 @@ export default function FighterStatsPage() {
       .catch((e) => setError(e.message))
   }, [])
 
-  // Lazily aggregate real fight stats for the active division (parallel, cached by lib/api).
+  // Career stats for the active division: one request against the precomputed
+  // ufc_fighter_career_stats table (refreshed by the post-event chain).
   useEffect(() => {
     if (!data || !activeWc || aggByWc[activeWc]) return
     const div = data.weight_classes.find((w) => w.key === activeWc)
     if (!div) return
     let cancelled = false
-    setLoadingAgg(true)
-    Promise.all(
-      div.fighters.map((f) =>
-        Promise.all([fetchFighterStats(f.id).catch(() => []), fetchFighterFights(f.id).catch(() => [])])
-          .then(([stats, fights]) => [f.id, aggregateCareer(stats, fights, f.id)]),
-      ),
-    )
-      .then((entries) => {
+    fetchCareerStatsFor(div.fighters.map((f) => f.id))
+      .catch(() => [])
+      .then((rows) => {
         if (cancelled) return
-        setAggByWc((prev) => ({ ...prev, [activeWc]: Object.fromEntries(entries) }))
+        const byId = Object.fromEntries(rows.map((r) => [String(r.fighter_id), careerFromRow(r)]))
+        setAggByWc((prev) => ({ ...prev, [activeWc]: byId }))
       })
-      .finally(() => !cancelled && setLoadingAgg(false))
     return () => { cancelled = true }
   }, [data, activeWc, aggByWc])
 
@@ -122,6 +117,9 @@ export default function FighterStatsPage() {
 
   const activeDiv = data?.weight_classes.find((w) => w.key === activeWc)
   const agg = aggByWc[activeWc]
+  // Derived rather than stored: the effect re-runs (and cancels) as soon as it stores
+  // the result, so a separate flag cleared in its own callback never got cleared.
+  const loadingAgg = !!activeDiv && !agg
 
   // leaders per column (for accent highlight)
   const leaders = useMemo(() => {
@@ -130,7 +128,7 @@ export default function FighterStatsPage() {
     ALL_COLS.forEach((c) => {
       let best = null
       activeDiv.fighters.forEach((f) => {
-        const v = agg[f.id]?.[c.key]
+        const v = agg[String(f.id)]?.[c.key]
         if (v == null) return
         if (best == null || v > best.v) best = { id: f.id, v }
       })
@@ -141,7 +139,7 @@ export default function FighterStatsPage() {
 
   const rows = useMemo(() => {
     if (!activeDiv) return []
-    const list = activeDiv.fighters.map((f) => ({ fighter: f, career: agg?.[f.id] }))
+    const list = activeDiv.fighters.map((f) => ({ fighter: f, career: agg?.[String(f.id)] }))
     const dir = sortDir === 'asc' ? 1 : -1
     list.sort((a, b) => {
       if (sortKey === 'rank') return (a.fighter.rank - b.fighter.rank) * dir
@@ -154,58 +152,21 @@ export default function FighterStatsPage() {
   if (error) return <Card><CardContent className="p-6"><p className="text-destructive">Failed to load: {error}</p></CardContent></Card>
   if (!data) return <PageLoader />
 
-  const mens = data.weight_classes.filter((wc) => !wc.key.startsWith('w_') && wc.key !== 'p4p_women')
-  const womens = data.weight_classes.filter((wc) => wc.key.startsWith('w_') || wc.key === 'p4p_women')
-  const isPfp = (key) => key.startsWith('p4p')
-
-  const WcButton = ({ wc }) => {
-    const active = activeWc === wc.key
-    const gold = isPfp(wc.key)
-    return (
-      <button
-        onClick={() => setActiveWc(wc.key)}
-        className={cn(
-          'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
-          active && gold && 'border-amber-500 bg-amber-500 text-white shadow-sm',
-          active && !gold && 'border-blue-500 bg-blue-600 text-white shadow-sm',
-          !active && 'border-border bg-card text-muted-foreground hover:border-blue-300 hover:text-foreground',
-        )}
-      >
-        {wc.label}
-        <span className={cn('ml-1', active ? (gold ? 'text-amber-200' : 'text-blue-200') : 'text-muted-foreground/60')}>{wc.fighters.length}</span>
-      </button>
-    )
-  }
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="shrink-0 space-y-3 pb-3">
         <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600"><BarChart3 className="h-5 w-5 text-white" /></span>
           Fighter Stats
-          <span className="text-sm font-medium text-muted-foreground">— career fight metrics from UFCStats</span>
         </h1>
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-10 shrink-0">Men</span>
-            <div className="flex flex-wrap gap-1.5">
-              {mens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground w-10 shrink-0">Women</span>
-            <div className="flex flex-wrap gap-1.5">
-              {womens.map((wc) => <WcButton key={wc.key} wc={wc} />)}
-            </div>
-          </div>
-        </div>
+        <DivisionPicker weightClasses={data.weight_classes} active={activeWc} onSelect={setActiveWc} />
       </div>
 
       {loadingAgg && !agg ? (
         <div className="flex h-64 items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Aggregating fight stats…</p>
+            <p className="text-sm text-muted-foreground">Loading fight stats…</p>
           </div>
         </div>
       ) : (
@@ -236,7 +197,7 @@ export default function FighterStatsPage() {
                 {rows.map(({ fighter, career }) => (
                   <tr key={fighter.id} className="group border-b last:border-b-0 hover:bg-muted/40">
                     <td className="sticky left-0 z-[2] w-[46px] min-w-[46px] bg-card px-2 py-2 text-center group-hover:bg-muted/40">
-                      {fighter.rank === 1 ? <Crown className="mx-auto h-4 w-4 text-amber-500" /> : <span className={cn('tabular-nums', fighter.rank <= 5 ? 'font-extrabold text-blue-600' : 'font-semibold text-muted-foreground')}>{fighter.rank}</span>}
+                      {isChampion(fighter) ? <BeltIcon className="mx-auto h-4 w-4 text-amber-500" /> : <span className={cn('tabular-nums', displayRank(fighter) <= 5 ? 'font-extrabold text-blue-600' : 'font-semibold text-muted-foreground')}>{displayRank(fighter)}</span>}
                     </td>
                     <td className="sticky left-[46px] z-[2] w-[208px] min-w-[208px] border-r bg-card px-3 py-2 group-hover:bg-muted/40">
                       <Link to={`/ufc/fighters/${fighter.id}`} className="flex items-center gap-2.5">
@@ -269,7 +230,7 @@ export default function FighterStatsPage() {
           <div className="shrink-0 border-t px-4 py-3 flex items-center gap-2">
             {loadingAgg && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
             <p className="text-[11.5px] text-muted-foreground">
-              {loadingAgg ? 'Aggregating fight stats…' : 'Per-minute (SLpM/TSL/m) and per-15-min (TD, Sub, Rev, Ctrl) rates from UFCStats totals. Target & Position are shares of significant strikes. Leader in each column is highlighted.'}
+              {loadingAgg ? 'Loading fight stats…' : 'Per-minute (SLpM/TSL/m) and per-15-min (TD, Sub, Rev, Ctrl) rates from UFCStats totals. Target & Position are shares of significant strikes. Leader in each column is highlighted.'}
             </p>
           </div>
         </Card>

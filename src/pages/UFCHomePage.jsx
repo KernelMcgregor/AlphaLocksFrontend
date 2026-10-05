@@ -3,6 +3,7 @@
 // bottom, and the pound-for-pound top ten holds the full-height right rail. Every panel
 // scrolls inside itself.
 import { BarChart3, Calendar, Clock, Layers, Newspaper, Swords, TrendingUp } from 'lucide-react'
+import BeltIcon from '../components/ui/belt-icon'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -21,7 +22,7 @@ import {
   fetchUpcomingEvents,
   peekCached,
 } from '../lib/api'
-import { cn, formatDate } from '../lib/utils'
+import { cn, formatDate, isChampion, displayRank } from '../lib/utils'
 
 // The rest of the UFC section, kept in step with the sidebar tree.
 const SECTIONS = [
@@ -41,12 +42,12 @@ function P4PRow({ fighter, onClick }) {
       <span
         className={cn(
           'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold tabular-nums',
-          fighter.rank === 1
+          isChampion(fighter)
             ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
             : 'bg-secondary text-secondary-foreground',
         )}
       >
-        {fighter.rank}
+        {isChampion(fighter) ? <BeltIcon className="h-3.5 w-3.5" /> : displayRank(fighter)}
       </span>
       <FighterImage fighter={fighter} className="h-8 w-8 shrink-0 rounded" />
       <div className="min-w-0 flex-1">

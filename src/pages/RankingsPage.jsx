@@ -1,10 +1,11 @@
-import { ChevronDown, Crown, Loader2, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react'
+import { ChevronDown, Loader2, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import DivisionPicker from '../components/sports/DivisionPicker'
 import CountryFlag from '../components/CountryFlag'
+import BeltIcon from '../components/ui/belt-icon'
 import { fetchRankings } from '../lib/api'
-import { cn, formatRecord } from '../lib/utils'
+import { cn, formatRecord, isChampion, displayRank } from '../lib/utils'
 
 // ---------------------------------------------------------------------------
 // Dimension model
@@ -196,11 +197,13 @@ const GRAPH_NOTE = {
 // ---------------------------------------------------------------------------
 // Small pieces
 // ---------------------------------------------------------------------------
-function RankBadge({ rank }) {
-  if (rank === 1) {
+// The champion wears the belt; contenders are numbered from 1 (display_rank).
+function RankBadge({ fighter }) {
+  const rank = displayRank(fighter)
+  if (isChampion(fighter)) {
     return (
       <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-amber-500/15">
-        <Crown className="h-4 w-4 text-amber-500" />
+        <BeltIcon className="h-4 w-4 text-amber-500" />
       </div>
     )
   }
@@ -228,8 +231,8 @@ function FighterAvatar({ fighter, size = 'sm' }) {
     )
   }
   const tier =
-    fighter.rank === 1 ? 'bg-amber-500/15 text-amber-600' :
-    fighter.rank <= 5 ? 'bg-blue-500/10 text-blue-600' :
+    isChampion(fighter) ? 'bg-amber-500/15 text-amber-600' :
+    displayRank(fighter) <= 5 ? 'bg-blue-500/10 text-blue-600' :
     'bg-muted text-muted-foreground'
   return (
     <div className={cn(dim, 'flex items-center justify-center rounded-full text-[13px] font-extrabold tracking-tight ring-1 ring-border', tier)}>
@@ -314,9 +317,9 @@ function DetailPanel({ fighter, profile, division }) {
                 Elo {fighter.score.toFixed(0)}
               </span>
             </div>
-            {fighter.rank === 1 && (
+            {isChampion(fighter) && (
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-600">
-                <Crown className="h-3 w-3" /> {division} Champion
+                <BeltIcon className="h-3 w-3" /> {division} Champion
               </div>
             )}
           </div>
@@ -387,7 +390,7 @@ function FighterRow({ fighter, profile, division, expanded, onToggle, scorePct }
         onClick={onToggle}
         className={cn(ROW_GRID, 'cursor-pointer px-4 py-2.5 transition-colors hover:bg-muted/40', expanded && 'bg-muted/40')}
       >
-        <div className="flex justify-center"><RankBadge rank={fighter.rank} /></div>
+        <div className="flex justify-center"><RankBadge fighter={fighter} /></div>
         <FighterAvatar fighter={fighter} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
@@ -405,7 +408,7 @@ function FighterRow({ fighter, profile, division, expanded, onToggle, scorePct }
           <span className="w-10 text-sm font-extrabold tabular-nums">{fighter.score.toFixed(0)}</span>
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className={cn('h-full rounded-full', fighter.rank === 1 ? 'bg-amber-500' : fighter.rank <= 5 ? 'bg-blue-600' : 'bg-muted-foreground/50')}
+              className={cn('h-full rounded-full', isChampion(fighter) ? 'bg-amber-500' : displayRank(fighter) <= 5 ? 'bg-blue-600' : 'bg-muted-foreground/50')}
               style={{ width: `${scorePct}%` }}
             />
           </div>
@@ -486,6 +489,7 @@ export default function RankingsPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [activeWc, setActiveWc] = useState(null)
 
   useEffect(() => {
     fetchRankings()
@@ -512,44 +516,23 @@ export default function RankingsPage() {
     )
   }
 
-  const defaultTab = data.weight_classes[0]?.key
+  const activeDiv = data.weight_classes.find((wc) => wc.key === activeWc) || data.weight_classes[0]
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-              <TrendingUp className="h-5 w-5 text-white" />
-            </span>
-            Fighter Rankings
-          </h1>
-          <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Round-level multi-dimensional Elo — 13 skill dimensions graded across every round in UFC history.{' '}
-            <span className="font-medium text-foreground">Click any fighter</span> to open their percentile breakdown.
-          </p>
-        </div>
+      <div className="space-y-3">
+        <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+            <TrendingUp className="h-5 w-5 text-white" />
+          </span>
+          Fighter Rankings
+        </h1>
+        <DivisionPicker weightClasses={data.weight_classes} active={activeDiv.key} onSelect={setActiveWc} />
       </div>
 
       <Card className="overflow-hidden p-0">
         <CardContent className="p-0">
-          <Tabs defaultValue={defaultTab}>
-            <div className="border-b px-4 pt-3">
-              <TabsList className="h-auto flex-wrap gap-1">
-                {data.weight_classes.map((wc) => (
-                  <TabsTrigger key={wc.key} value={wc.key} className="text-xs">
-                    {wc.label}
-                    <span className="ml-1 text-muted-foreground">({wc.fighters.length})</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
-            {data.weight_classes.map((wc) => (
-              <TabsContent key={wc.key} value={wc.key} className="mt-0">
-                <DivisionTable fighters={wc.fighters} label={wc.label} />
-              </TabsContent>
-            ))}
-          </Tabs>
+          <DivisionTable key={activeDiv.key} fighters={activeDiv.fighters} label={activeDiv.label} />
         </CardContent>
       </Card>
 

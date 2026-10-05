@@ -28,3 +28,9 @@ export function formatRecord(wins, losses, extra) {
   const base = `${wins}-${losses}`
   return extra != null ? `${base}-${extra}` : base
 }
+
+// Rank display for a rankings-board fighter: the champion wears the belt and the
+// first contender is #1. Falls back to the plain rank (and #1 as champion) when the
+// payload predates is_champion/display_rank, e.g. a cached copy or an older backend.
+export const isChampion = (f) => f?.is_champion ?? f?.rank === 1
+export const displayRank = (f) => (f?.display_rank !== undefined ? f.display_rank : f?.rank)

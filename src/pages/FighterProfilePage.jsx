@@ -1,5 +1,6 @@
 // src/pages/FighterProfilePage.jsx
-import { ArrowLeft, ChevronLeft, ChevronRight, Crown, Flame, Menu, Swords, Timer, TrendingUp } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Flame, Menu, Swords, Timer, TrendingUp } from 'lucide-react'
+import BeltIcon from '../components/ui/belt-icon'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
@@ -30,7 +31,7 @@ import { useScrollSpy, useSlidingWindow } from '../components/viz/hooks'
 // to src/lib/api.js — the endpoint already exists in routers/ufc.py.
 import PageLoader from '../components/PageLoader'
 import { fetchEvents, fetchFighter, fetchFighterCareerStats, fetchFighterFights, fetchFighterRankHistory, fetchFighterStats, fetchRankings } from '../lib/api'
-import { clock, cn, formatDate, formatRecord } from '../lib/utils'
+import { clock, cn, formatDate, formatRecord, isChampion, displayRank } from '../lib/utils'
 import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, deriveRoundPacing, deriveRoundSurvival, deriveTwoWay, methodLabel, resultCode, RESULT_BADGE } from '../lib/fighterAnalytics'
 import FighterImage from '../components/sports/FighterImage'
 import logoSrc from '../assets/alocks-logo.png'
@@ -279,7 +280,7 @@ function MobileFighterProfile({
             />
             {isChamp && (
               <div className="absolute left-1.5 top-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full border border-amber-400 bg-background">
-                <Crown className="h-3 w-3 text-amber-600" />
+                <BeltIcon className="h-3 w-3 text-amber-600" />
               </div>
             )}
           </div>
@@ -293,7 +294,7 @@ function MobileFighterProfile({
             {condensed ? (
               <div className="truncate text-xs font-semibold tabular-nums text-muted-foreground">
                 <span className="text-foreground">{record}</span>
-                {ranked && divisionLabel && <> · <span className="text-blue-600">#{ranked.rank} {divisionLabel}</span></>}
+                {ranked && divisionLabel && <> · <span className="text-blue-600">{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span></>}
                 {ranked && <> · Power {ranked.score.toFixed(0)}</>}
               </div>
             ) : (
@@ -302,7 +303,7 @@ function MobileFighterProfile({
                 <div className="mt-0.5 flex flex-wrap gap-1.5">
                   <span className="rounded-md border bg-background px-1.5 py-0.5 text-[11px] font-bold tabular-nums">{record}</span>
                   {ranked && divisionLabel && (
-                    <span className="rounded-md border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-bold text-blue-600">#{ranked.rank} {divisionLabel}</span>
+                    <span className="rounded-md border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-bold text-blue-600">{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
                   )}
                   {ranked && <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
                 </div>
@@ -934,7 +935,7 @@ export default function FighterProfilePage() {
   if (error) return <Card><CardContent className="p-6"><p className="text-destructive">Failed to load fighter: {error}</p></CardContent></Card>
   if (!fighter) return null
 
-  const isChamp = ranked?.rank === 1
+  const isChamp = isChampion(ranked)
   const record = formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)
 
   // Phones get their own layout; everything below this return is the desktop view, unchanged.
@@ -986,7 +987,7 @@ export default function FighterProfilePage() {
               />
               {isChamp && (
                 <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-background/90 px-2 py-0.5 text-[10px] font-bold text-amber-600 backdrop-blur">
-                  <Crown className="h-3 w-3" /> CHAMPION
+                  <BeltIcon className="h-3 w-3" /> CHAMPION
                 </div>
               )}
             </div>
@@ -1001,7 +1002,7 @@ export default function FighterProfilePage() {
                 <span className="rounded-md border bg-background px-2 py-0.5 text-[11px] font-bold tabular-nums">{record}</span>
                 {ranked && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
                 {ranked && divisionLabel && (
-                  <span className="rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-600">#{ranked.rank} {divisionLabel}</span>
+                  <span className="rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-600">{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
                 )}
               </div>
             </div>
