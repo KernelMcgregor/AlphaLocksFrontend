@@ -1,10 +1,11 @@
 import { ChevronDown, Loader2, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import DivisionPicker from '../components/sports/DivisionPicker'
 import CountryFlag from '../components/CountryFlag'
 import BeltIcon from '../components/ui/belt-icon'
-import { fetchRankings } from '../lib/api'
+import { fetchAltRankings, fetchRankings } from '../lib/api'
 import { cn, formatRecord, isChampion, displayRank } from '../lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -221,6 +222,20 @@ function RankBadge({ fighter }) {
   )
 }
 
+// P4P / BMF position: a plain number, top 5 highlighted. Champions are marked by the
+// belt next to their name instead, since their list position is not 1.
+function ListRankBadge({ rank }) {
+  return rank <= 5 ? (
+    <div className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-blue-500/10">
+      <span className="text-sm font-extrabold tabular-nums text-blue-600">{rank}</span>
+    </div>
+  ) : (
+    <div className="flex h-8 w-8 items-center justify-center">
+      <span className="text-sm font-semibold tabular-nums text-muted-foreground">{rank}</span>
+    </div>
+  )
+}
+
 function FighterAvatar({ fighter, size = 'sm' }) {
   const dim = size === 'sm' ? 'h-10 w-10' : 'h-12 w-12'
   if (fighter.image_url) {
@@ -383,14 +398,18 @@ function DetailPanel({ fighter, profile, division }) {
 // ---------------------------------------------------------------------------
 const ROW_GRID = 'grid grid-cols-[44px_44px_minmax(140px,1fr)_84px_140px_190px_24px] items-center gap-3.5'
 
-function FighterRow({ fighter, profile, division, expanded, onToggle, scorePct }) {
+// `rank`/`score`/`subtitle` override the division values for the P4P and BMF lists,
+// which reuse this row unchanged otherwise; they pass no `scorePct`, so no bar.
+function FighterRow({ fighter, profile, division, expanded, onToggle, scorePct, rank, score, subtitle }) {
   return (
     <div className="border-b last:border-b-0">
       <div
         onClick={onToggle}
         className={cn(ROW_GRID, 'cursor-pointer px-4 py-2.5 transition-colors hover:bg-muted/40', expanded && 'bg-muted/40')}
       >
-        <div className="flex justify-center"><RankBadge fighter={fighter} /></div>
+        <div className="flex justify-center">
+          {rank != null ? <ListRankBadge rank={rank} /> : <RankBadge fighter={fighter} />}
+        </div>
         <FighterAvatar fighter={fighter} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
@@ -398,20 +417,25 @@ function FighterRow({ fighter, profile, division, expanded, onToggle, scorePct }
             <span className="truncate text-[15px] font-bold tracking-tight">
               {fighter.first_name} {fighter.last_name}
             </span>
+            {rank != null && isChampion(fighter) && <BeltIcon className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
           </div>
-          {fighter.nickname && <div className="truncate text-[11.5px] text-muted-foreground">"{fighter.nickname}"</div>}
+          {subtitle
+            ? <div className="truncate text-[11.5px] text-muted-foreground">{subtitle}</div>
+            : fighter.nickname && <div className="truncate text-[11.5px] text-muted-foreground">"{fighter.nickname}"</div>}
         </div>
         <span className="text-[13px] font-semibold tabular-nums text-muted-foreground">
           {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
         </span>
         <div className="flex items-center gap-2.5">
-          <span className="w-10 text-sm font-extrabold tabular-nums">{fighter.score.toFixed(0)}</span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn('h-full rounded-full', isChampion(fighter) ? 'bg-amber-500' : displayRank(fighter) <= 5 ? 'bg-blue-600' : 'bg-muted-foreground/50')}
-              style={{ width: `${scorePct}%` }}
-            />
-          </div>
+          <span className="w-10 text-sm font-extrabold tabular-nums">{(score ?? fighter.score).toFixed(0)}</span>
+          {scorePct != null && (
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn('h-full rounded-full', isChampion(fighter) ? 'bg-amber-500' : displayRank(fighter) <= 5 ? 'bg-blue-600' : 'bg-muted-foreground/50')}
+                style={{ width: `${scorePct}%` }}
+              />
+            </div>
+          )}
         </div>
         <div className="hidden flex-wrap gap-1.5 md:flex">
           {profile.topSkills.map((s) => (
@@ -485,11 +509,103 @@ function DivisionTable({ fighters, label }) {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// P4P / BMF table — the published top 15, in rows identical to a division's
+// ---------------------------------------------------------------------------
+const ALT_TOP = 15
+
+function AltTable({ kind, pool, weightClasses }) {
+  const [loaded, setLoaded] = useState({ kind: null, data: null, error: null })
+  const [expandedId, setExpandedId] = useState(null)
+
+  useEffect(() => {
+    let live = true
+    fetchAltRankings(kind)
+      .then((d) => live && setLoaded({ kind, data: d, error: null }))
+      .catch((e) => live && setLoaded({ kind, data: null, error: e.message }))
+    return () => { live = false }
+  }, [kind])
+  const data = loaded.kind === kind ? loaded.data : null
+
+  // Each listed fighter is shown with their own division's ranking record, so the row
+  // and its skill panel match the division table exactly; percentiles are taken within
+  // that division.
+  const { byId, pctByDiv } = useMemo(() => {
+    const byId = {}, pctByDiv = {}
+    for (const wc of weightClasses) {
+      pctByDiv[wc.key] = buildPercentile(wc.fighters)
+      for (const f of wc.fighters) (byId[f.id] ||= []).push({ fighter: f, wc })
+    }
+    return { byId, pctByDiv }
+  }, [weightClasses])
+
+  if (loaded.error && loaded.kind === kind) {
+    return <Card><CardContent className="p-6"><p className="text-destructive">Failed to load rankings: {loaded.error}</p></CardContent></Card>
+  }
+  if (!data) {
+    return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+  }
+
+  const top = [...(data.pools[pool] || [])].sort((a, b) => a.default_rank - b.default_rank).slice(0, ALT_TOP)
+  return (
+    <Card className="overflow-hidden p-0">
+      <CardContent className="p-0">
+        <div className={cn(ROW_GRID, 'border-b bg-muted/40 px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground')}>
+          <span className="text-center">Rank</span>
+          <span />
+          <span>Fighter</span>
+          <span>Record</span>
+          <span>{kind === 'bmf' ? 'BMF score' : 'P4P score'}</span>
+          <span className="hidden md:block">Top skills</span>
+          <span />
+        </div>
+        {top.map((a) => {
+          // A fighter ranked in two divisions uses the one the list filed them under.
+          const entries = byId[a.id] || []
+          const own = entries.find((e) => e.wc.key === a.division) || entries[0]
+          // The division record wins for the row; the list's own champion flag is the
+          // authority for the belt, since division standings may pre-date a title change.
+          const fighter = { ...(own?.fighter || a), is_champion: a.is_champion }
+          const division = own?.wc.label || a.division_label
+          const pct = pctByDiv[own?.wc.key] || buildPercentile([fighter])
+          return (
+            <FighterRow
+              key={a.id}
+              fighter={fighter}
+              profile={deriveProfile(fighter, pct)}
+              division={division}
+              rank={a.default_rank}
+              score={a.default_score}
+              subtitle={a.division_label}
+              expanded={expandedId === a.id}
+              onToggle={() => setExpandedId((id) => (id === a.id ? null : a.id))}
+            />
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
+// The cross-division boards sit in the division picker next to the real divisions.
+// Their keys follow the picker's `<kind>_<pool>` convention, which is also how the
+// picker files them under Men or Women.
+const ALT_BOARDS = [
+  { key: 'p4p_men', kind: 'p4p', pool: 'men', label: 'P4P' },
+  { key: 'bmf_men', kind: 'bmf', pool: 'men', label: 'BMF' },
+  { key: 'p4p_women', kind: 'p4p', pool: 'women', label: 'P4P' },
+  { key: 'bmf_women', kind: 'bmf', pool: 'women', label: 'BMF' },
+]
+
 export default function RankingsPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [activeWc, setActiveWc] = useState(null)
+  // The selected division lives in the URL (?div=p4p_men), so a board is linkable.
+  const [params, setParams] = useSearchParams()
+  // Men's P4P is the landing view; a division is one click (or ?div=) away.
+  const activeWc = params.get('div') || 'p4p_men'
+  const setActiveWc = (key) => setParams({ div: key }, { replace: true })
 
   useEffect(() => {
     fetchRankings()
@@ -516,7 +632,15 @@ export default function RankingsPage() {
     )
   }
 
+  const board = ALT_BOARDS.find((b) => b.key === activeWc)
   const activeDiv = data.weight_classes.find((wc) => wc.key === activeWc) || data.weight_classes[0]
+  // P4P and BMF lead their row, ahead of the divisions.
+  const pickerItems = [
+    ...ALT_BOARDS.filter((b) => b.pool === 'men'),
+    ...data.weight_classes.filter((wc) => !wc.key.startsWith('w_')),
+    ...ALT_BOARDS.filter((b) => b.pool === 'women'),
+    ...data.weight_classes.filter((wc) => wc.key.startsWith('w_')),
+  ]
 
   return (
     <div className="space-y-4">
@@ -527,9 +651,13 @@ export default function RankingsPage() {
           </span>
           Fighter Rankings
         </h1>
-        <DivisionPicker weightClasses={data.weight_classes} active={activeDiv.key} onSelect={setActiveWc} />
+        <DivisionPicker weightClasses={pickerItems} active={board ? board.key : activeDiv.key} onSelect={setActiveWc} />
       </div>
 
+      {board && <AltTable key={board.key} kind={board.kind} pool={board.pool} weightClasses={data.weight_classes} />}
+
+      {!board && (
+      <>
       <Card className="overflow-hidden p-0">
         <CardContent className="p-0">
           <DivisionTable key={activeDiv.key} fighters={activeDiv.fighters} label={activeDiv.label} />
@@ -549,6 +677,8 @@ export default function RankingsPage() {
           </p>
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   )
 }

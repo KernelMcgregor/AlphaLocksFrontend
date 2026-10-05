@@ -1,7 +1,7 @@
 import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-import { fetchRankings, fetchUpcomingEvents } from '../../lib/api'
+import { fetchAltRankings, fetchRankings, fetchUpcomingEvents } from '../../lib/api'
 import Sidebar from './Sidebar'
 
 export default function Layout({ children }) {
@@ -18,6 +18,7 @@ export default function Layout({ children }) {
   useEffect(() => {
     fetchUpcomingEvents().catch(() => {})
     fetchRankings().catch(() => {})
+    fetchAltRankings('p4p').catch(() => {})   // the Rankings page opens on P4P
   }, [])
 
   return (

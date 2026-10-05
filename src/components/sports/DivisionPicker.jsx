@@ -1,25 +1,36 @@
 // src/components/sports/DivisionPicker.jsx
-// Men / Women rows of division pills with fighter counts. P4P pills are gold.
-// Shared by Fighter Stats and Rankings so both pages pick a division the same way.
+// Men / Women rows of division pills with fighter counts. P4P pills are gold, BMF pills
+// red. Shared by Fighter Stats and Rankings so both pages pick a division the same way.
+// A pill without a `fighters` array (the cross-division boards) shows no count.
 import { cn } from '../../lib/utils'
 
-const isWomens = (key) => key.startsWith('w_') || key === 'p4p_women'
-const isPfp = (key) => key.startsWith('p4p')
+const isWomens = (key) => key.startsWith('w_') || key.endsWith('_women')
+const TONES = {
+  p4p: { on: 'border-amber-500 bg-amber-500 text-white shadow-sm', count: 'text-amber-200',
+    off: 'border-amber-500/40 text-amber-700 hover:border-amber-500' },
+  bmf: { on: 'border-rose-500 bg-rose-600 text-white shadow-sm', count: 'text-rose-200',
+    off: 'border-rose-500/40 text-rose-700 hover:border-rose-500' },
+}
+const toneOf = (key) => TONES[key.split('_')[0]]
 
 function DivisionButton({ wc, active, onSelect }) {
-  const gold = isPfp(wc.key)
+  const tone = toneOf(wc.key)
   return (
     <button
       onClick={() => onSelect(wc.key)}
       className={cn(
         'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
-        active && gold && 'border-amber-500 bg-amber-500 text-white shadow-sm',
-        active && !gold && 'border-blue-500 bg-blue-600 text-white shadow-sm',
-        !active && 'border-border bg-card text-muted-foreground hover:border-blue-300 hover:text-foreground',
+        active && tone && tone.on,
+        active && !tone && 'border-blue-500 bg-blue-600 text-white shadow-sm',
+        !active && 'bg-card',
+        !active && tone && tone.off,
+        !active && !tone && 'border-border text-muted-foreground hover:border-blue-300 hover:text-foreground',
       )}
     >
       {wc.label}
-      <span className={cn('ml-1', active ? (gold ? 'text-amber-200' : 'text-blue-200') : 'text-muted-foreground/60')}>{wc.fighters.length}</span>
+      {wc.fighters && (
+        <span className={cn('ml-1', active ? (tone ? tone.count : 'text-blue-200') : 'text-muted-foreground/60')}>{wc.fighters.length}</span>
+      )}
     </button>
   )
 }

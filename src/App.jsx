@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import ArticlesPage from './pages/ArticlesPage'
 import FightDetailPage from './pages/FightDetailPage'
@@ -23,6 +23,9 @@ export default function App() {
         <Route path="/ufc/fights/:id" element={<FightDetailPage />} />
         <Route path="/ufc/fights/:id/preview" element={<FightPreviewPage />} />
         <Route path="/ufc/rankings" element={<RankingsPage />} />
+        {/* P4P and BMF are boards inside the Rankings page, chosen in its division picker. */}
+        <Route path="/ufc/rankings/bmf" element={<Navigate to="/ufc/rankings?div=bmf_men" replace />} />
+        <Route path="/ufc/rankings/p4p" element={<Navigate to="/ufc/rankings?div=p4p_men" replace />} />
         <Route path="/model/upcoming" element={<UpcomingPage />} />
         <Route path="/picks" element={<PicksPage />} />
         <Route path="/ufc/fighters/:id" element={<FighterProfilePage />} />
