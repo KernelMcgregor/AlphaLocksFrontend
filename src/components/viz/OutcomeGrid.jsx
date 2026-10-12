@@ -62,7 +62,8 @@ function MarketLine({ market, model, className }) {
  * source:       short label naming where the market numbers come from
  * onHighlight:  (key | null) => void — 'red_ko' … 'blue_sub', or 'dec' for a decision cell
  */
-export default function OutcomeGrid({ rows, market, methodMarket, winMarket, source, onHighlight }) {
+// `noMarket`: a bout that will never be priced (hypothetical) — no "no market" labels.
+export default function OutcomeGrid({ rows, market, methodMarket, winMarket, source, onHighlight, noMarket = false }) {
   const all = rows.flatMap((r) => COLS.map((c) => r.cells[c.key] ?? 0))
   const maxCell = Math.max(...all, 0.01)
   const colTotals = Object.fromEntries(COLS.map((c) => [c.key, rows.reduce((a, r) => a + (r.cells[c.key] ?? 0), 0)]))
@@ -142,7 +143,7 @@ export default function OutcomeGrid({ rows, market, methodMarket, winMarket, sou
                         <SourceTag source={mkt.source} />
                         <Edge market={mkt.prob} model={p} />
                       </span>
-                    ) : (
+                    ) : !noMarket && (
                       <span className="mt-1.5 text-[11px] text-foreground/45">no market</span>
                     )}
                   </div>

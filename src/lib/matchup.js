@@ -7,6 +7,15 @@ import {
   fetchMarketHistory,
 } from './api'
 
+// One corner's logs: bouts, per-fight stats and the career-stats row.
+const forFighter = (id) => (id
+  ? Promise.all([
+    fetchFighterFights(id).catch(() => []),
+    fetchFighterStats(id).catch(() => []),
+    fetchFighterCareerStats(id).catch(() => null),
+  ]).then(([fights, stats, careerStats]) => ({ fights, stats, careerStats }))
+  : Promise.resolve(null))
+
 /**
  * Everything the page shows beyond the fight payload itself, fetched in parallel:
  * the matchup context, both fighters' logs, event names for the form strip, and the
@@ -18,14 +27,6 @@ import {
 export function loadMatchup(fight) {
   const redId = fight.red_fighter?.id
   const blueId = fight.blue_fighter?.id
-  const forFighter = (id) => (id
-    ? Promise.all([
-      fetchFighterFights(id).catch(() => []),
-      fetchFighterStats(id).catch(() => []),
-      fetchFighterCareerStats(id).catch(() => null),
-    ]).then(([fights, stats, careerStats]) => ({ fights, stats, careerStats }))
-    : Promise.resolve(null))
-
   return Promise.all([
     fetchFightContext(fight.id).catch(() => null),
     forFighter(redId),
@@ -61,5 +62,25 @@ export function loadReview(fight) {
     ctx,
     fights: { red: redFights, blue: blueFights },
     marketHistory,
+  }))
+}
+
+/**
+ * loadMatchup for a bout that is not booked. The matchup context arrives with the
+ * hypothetical payload rather than from /fights/:id/context, and there is no market, so
+ * only the two fighters' logs and the event names are fetched.
+ */
+export function loadHypotheticalMatchup(fight, ctx) {
+  const redId = fight.red_fighter?.id
+  const blueId = fight.blue_fighter?.id
+  return Promise.all([
+    forFighter(redId),
+    forFighter(blueId),
+    fetchEvents({ limit: 500 }).catch(() => []),
+  ]).then(([redData, blueData, events]) => ({
+    ctx,
+    perFighter: { [redId]: redData, [blueId]: blueData },
+    eventMap: Object.fromEntries((events || []).map((e) => [String(e.id), e.name])),
+    marketHistory: {},
   }))
 }

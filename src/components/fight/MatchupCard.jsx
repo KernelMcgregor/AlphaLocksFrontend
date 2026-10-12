@@ -38,8 +38,11 @@ const recordText = (f) => `${f.wins}-${f.losses}${f.draws > 0 ? `-${f.draws}` : 
 function CornerHalf({ fighter, corner, ctx, rounded, weightClass, outcome, record, rank }) {
   const glicko = ctx?.glicko
   // A ranking-history key ('w_flyweight', 'light_heavyweight') read as a weight class.
-  const division = rank
-    ? divisionAbbr(rank.weight_class.replace(/^w_/, "women's ").replace('_', ' '))
+  // `glicko_division` is set when the rank comes from a division other than the bout's
+  // (a fighter outside their weight class in a hypothetical bout).
+  const rankKey = rank?.weight_class ?? ctx?.glicko_division
+  const division = rankKey
+    ? divisionAbbr(rankKey.replace(/^w_/, "women's ").replace('_', ' '))
     : divisionAbbr(weightClass)
   // The context's rank is TODAY's published standing. A result card passes the rank
   // the fighter held going in instead (`rank`, null when unranked) and never falls back.

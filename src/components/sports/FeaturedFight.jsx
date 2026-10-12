@@ -60,13 +60,19 @@ const reachIn = (v) => {
 // so keep it whole and let the cell truncate. Bare country names stay as they are.
 const fromLabel = (v) => val(v)
 
-function PortraitColumn({ fighter, corner, ctxSide, weightClass }) {
+// Exported for the hypothetical-bout page, where the portraits flank the full dashboard.
+export function PortraitColumn({ fighter, corner, ctxSide, weightClass }) {
   const c = CORNERS[corner]
   const right = corner === 'blue'
   const rank = ctxSide?.glicko?.division_rank
   // "#2" alone does not say #2 of what, and this panel never repeats the division
   // anywhere near the rank.
-  const division = divisionAbbr(weightClass)
+  // A fighter ranked in another division than the bout's (`glicko_division`, hypothetical
+  // bouts) is labelled with the division the rank belongs to.
+  const rankDiv = ctxSide?.glicko_division
+  const division = rankDiv
+    ? divisionAbbr(rankDiv.replace(/^w_/, "women's ").replace('_', ' '))
+    : divisionAbbr(weightClass)
   return (
     <Link
       to={`/ufc/fighters/${fighter?.id}`}

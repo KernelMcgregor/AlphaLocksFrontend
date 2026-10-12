@@ -6,6 +6,7 @@ import FightPreviewPage from './pages/FightPreviewPage'
 import FighterDecompositionsPage from './pages/FighterDecompositionsPage'
 import FighterProfilePage from './pages/FighterProfilePage'
 import FighterStatsPage from './pages/FighterStatsPage'
+import HypotheticalPage from './pages/HypotheticalPage'
 import RankingsPage from './pages/RankingsPage'
 import PicksPage from './pages/PicksPage'
 import UFCHomePage from './pages/UFCHomePage'
@@ -27,6 +28,9 @@ export default function App() {
         <Route path="/ufc/rankings/bmf" element={<Navigate to="/ufc/rankings?div=bmf_men" replace />} />
         <Route path="/ufc/rankings/p4p" element={<Navigate to="/ufc/rankings?div=p4p_men" replace />} />
         <Route path="/model/upcoming" element={<UpcomingPage />} />
+        <Route path="/ufc/hypothetical" element={<HypotheticalPage />} />
+        {/* The breakdown used to be its own page; it is the matchup view now. */}
+        <Route path="/ufc/hypothetical/breakdown" element={<HypotheticalPage />} />
         <Route path="/picks" element={<PicksPage />} />
         <Route path="/ufc/fighters/:id" element={<FighterProfilePage />} />
         <Route path="/ufc/fighters/stats" element={<FighterStatsPage />} />

@@ -138,5 +138,19 @@ export const fetchPicksV2 = (eventId) =>
 // Every upcoming card in one batched request: a list of per-event payloads.
 export const fetchPicksAll = () => cachedRequest('/ufc/picks/v2?all=true', 2 * 60 * 1000)
 
+// Hypothetical bouts: any two fighters, scored on request (services/ufc/hypothetical.py).
+// The picker's index is every fighter with a UFC bout; long TTL, it changes after events.
+export const fetchHypotheticalFighters = () => cachedRequest('/ufc/hypothetical/fighters', 30 * 60 * 1000)
+export const fetchHypotheticalStatus = () => request('/ufc/hypothetical/status')
+// { fight, context }. Throws while the server builds its feature cache (503) — a failed
+// request is never cached, so the next call simply tries again.
+export const fetchHypothetical = ({ red, blue, division, title, rounds }) => {
+  const qs = new URLSearchParams({ red, blue })
+  if (division) qs.set('division', division)
+  if (title) qs.set('title', 'true')
+  if (rounds) qs.set('rounds', String(rounds))
+  return cachedRequest(`/ufc/hypothetical/predict?${qs}`, 60 * 60 * 1000)
+}
+
 // Admin
 export const fetchAdminStats = () => request('/admin/stats')
