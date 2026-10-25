@@ -17,49 +17,8 @@ import { Tip } from '../ui/tip'
 import FighterMini from './FighterMini'
 import { fetchRankings, fetchSimilarFighters } from '../../lib/api'
 import { cn, formatRecord } from '../../lib/utils'
+import { traitLabel } from '../../lib/styleTraits'
 import FighterImage from './FighterImage'
-
-// Feature key -> what to actually call it on screen. The raw column names (gnp15g,
-// td15s, sub_att15g) are backend vocabulary and mean nothing to a reader.
-const DRIVER_LABELS = {
-  slpm: 'strike volume',
-  sapm: 'strikes absorbed',
-  sig_acc: 'striking accuracy',
-  sig_def: 'striking defense',
-  head_pct: 'head targeting',
-  body_pct: 'body work',
-  leg_pct: 'leg kicks',
-  dist_pct: 'distance striking',
-  clinch_pct: 'clinch work',
-  ground_pct: 'ground striking',
-  td15s: 'takedown volume',
-  td_acc: 'takedown accuracy',
-  td_def: 'takedown defense',
-  ctrl15g: 'control time',
-  sub_att15g: 'submission attempts',
-  gnp15g: 'ground and pound',
-  kd15s: 'knockdown rate',
-  rev15: 'reversals',
-  finish_rate: 'finish rate',
-  avg_fight_sec: 'fight length',
-  ko_win_share: 'KO wins',
-  sub_win_share: 'submission wins',
-  glicko_pts: 'round-winning',
-  glicko_ko: 'KO power',
-  glicko_kod: 'chin',
-  glicko_sub: 'submission offense',
-  glicko_subd: 'submission defense',
-  glicko_td: 'takedowns',
-  glicko_tdd: 'takedown defense',
-  glicko_ctrl: 'control',
-  glicko_str_vol: 'striking volume',
-  glicko_str_acc: 'striking accuracy',
-  glicko_str_def: 'striking defense',
-  glicko_dist: 'distance game',
-  glicko_clinch: 'clinch game',
-  glicko_gnd: 'ground striking',
-  glicko_durability: 'durability',
-}
 
 // Capped rather than scrolled: this panel shares a fixed-height column, and a
 // scrollable list inside it competes with the page's own scrolling. Four is what
@@ -70,7 +29,7 @@ const MAX_ROWS = 4
 // kicks" is as real a shared trait as "high leg kicks", and collapsing the two would
 // make the chips lie.
 function driverText({ feature, z }) {
-  const label = DRIVER_LABELS[feature] || feature.replace(/_/g, ' ')
+  const label = traitLabel(feature)
   return `${z >= 0 ? 'high' : 'low'} ${label}`
 }
 

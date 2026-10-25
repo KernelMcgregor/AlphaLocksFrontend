@@ -85,6 +85,11 @@ export const fetchSimilarFighters = (id, { limit = 10, sameDivisionOnly = false 
     `/ufc/fighters/${id}/similar?limit=${limit}&same_division_only=${sameDivisionOnly}`,
     30 * 60 * 1000,
   )
+// Fighter Styles page: families, map, lineage (one payload) and a fighter's trait
+// profile with their comps. Rewritten after each event, so the rankings TTL fits.
+export const fetchStyles = () => cachedRequest('/ufc/styles', 30 * 60 * 1000)
+export const fetchStyleDetail = (id) => cachedRequest(`/ufc/styles/fighters/${id}`, 30 * 60 * 1000)
+
 export const fetchAllCareerStats = (params = {}) => {
   const qs = new URLSearchParams(params).toString()
   return cachedRequest(`/ufc/career-stats${qs ? `?${qs}` : ''}`, 30 * 60 * 1000)

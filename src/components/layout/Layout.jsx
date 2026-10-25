@@ -24,7 +24,8 @@ export default function Layout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <main className="flex flex-1 flex-col overflow-hidden px-3 py-4 md:px-4 md:py-4">
+      {/* Bottom padding matches the sidebar's p-3, so full-height pages end level with it. */}
+      <main className="flex flex-1 flex-col overflow-hidden px-3 py-4 md:px-4 md:pb-3 md:pt-4">
         {/* Hidden on desktop when no page has portalled actions into it; on mobile it
             still holds the menu button. */}
         <div className="mb-3 shrink-0 flex items-center gap-3 md:has-[#page-header-actions:empty]:hidden">

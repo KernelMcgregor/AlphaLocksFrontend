@@ -6,6 +6,7 @@ import FightPreviewPage from './pages/FightPreviewPage'
 import FighterDecompositionsPage from './pages/FighterDecompositionsPage'
 import FighterProfilePage from './pages/FighterProfilePage'
 import FighterStatsPage from './pages/FighterStatsPage'
+import FighterStylesPage from './pages/FighterStylesPage'
 import HypotheticalPage from './pages/HypotheticalPage'
 import RankingsPage from './pages/RankingsPage'
 import PicksPage from './pages/PicksPage'
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/ufc/fighters/:id" element={<FighterProfilePage />} />
         <Route path="/ufc/fighters/stats" element={<FighterStatsPage />} />
         <Route path="/ufc/fighters/skills" element={<FighterDecompositionsPage />} />
+        <Route path="/ufc/fighters/styles" element={<FighterStylesPage />} />
         {/* Former path for the same page, kept so existing links and bookmarks survive
             the rename from "Rankings"/"Decompositions" to "Fighter Skills". */}
         <Route path="/ufc/fighters/decompositions" element={<FighterDecompositionsPage />} />

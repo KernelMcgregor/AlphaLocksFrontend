@@ -1,4 +1,4 @@
-import { BarChart3, Calendar, ChevronRight, Clock, Layers, Newspaper, Shuffle, Swords, Target, TrendingUp } from 'lucide-react'
+import { BarChart3, Calendar, ChevronRight, Clock, Layers, Newspaper, Orbit, Shuffle, Swords, Target, TrendingUp } from 'lucide-react'
 import logoSrc from '../../assets/alocks-logo.png'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -19,6 +19,7 @@ const navTree = [
       { id: 'ufc-rankings', label: 'Rankings', icon: TrendingUp, path: '/ufc/rankings' },
       { id: 'fighter-stats', label: 'Fighter Stats', icon: BarChart3, path: '/ufc/fighters/stats' },
       { id: 'fighter-skills', label: 'Fighter Skills', icon: Layers, path: '/ufc/fighters/skills' },
+      { id: 'fighter-styles', label: 'Fighter Styles', icon: Orbit, path: '/ufc/fighters/styles' },
     ],
   },
 ]

@@ -40,6 +40,7 @@
      --color-destructive, which is a reserved status colour. */
   --color-viz-neg: #e34948;
 
+
   /* UFC corners. NOT a categorical chart slot: the corners are literally named
      red and blue, so this is a domain-literal encoding the reader already knows,
      not an arbitrary assignment. The viz slots were used here first, which had
@@ -50,7 +51,33 @@
   --color-corner-blue: #2a6fd6;
 }
 
+/* Style families (Fighter Styles page) — the full validated 8-slot categorical set,
+   whose first three are --color-viz-1..3. Assigned by family id in fixed order; never
+   cycled. Plain custom properties rather than @theme entries: no utility class uses
+   them (they are read by inline styles and by canvas), and Tailwind drops theme
+   variables nothing references. */
+:root {
+  --color-fam-1: #2a78d6;
+  --color-fam-2: #eb6834;
+  --color-fam-3: #1baf7a;
+  --color-fam-4: #eda100;
+  --color-fam-5: #e87ba4;
+  --color-fam-6: #008300;
+  --color-fam-7: #4a3aa7;
+  --color-fam-8: #e34948;
+}
+
 .dark {
+  /* Families, stepped for the dark surface (same hues, selected not flipped). */
+  --color-fam-1: #3987e5;
+  --color-fam-2: #d95926;
+  --color-fam-3: #199e70;
+  --color-fam-4: #c98500;
+  --color-fam-5: #d55181;
+  --color-fam-6: #008300;
+  --color-fam-7: #9085e9;
+  --color-fam-8: #e66767;
+
   --color-background: #09090b;
   --color-foreground: #fafafa;
   --color-card: #111113;
@@ -76,6 +103,7 @@
      contrast PASS. */
   --color-viz-1-soft: #8fc0f2;
   --color-viz-neg: #e34948;
+
 
   /* Lifted for the dark surface rather than flipped. */
   --color-corner-red: #e8404f;
