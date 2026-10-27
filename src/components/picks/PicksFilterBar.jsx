@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { cn } from '../../lib/utils'
 
-function Field({ label, children, className }) {
+export function Field({ label, children, className }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1', className)}>
       <span className="text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
@@ -23,7 +23,7 @@ const inputCls =
   'h-8 rounded-md border border-border bg-background px-2 text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /** The site's Radix select, sized to sit in the bar. options: [{ key, label }] */
-function Dropdown({ label, value, onChange, options, className }) {
+export function Dropdown({ label, value, onChange, options, className }) {
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger aria-label={label} className={cn('h-8 gap-2 px-2.5 py-0 text-[12.5px] font-semibold', className)}>
@@ -40,7 +40,7 @@ function Dropdown({ label, value, onChange, options, className }) {
   )
 }
 
-function Segmented({ value, options, onChange, label }) {
+export function Segmented({ value, options, onChange, label }) {
   return (
     <div role="group" aria-label={label} className="inline-flex h-8 rounded-md border border-border bg-muted/50 p-0.5">
       {options.map((o) => (

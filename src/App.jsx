@@ -10,6 +10,7 @@ import FighterStylesPage from './pages/FighterStylesPage'
 import HypotheticalPage from './pages/HypotheticalPage'
 import RankingsPage from './pages/RankingsPage'
 import PicksPage from './pages/PicksPage'
+import PastResultsPage from './pages/PastResultsPage'
 import UFCHomePage from './pages/UFCHomePage'
 import UFCPage from './pages/UFCPage'
 import UpcomingPage from './pages/UpcomingPage'
@@ -33,6 +34,7 @@ export default function App() {
         {/* The breakdown used to be its own page; it is the matchup view now. */}
         <Route path="/ufc/hypothetical/breakdown" element={<HypotheticalPage />} />
         <Route path="/picks" element={<PicksPage />} />
+        <Route path="/results" element={<PastResultsPage />} />
         <Route path="/ufc/fighters/:id" element={<FighterProfilePage />} />
         <Route path="/ufc/fighters/stats" element={<FighterStatsPage />} />
         <Route path="/ufc/fighters/skills" element={<FighterDecompositionsPage />} />

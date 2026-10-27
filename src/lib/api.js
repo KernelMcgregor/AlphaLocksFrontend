@@ -143,6 +143,17 @@ export const fetchPicksV2 = (eventId) =>
 // Every upcoming card in one batched request: a list of per-event payloads.
 export const fetchPicksAll = () => cachedRequest('/ufc/picks/v2?all=true', 2 * 60 * 1000)
 
+// Past Model Results (walk-forward backtest ledger; changes once per event, so a long TTL).
+// `q` is the filter query string from resultsQuery() in components/results/filters.js.
+export const pastResultsPath = {
+  events: (q) => `/ufc/model/results/events?${q}`,
+  event: (id, q) => `/ufc/model/results/events/${id}?${q}`,
+  splits: (q) => `/ufc/model/results/splits?${q}`,
+}
+export const fetchPastResultsEvents = (q) => cachedRequest(pastResultsPath.events(q), 30 * 60 * 1000)
+export const fetchPastResultsEvent = (id, q) => cachedRequest(pastResultsPath.event(id, q), 30 * 60 * 1000)
+export const fetchPastResultsSplits = (q) => cachedRequest(pastResultsPath.splits(q), 30 * 60 * 1000)
+
 // Hypothetical bouts: any two fighters, scored on request (services/ufc/hypothetical.py).
 // The picker's index is every fighter with a UFC bout; long TTL, it changes after events.
 export const fetchHypotheticalFighters = () => cachedRequest('/ufc/hypothetical/fighters', 30 * 60 * 1000)
