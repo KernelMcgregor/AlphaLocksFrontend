@@ -4,9 +4,9 @@
 // Backed by /ufc/model/results/* over the walk-forward backtest ledger
 // (alocks-backend/app/services/ufc/model_results.py), rebuilt after every event.
 //
-// Tab, filters and the opened event live in the URL (?tab=transparency&basis=open&event=...)
+// Tab, filters and the selected event live in the URL (?tab=transparency&basis=open&event=...)
 // so any view is a link someone can share.
-import { History } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import PageLoader from '../components/PageLoader'
@@ -19,8 +19,8 @@ import { filterParams, readFilters, resultsQuery } from '../components/results/f
 import { fetchPastResultsEvents, fetchPastResultsSplits, pastResultsPath, peekCached } from '../lib/api'
 
 const TABS = [
-  { key: 'events', label: 'Past Events' },
-  { key: 'transparency', label: 'Model Transparency' },
+  { key: 'events', label: 'Performance' },
+  { key: 'transparency', label: 'Why trust it' },
 ]
 
 export default function PastResultsPage() {
@@ -42,6 +42,7 @@ export default function PastResultsPage() {
     return () => { live = false }
   }, [path, q, tab])
 
+  // selecting an event swaps the detail panel in place, so it replaces the URL (no history spam)
   const go = (next) => {
     const p = new URLSearchParams(params)
     for (const [k, v] of Object.entries(next)) (v == null ? p.delete(k) : p.set(k, v))
@@ -55,22 +56,23 @@ export default function PastResultsPage() {
   const error = got[path]?.error
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto pr-1">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 pb-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600"><History className="h-5 w-5 text-white" /></span>
-            Past Model Results
-          </h1>
-          <p className="mt-1 text-[12px] text-muted-foreground">
-            Every pick the models would have made on past cards, flat 1 unit, from walk-forward backtests.
-          </p>
+    <div className="flex h-full flex-col gap-3 overflow-y-auto pr-1">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-primary">
+            <TrendingUp className="h-[18px] w-[18px] text-white" strokeWidth={2.4} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-[22px] font-extrabold leading-tight tracking-tight">Model Results</h1>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              Walk-forward backtest · flat 1u · {filters.basis === 'open' ? 'opening' : 'closing'} line{filters.top && filters.minEv !== 'pick' ? ' · one pick per market' : ''}
+            </p>
+          </div>
         </div>
-        <SlideTabs tabs={TABS} value={tab} onChange={(t) => go({ tab: t === 'events' ? null : t })} />
-      </div>
-
-      <div className="sticky top-0 z-10 -mx-1 mb-3 bg-background/95 px-1 pb-1 backdrop-blur">
-        <ResultsFilterBar filters={filters} onChange={setFilters} coverage={data?.coverage} />
+        <div className="flex flex-wrap items-center gap-2.5">
+          <ResultsFilterBar filters={filters} onChange={setFilters} coverage={data?.coverage} />
+          <SlideTabs tabs={TABS} value={tab} onChange={(t) => go({ tab: t === 'events' ? null : t })} />
+        </div>
       </div>
 
       {error ? (
@@ -80,8 +82,8 @@ export default function PastResultsPage() {
       ) : (
         <div className={loading ? 'pointer-events-none opacity-60 transition-opacity' : 'transition-opacity'}>
           {tab === 'events' ? (
-            <PastEventsTab data={data} filters={filters} eventId={params.get('event')}
-              onEvent={(id) => go({ event: id })} />
+            <PastEventsTab data={data} filters={filters} onFilters={setFilters}
+              eventId={params.get('event')} onEvent={(id) => go({ event: id })} />
           ) : (
             <TransparencyTab data={data} filters={filters} />
           )}

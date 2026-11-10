@@ -112,7 +112,9 @@ function MethodGrid({ fight, highlight }) {
 }
 
 function Drivers({ fight, corner }) {
-  const rows = (fight.drivers || []).map((d) => describeDriver(d, corner)).filter((r) => !r.redundant).slice(0, 4)
+  // never list a price-derived input as a reason (none are stored today; this keeps it that way)
+  const rows = (fight.drivers || []).filter((d) => !/odds|market|implied|mkt/i.test(d.feature_name))
+    .map((d) => describeDriver(d, corner)).filter((r) => !r.redundant).slice(0, 4)
   if (!rows.length) return null
   const max = Math.max(...rows.map((r) => r.weight))
   return (
@@ -225,9 +227,6 @@ export default function PickCard({ row, basis, showEvent = false }) {
             <Stat
               label={row.group === 'moneyline' ? 'Model' : 'Our prob.'}
               value={fmtPct(row.p_model)}
-              title={row.group === 'moneyline'
-                ? 'Winner model, stacked with the market'
-                : `Model ${fmtPct(row.p_model_raw)} blended with the market ${fmtPct(row.q_market)}`}
             />
             <Stat label="Market" value={fmtPct(row.q_market)} title={row.source ? `${row.source}, margin removed` : undefined} />
             <Stat label="EV / $1" value={price.ev != null ? fmtRoi(price.ev) : '—'} className={evTone} />

@@ -1,13 +1,17 @@
-// Controls shared by both Past Model Results tabs: which bets count and at what price.
-import { ChevronDown } from 'lucide-react'
+// Compact controls for Past Model Results, sized to sit in the page header.
+// The common choice (minimum edge) is one tap; everything else lives in a "Filters" popover.
+// Markets are toggled from the market cards on the Performance tab (and from here too).
+import { ChevronDown, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import DateRangeFilter from '../filters/DateRangeFilter'
 import { Dropdown, Field, Segmented } from '../picks/PicksFilterBar'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '../../lib/utils'
-import { MARKETS, MIN_EVS } from './filters'
+import { DEFAULTS, MARKETS, MIN_EVS } from './filters'
 
-function MarketsPicker({ selected, onChange }) {
+const QUICK_EDGES = ['0.03', '0.05', '0.08', '0.12']
+
+export function MarketsPicker({ selected, onChange }) {
   const all = MARKETS.map((m) => m.key)
   const isOn = (k) => !selected.length || selected.includes(k)
   const toggle = (k, checked) => {
@@ -21,24 +25,20 @@ function MarketsPicker({ selected, onChange }) {
   const row = 'flex cursor-pointer items-center gap-2.5 rounded-sm px-2 py-1.5 text-[12.5px] hover:bg-accent'
   return (
     <Popover>
-      <PopoverTrigger
-        aria-label="Markets"
-        className="flex h-8 w-[160px] items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 text-[12.5px] font-semibold focus:outline-none focus:ring-2 focus:ring-ring"
-      >
+      <PopoverTrigger aria-label="Markets"
+        className="flex h-8 w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 text-[12.5px] font-semibold focus:outline-none focus:ring-2 focus:ring-ring">
         <span className="truncate">{summary}</span>
         <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[220px] p-1">
         <label className={cn(row, 'font-semibold')}>
-          <Checkbox className="size-4 rounded-[4px] border-border" checked={!selected.length}
-            onCheckedChange={(c) => c && onChange([])} />
+          <Checkbox className="size-4 rounded-[4px] border-border" checked={!selected.length} onCheckedChange={(c) => c && onChange([])} />
           All markets
         </label>
         <div className="my-1 h-px bg-border" />
         {MARKETS.map((m) => (
           <label key={m.key} className={row}>
-            <Checkbox className="size-4 rounded-[4px] border-border" checked={isOn(m.key)}
-              onCheckedChange={(c) => toggle(m.key, c)} />
+            <Checkbox className="size-4 rounded-[4px] border-border" checked={isOn(m.key)} onCheckedChange={(c) => toggle(m.key, c)} />
             <span className={isOn(m.key) ? 'text-foreground' : 'text-muted-foreground'}>{m.label}</span>
           </label>
         ))}
@@ -51,43 +51,75 @@ export default function ResultsFilterBar({ filters, onChange, coverage }) {
   const set = (patch) => onChange({ ...filters, ...patch })
   const range = { from: filters.from || coverage?.from || '', to: filters.to || coverage?.to || '' }
   const propsShown = !filters.markets.length || filters.markets.some((m) => m !== 'winner')
+  // dates and markets have their own on-page controls, so they don't count toward the badge
+  const changed = ['basis', 'price', 'props', 'top'].filter((k) => filters[k] !== DEFAULTS[k]).length
+    + (QUICK_EDGES.includes(filters.minEv) ? 0 : 1)
+  const isDefault = Object.keys(DEFAULTS).every((k) => (k === 'markets' ? filters.markets.length === 0 : filters[k] === DEFAULTS[k]))
+
   return (
-    <div className="flex flex-wrap items-end gap-x-3 gap-y-2 rounded-xl border border-border bg-card px-3 py-2.5">
-      <Field label="Dates">
-        {range.from ? (
-          <DateRangeFilter dateRange={range} allFrom={coverage?.from}
-            onApply={({ from, to }) => set({ from: from === coverage?.from ? '' : from, to: to >= (coverage?.to || '') ? '' : to })} />
-        ) : <div className="h-8" />}
-      </Field>
-      <Field label="Moneyline line">
-        <Segmented label="Moneyline line" value={filters.basis} onChange={(basis) => set({ basis })}
-          options={[{ key: 'open', label: 'Opening' }, { key: 'close', label: 'Closing' }]} />
-      </Field>
-      <Field label="Price">
-        <Segmented label="Price" value={filters.price} onChange={(price) => set({ price })}
-          options={[{ key: 'typical', label: 'Typical book' }, { key: 'best', label: 'Best book' }]} />
-      </Field>
-      <Field label="Minimum edge">
-        <Dropdown label="Minimum edge" value={filters.minEv} onChange={(minEv) => set({ minEv })} options={MIN_EVS}
-          className="w-[150px]" />
-      </Field>
-      <Field label="Markets">
-        <MarketsPicker selected={filters.markets} onChange={(markets) => set({ markets })} />
-      </Field>
-      <div className="flex flex-col gap-1.5 pb-0.5">
-        <label className="flex cursor-pointer items-center gap-2 text-[12px]">
-          <Checkbox className="size-4 rounded-[4px] border-border" checked={filters.top}
-            onCheckedChange={(c) => set({ top: !!c })} />
-          One pick per market
-        </label>
-        {filters.basis === 'open' && propsShown && (
-          <label className="flex cursor-pointer items-center gap-2 text-[12px]">
-            <Checkbox className="size-4 rounded-[4px] border-border" checked={filters.props}
-              onCheckedChange={(c) => set({ props: !!c })} />
-            Include props (closing price)
-          </label>
-        )}
+    <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">Min edge</span>
+        <div className="flex gap-0.5 rounded-[9px] border border-border bg-card p-[3px]">
+          {QUICK_EDGES.map((k) => (
+            <button key={k} type="button" onClick={() => set({ minEv: k })}
+              className={cn('rounded-md px-2.5 py-1 text-[12px] font-bold transition',
+                filters.minEv === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              {Math.round(+k * 100)}%+
+            </button>
+          ))}
+        </div>
       </div>
+
+      <Popover>
+        <PopoverTrigger
+          className="inline-flex h-[34px] items-center gap-1.5 rounded-[9px] border border-border bg-card px-3 text-[12px] font-bold text-muted-foreground transition hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+          <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
+          {changed > 0 && <span className="rounded-full bg-primary px-1.5 text-[10px] leading-4 text-primary-foreground">{changed}</span>}
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-[320px] space-y-3 p-3">
+          <Field label="Dates">
+            {range.from ? (
+              <DateRangeFilter dateRange={range} allFrom={coverage?.from}
+                onApply={({ from, to }) => set({ from: from === coverage?.from ? '' : from, to: to >= (coverage?.to || '') ? '' : to })} />
+            ) : <div className="h-8" />}
+          </Field>
+          <Field label="Moneyline line">
+            <Segmented label="Moneyline line" value={filters.basis} onChange={(basis) => set({ basis })}
+              options={[{ key: 'open', label: 'Opening' }, { key: 'close', label: 'Closing' }]} />
+          </Field>
+          <Field label="Price">
+            <Segmented label="Price" value={filters.price} onChange={(price) => set({ price })}
+              options={[{ key: 'typical', label: 'Typical book' }, { key: 'best', label: 'Best book' }]} />
+          </Field>
+          <Field label="Bet rule">
+            <Dropdown label="Bet rule" value={filters.minEv} onChange={(minEv) => set({ minEv })} options={MIN_EVS} className="w-full" />
+          </Field>
+          <Field label="Markets">
+            <MarketsPicker selected={filters.markets} onChange={(markets) => set({ markets })} />
+          </Field>
+          <div className="space-y-1.5">
+            {filters.minEv !== 'pick' && (
+              <label className="flex cursor-pointer items-center gap-2 text-[12px]">
+                <Checkbox className="size-4 rounded-[4px] border-border" checked={filters.top} onCheckedChange={(c) => set({ top: !!c })} />
+                One pick per market
+              </label>
+            )}
+            {filters.basis === 'open' && propsShown && (
+              <label className="flex cursor-pointer items-center gap-2 text-[12px]">
+                <Checkbox className="size-4 rounded-[4px] border-border" checked={filters.props} onCheckedChange={(c) => set({ props: !!c })} />
+                Include props (closing price)
+              </label>
+            )}
+          </div>
+          {!isDefault && (
+            <button type="button" onClick={() => onChange({ ...DEFAULTS, markets: [] })}
+              className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border bg-background text-[12px] font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground">
+              <RotateCcw className="h-3.5 w-3.5" /> Reset to defaults
+            </button>
+          )}
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }

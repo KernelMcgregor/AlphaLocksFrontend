@@ -94,8 +94,7 @@ export function ModelGrade({ grade, red, blue }) {
   const onWinner = (pRed) => (pRed == null ? null : w === 'red' ? pRed : 1 - pRed)
   const winner = w === 'red' ? red : blue
   const hasMarket = grade.market_red_prob != null
-  const showPure = grade.model_prob != null && Math.abs(grade.model_prob - grade.red_prob) > 0.005
-  const losses = [grade.log_loss, showPure ? grade.model_log_loss : null, grade.market_log_loss].filter((l) => l != null)
+  const losses = [grade.log_loss, grade.market_log_loss].filter((l) => l != null)
   const best = losses.length > 1 ? Math.min(...losses) : null
   const edge = grade.market_log_loss != null ? grade.market_log_loss - grade.log_loss : null
   const m = grade.method
@@ -110,13 +109,9 @@ export function ModelGrade({ grade, red, blue }) {
           {grade.correct ? 'the model had them' : 'the model had the other side'}
         </>}
       >
-        <div className={cn('grid gap-2', [true, showPure, hasMarket].filter(Boolean).length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
-          <ForecastColumn label="Model" sub="as published" pWinner={onWinner(grade.red_prob)} loss={grade.log_loss}
+        <div className="grid grid-cols-2 gap-2">
+          <ForecastColumn label="Model" sub="before the fight" pWinner={onWinner(grade.red_prob)} loss={grade.log_loss}
             best={best != null && grade.log_loss === best} />
-          {showPure && (
-            <ForecastColumn label="Model only" sub="no odds in inputs" pWinner={onWinner(grade.model_prob)} loss={grade.model_log_loss}
-              best={best != null && grade.model_log_loss === best} />
-          )}
           {hasMarket && (
             <ForecastColumn label="Market" sub="closing, no vig" pWinner={onWinner(grade.market_red_prob)} loss={grade.market_log_loss}
               best={best != null && grade.market_log_loss === best} />

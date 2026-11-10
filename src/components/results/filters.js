@@ -6,11 +6,13 @@ export const MARKETS = [
   { key: 'distance', label: 'Goes the distance' },
   { key: 'itd', label: 'Inside the distance' },
   { key: 'rounds', label: 'Rounds' },
+  { key: 'method3', label: 'Method (either)' },   // last, so the others keep their colours
 ]
 // Market identity colour: the validated family slots, in this fixed order (filtering markets
 // never repaints the ones left).
 export const MARKET_COLOR = Object.fromEntries(MARKETS.map((m, i) => [m.key, `var(--color-fam-${i + 1})`]))
 export const MIN_EVS = [
+  { key: 'pick', label: "Model's pick" },
   { key: '0', label: 'Every +EV pick' },
   { key: '0.03', label: '3%+ EV' },
   { key: '0.05', label: '5%+ EV' },
@@ -18,19 +20,21 @@ export const MIN_EVS = [
   { key: '0.12', label: '12%+ EV' },
   { key: '0.2', label: '20%+ EV' },
 ]
-export const DEFAULTS = { from: '', to: '', basis: 'close', price: 'typical', minEv: '0', markets: [], props: true, top: false }
+// Default view: picks at the opening line, 5%+ edge, one per market (the forward test's
+// pre-registered rule, and the strongest full-history result: +7.3% ROI, CI clear of zero).
+export const DEFAULTS = { from: '', to: '', basis: 'open', price: 'typical', minEv: '0.05', markets: [], props: true, top: true }
 
 export function readFilters(params) {
   const markets = (params.get('markets') || '').split(',').filter((m) => MARKETS.some((x) => x.key === m))
   return {
     from: params.get('from') || '',
     to: params.get('to') || '',
-    basis: params.get('basis') === 'open' ? 'open' : 'close',
+    basis: params.get('basis') === 'close' ? 'close' : DEFAULTS.basis,
     price: params.get('price') === 'best' ? 'best' : 'typical',
-    minEv: MIN_EVS.some((m) => m.key === params.get('min_ev')) ? params.get('min_ev') : '0',
+    minEv: MIN_EVS.some((m) => m.key === params.get('min_ev')) ? params.get('min_ev') : DEFAULTS.minEv,
     markets,                                  // [] = every market
     props: params.get('props') !== '0',
-    top: params.get('top') === '1',
+    top: params.get('top') == null ? DEFAULTS.top : params.get('top') === '1',
   }
 }
 
@@ -38,22 +42,25 @@ export function readFilters(params) {
 export function filterParams(f) {
   return {
     from: f.from || null, to: f.to || null,
-    basis: f.basis === 'close' ? null : f.basis,
+    basis: f.basis === DEFAULTS.basis ? null : f.basis,
     price: f.price === 'typical' ? null : f.price,
-    min_ev: f.minEv === '0' ? null : f.minEv,
+    min_ev: f.minEv === DEFAULTS.minEv ? null : f.minEv,
     markets: f.markets.length ? f.markets.join(',') : null,
     props: f.props ? null : '0',
-    top: f.top ? '1' : null,
+    top: f.top === DEFAULTS.top ? null : f.top ? '1' : '0',
   }
 }
 
 export function resultsQuery(f, { dates = true } = {}) {
-  const q = new URLSearchParams({ basis: f.basis, price: f.price, min_ev: f.minEv })
+  // 'pick' = bet the model's most likely side in every market, at any price (backend rule=pick)
+  const pick = f.minEv === 'pick'
+  const q = new URLSearchParams({ basis: f.basis, price: f.price, min_ev: pick ? '0' : f.minEv })
+  if (pick) q.set('rule', 'pick')
   if (dates && f.from) q.set('start', f.from)
   if (dates && f.to) q.set('end', f.to)
   if (f.markets.length) q.set('markets', f.markets.join(','))
   if (!f.props) q.set('props_at_open', 'false')
-  if (f.top) q.set('top_only', 'true')
+  if (f.top && !pick) q.set('top_only', 'true')
   return q.toString()
 }
 
@@ -67,5 +74,4 @@ export const signCls = (x) => (x == null || Math.abs(x) < 1e-9 ? 'text-muted-for
 // Where a fight's predictions came from (backend model_results.SOURCE_LABELS).
 export const SOURCE_BADGE = {
   live: { label: 'Live', title: 'Served on the site before the fight', cls: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
-  forward: { label: 'Pre-trained', title: 'Predicted by a model trained before this card (out-of-sample, not the walk-forward backtest)', cls: 'border-blue-200 bg-blue-50 text-blue-700' },
 }
