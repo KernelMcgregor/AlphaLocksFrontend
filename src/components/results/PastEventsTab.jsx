@@ -118,7 +118,7 @@ function Hero({ data, filters, onFilters, onEvent }) {
               {ciClear ? 'Edge confirmed' : 'Trending up'} · CI {fmtPct(t.ci[0], 0)} to {fmtPct(t.ci[1], 0)}
             </span>
           )}
-          <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-[11.5px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+          <span className="inline-flex items-center rounded-full bg-primary/[0.06] px-2.5 py-1 text-[11.5px] font-bold text-primary dark:bg-primary/15 dark:text-red-300">
             {atHigh ? 'At an all-time high' : `${fmtUnits(ath - last).replace('+', '')} off the high`}
           </span>
         </div>
@@ -298,7 +298,7 @@ function EventList({ events, selId, onEvent, jump }) {
               return (
                 <button key={e.event_id} type="button" data-event={e.event_id} onClick={() => onEvent(e.event_id)}
                   className={cn('grid w-full grid-cols-[44px_minmax(0,1fr)_56px] items-center gap-2 2xl:grid-cols-[44px_minmax(0,1fr)_52px_56px] border-b border-border/40 px-3.5 py-[7px] text-left transition hover:bg-muted/40',
-                    sel && 'bg-blue-50 shadow-[inset_3px_0_0_var(--color-primary)] dark:bg-blue-950/40')}>
+                    sel && 'bg-primary/[0.06] shadow-[inset_3px_0_0_var(--color-primary)] dark:bg-primary/15')}>
                   <span className="text-[11px] font-bold tabular-nums text-muted-foreground">{dayLabel(e.date)}</span>
                   <span className="min-w-0" title={e.name}>
                     <span className="block truncate text-[12.5px] font-bold">{shortEvent(e.name).title}<SourceBadges sources={e.sources} /></span>

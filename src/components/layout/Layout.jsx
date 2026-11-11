@@ -1,7 +1,7 @@
 import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-import { fetchAltRankings, fetchRankings, fetchUpcomingEvents } from '../../lib/api'
+import { fetchAltRankings, fetchHome, fetchRankings, fetchUpcomingEvents } from '../../lib/api'
 import Sidebar from './Sidebar'
 
 export default function Layout({ children }) {
@@ -9,6 +9,13 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     document.documentElement.classList.remove('dark')
+  }, [])
+
+  // Pages with their own app bar (the mobile fighter profile) open the drawer by event.
+  useEffect(() => {
+    const open = () => setSidebarOpen(true)
+    window.addEventListener('alocks:open-sidebar', open)
+    return () => window.removeEventListener('alocks:open-sidebar', open)
   }, [])
 
   // Warm the two payloads most pages open with — the upcoming slate (Upcoming, UFC home)
@@ -19,6 +26,7 @@ export default function Layout({ children }) {
     fetchUpcomingEvents().catch(() => {})
     fetchRankings().catch(() => {})
     fetchAltRankings('p4p').catch(() => {})   // the Rankings page opens on P4P
+    fetchHome().catch(() => {})               // the home dashboard, where the logo leads
   }, [])
 
   return (

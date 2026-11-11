@@ -63,7 +63,7 @@ export default function PastResultsPage() {
             <TrendingUp className="h-[18px] w-[18px] text-white" strokeWidth={2.4} />
           </span>
           <div className="min-w-0">
-            <h1 className="text-[22px] font-extrabold leading-tight tracking-tight">Model Results</h1>
+            <h1 className="page-title">Model Results</h1>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
               Walk-forward backtest · flat 1u · {filters.basis === 'open' ? 'opening' : 'closing'} line{filters.top && filters.minEv !== 'pick' ? ' · one pick per market' : ''}
             </p>

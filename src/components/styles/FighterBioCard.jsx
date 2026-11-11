@@ -31,8 +31,8 @@ function Badges({ fighter, rank, small }) {
   return (
     <div className={cn('mt-1 flex flex-wrap', small ? 'gap-1' : 'gap-1.5')}>
       <span className={cn('rounded-md border bg-background font-bold tabular-nums', chip)}>{fighter.record}</span>
-      {rank?.score != null && <span className={cn('rounded-md bg-blue-600 font-bold text-white tabular-nums', chip)}>Power {rank.score.toFixed(0)}</span>}
-      <span className={cn('rounded-md border border-blue-500/40 bg-blue-500/10 font-bold text-blue-600', chip)}>
+      {rank?.score != null && <span className={cn('rounded-md bg-primary font-bold text-white tabular-nums', chip)}>Power {rank.score.toFixed(0)}</span>}
+      <span className={cn('rounded-md border font-bold', rank && isChampion(rank) ? 'border-gold/50 bg-gold/15 text-gold-foreground' : 'border-primary/40 bg-primary/10 text-primary', chip)}>
         {rank ? (isChampion(rank) ? `${rank.division} Champion` : `#${displayRank(rank)} ${rank.division}`) : divisionLabel(fighter.division)}
       </span>
     </div>
@@ -59,11 +59,11 @@ export function FighterBioCard({ fighter, families, rank, hideBio, portrait = PO
           </div>
         </div>
       ) : (<>
-      <div style={{ height: portrait }} className="relative flex shrink-0 items-end justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-b from-blue-500/10 to-transparent">
+      <div style={{ height: portrait }} className="relative flex shrink-0 items-end justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-b from-primary/10 to-transparent">
         <WavingFlag countryCode={fighter.country_code} />
         <FighterImage fighter={fighter} fit="contain" alt={fighter.name} className="relative z-10 h-full w-full" />
         {isChampion(rank) && (
-          <div className="absolute left-2 top-2 z-20 inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-background/90 px-2 py-0.5 text-[10px] font-bold text-amber-600 backdrop-blur">
+          <div className="absolute left-2 top-2 z-20 inline-flex items-center gap-1 rounded-md border border-gold/50 bg-background/90 px-2 py-0.5 text-[10px] font-bold text-gold-foreground backdrop-blur">
             <BeltIcon className="h-3 w-3" /> CHAMPION
           </div>
         )}

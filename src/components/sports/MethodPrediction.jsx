@@ -1,9 +1,9 @@
 import { cn } from '../../lib/utils'
 
 const METHOD_COLORS = {
-  'KO/TKO':     { bg: 'bg-red-500',    text: 'text-red-500',    light: 'bg-red-500/15' },
-  'Submission':  { bg: 'bg-purple-500', text: 'text-purple-500', light: 'bg-purple-500/15' },
-  'Decision':    { bg: 'bg-slate-400',  text: 'text-slate-400',  light: 'bg-slate-400/15' },
+  'KO/TKO':     { bg: 'bg-method-ko',  text: 'text-method-ko',     light: 'bg-method-ko/15' },
+  'Submission':  { bg: 'bg-method-sub', text: 'text-method-sub',    light: 'bg-method-sub/15' },
+  'Decision':    { bg: 'bg-method-dec', text: 'text-muted-foreground', light: 'bg-method-dec/15' },
 }
 
 export default function MethodPrediction({ methodPrediction }) {

@@ -42,7 +42,7 @@ export default function ActivityBars({ activity, oppData, start = 0, size = 6 })
             }
           >
             <span className="text-[10px] font-extrabold tabular-nums text-foreground">{a.count}</span>
-            <div className="w-full cursor-default rounded-t-sm bg-blue-600 transition-colors duration-200 hover:bg-blue-500" style={{ height: `${Math.max(4, (a.count / max) * 40)}px` }} />
+            <div className="w-full cursor-default rounded-t-sm bg-primary transition-colors duration-200 hover:bg-primary/85" style={{ height: `${Math.max(4, (a.count / max) * 40)}px` }} />
             <span className="text-[9px] font-semibold text-muted-foreground">{a.year}</span>
           </Tip>
         ))}

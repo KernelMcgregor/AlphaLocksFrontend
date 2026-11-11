@@ -58,7 +58,6 @@ import { CornerColumns, CornerHead, Empty } from '../components/fight/layout'
 
 // Method segments, most-likely first. Spelled out rather than built at runtime
 // — Tailwind scans source text for class names.
-const METHOD_TINTS = ['bg-primary', 'bg-muted-foreground/55', 'bg-muted-foreground/30']
 
 
 
@@ -151,9 +150,9 @@ function ModelVerdict({ prediction, methodPrediction, red, blue }) {
 
   // `full` is matched against predicted_method, which stores the long form.
   const methods = methodPrediction ? [
-    { label: 'KO/TKO', full: 'KO/TKO', prob: methodPrediction.ko_prob },
-    { label: 'Sub', full: 'Submission', prob: methodPrediction.sub_prob },
-    { label: 'Dec', full: 'Decision', prob: methodPrediction.dec_prob },
+    { label: 'KO/TKO', full: 'KO/TKO', prob: methodPrediction.ko_prob, cls: 'bg-method-ko' },
+    { label: 'Sub', full: 'Submission', prob: methodPrediction.sub_prob, cls: 'bg-method-sub' },
+    { label: 'Dec', full: 'Decision', prob: methodPrediction.dec_prob, cls: 'bg-method-dec' },
   ].sort((a, b) => b.prob - a.prob) : []
 
   return (
@@ -194,7 +193,7 @@ function ModelVerdict({ prediction, methodPrediction, red, blue }) {
             {methods.map((m, i) => (
               <div
                 key={m.label}
-                className={cn('h-full', METHOD_TINTS[i])}
+                className={cn('h-full', m.cls)}
                 style={{ width: `${m.prob * 100}%` }}
                 title={`${m.full} ${(m.prob * 100).toFixed(0)}%`}
               />
@@ -203,7 +202,7 @@ function ModelVerdict({ prediction, methodPrediction, red, blue }) {
           <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
             {methods.map((m, i) => (
               <span key={m.label} className="flex items-center gap-1">
-                <span className={cn('h-1.5 w-1.5 rounded-full', METHOD_TINTS[i])} />
+                <span className={cn('h-1.5 w-1.5 rounded-full', m.cls)} />
                 <span className="text-[9.5px] text-muted-foreground">{m.label}</span>
                 <span className="text-[9.5px] font-bold tabular-nums">{(m.prob * 100).toFixed(0)}%</span>
               </span>

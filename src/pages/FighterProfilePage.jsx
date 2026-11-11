@@ -34,7 +34,8 @@ import { fetchEvents, fetchFighter, fetchFighterCareerStats, fetchFighterFights,
 import { clock, cn, formatDate, formatRecord, isChampion, displayRank } from '../lib/utils'
 import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, deriveRoundPacing, deriveRoundSurvival, deriveTwoWay, methodLabel, resultCode, RESULT_BADGE } from '../lib/fighterAnalytics'
 import FighterImage from '../components/sports/FighterImage'
-import logoSrc from '../assets/alocks-logo.png'
+import logoSrc from '../assets/chinlytics-logo.png'
+import { Wordmark } from '../components/layout/Brand'
 
 // Captured once at module load — age only changes yearly, and reading the clock
 // during render is impure.
@@ -105,7 +106,7 @@ function FightDetail({ detail, data, finishRound }) {
   const position = (t?.distance_landed || 0) + (t?.clinch_landed || 0) + (t?.ground_landed || 0)
 
   return (
-    <div className="space-y-3 border-l-2 border-l-blue-500/40 bg-muted/25 px-3 py-2.5">
+    <div className="space-y-3 border-l-2 border-l-primary/40 bg-muted/25 px-3 py-2.5">
       {detail && <p className="text-[11.5px] leading-snug text-foreground/80">{detail}</p>}
 
       {!t ? (
@@ -258,8 +259,8 @@ function MobileFighterProfile({
             <Menu className="h-[22px] w-[22px]" />
           </button>
           <Link to="/" className="flex items-center gap-2">
-            <img src={logoSrc} alt="Alpha Locks" className="h-7 w-7 rounded-full" />
-            <span className="text-base font-extrabold tracking-tight">Alpha Locks</span>
+            <img src={logoSrc} alt="Chinlytics" className="h-7 w-7" />
+            <Wordmark className="text-xl" chinClass="text-foreground" />
           </Link>
           <Link to="/ufc/fighters/stats" className="ml-auto flex h-11 items-center gap-0.5 px-1.5 text-[12.5px] font-semibold text-muted-foreground hover:text-foreground">
             <ChevronLeft className="h-3.5 w-3.5" /> Fighters
@@ -279,8 +280,8 @@ function MobileFighterProfile({
               className={cn('absolute inset-x-0 top-0 w-full transition-[height] duration-200', condensed ? 'h-[84px]' : 'h-[150px]')}
             />
             {isChamp && (
-              <div className="absolute left-1.5 top-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full border border-amber-400 bg-background">
-                <BeltIcon className="h-3 w-3 text-amber-600" />
+              <div className="absolute left-1.5 top-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full border border-gold bg-background">
+                <BeltIcon className="h-3 w-3 text-gold" />
               </div>
             )}
           </div>
@@ -294,7 +295,7 @@ function MobileFighterProfile({
             {condensed ? (
               <div className="truncate text-xs font-semibold tabular-nums text-muted-foreground">
                 <span className="text-foreground">{record}</span>
-                {ranked && divisionLabel && <> · <span className="text-blue-600">{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span></>}
+                {ranked && divisionLabel && <> · <span className={isChampion(ranked) ? 'text-gold-foreground' : 'text-primary'}>{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span></>}
                 {ranked && <> · Power {ranked.score.toFixed(0)}</>}
               </div>
             ) : (
@@ -303,9 +304,9 @@ function MobileFighterProfile({
                 <div className="mt-0.5 flex flex-wrap gap-1.5">
                   <span className="rounded-md border bg-background px-1.5 py-0.5 text-[11px] font-bold tabular-nums">{record}</span>
                   {ranked && divisionLabel && (
-                    <span className="rounded-md border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[11px] font-bold text-blue-600">{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
+                    <span className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-bold', isChampion(ranked) ? 'border-gold/50 bg-gold/15 text-gold-foreground' : 'border-primary/40 bg-primary/10 text-primary')}>{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
                   )}
-                  {ranked && <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
+                  {ranked && <span className="rounded-md bg-primary px-1.5 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
                 </div>
               </>
             )}
@@ -539,9 +540,9 @@ function MobileFighterProfile({
                       title={`Win Methods · ${career.ko + career.sub + career.dec}`}
                       unit=""
                       segments={[
-                        { label: 'KO/TKO', value: career.ko, cls: 'bg-viz-1' },
-                        { label: 'Submission', value: career.sub, cls: 'bg-viz-2' },
-                        { label: 'Decision', value: career.dec, cls: 'bg-viz-3' },
+                        { label: 'KO/TKO', value: career.ko, cls: 'bg-method-ko' },
+                        { label: 'Submission', value: career.sub, cls: 'bg-method-sub' },
+                        { label: 'Decision', value: career.dec, cls: 'bg-method-dec' },
                       ]}
                     />
                   </div>
@@ -643,7 +644,7 @@ function MobileFighterProfile({
                           <Link
                             to={`/ufc/fighters/${r.oppId}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="block truncate text-[13.5px] font-bold hover:text-blue-600"
+                            className="block truncate text-[13.5px] font-bold hover:text-primary"
                           >
                             {opp?.name || 'Unknown'}
                           </Link>
@@ -977,7 +978,7 @@ export default function FighterProfilePage() {
           <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border p-2.5">
             {/* flex-1 so the portrait takes any leftover column height — otherwise the
                 slack collects as dead space between this card and the one below. */}
-            <div className="relative flex min-h-[132px] flex-1 items-end justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-b from-blue-500/10 to-transparent">
+            <div className="relative flex min-h-[132px] flex-1 items-end justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-b from-primary/10 to-transparent">
               <WavingFlag countryCode={fighter.country_code} />
               <FighterImage
                 fighter={fighter}
@@ -986,7 +987,7 @@ export default function FighterProfilePage() {
                 className="relative z-10 h-full w-full"
               />
               {isChamp && (
-                <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-background/90 px-2 py-0.5 text-[10px] font-bold text-amber-600 backdrop-blur">
+                <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md border border-gold/50 bg-background/90 px-2 py-0.5 text-[10px] font-bold text-gold-foreground backdrop-blur">
                   <BeltIcon className="h-3 w-3" /> CHAMPION
                 </div>
               )}
@@ -1000,9 +1001,9 @@ export default function FighterProfilePage() {
               {fighter.nickname && <div className="mt-0.5 text-[11px] text-muted-foreground">"{fighter.nickname}"</div>}
               <div className="mt-1 flex flex-wrap gap-1.5">
                 <span className="rounded-md border bg-background px-2 py-0.5 text-[11px] font-bold tabular-nums">{record}</span>
-                {ranked && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
+                {ranked && <span className="rounded-md bg-primary px-2 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
                 {ranked && divisionLabel && (
-                  <span className="rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-[11px] font-bold text-blue-600">{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
+                  <span className={cn('rounded-md border px-2 py-0.5 text-[11px] font-bold', isChampion(ranked) ? 'border-gold/50 bg-gold/15 text-gold-foreground' : 'border-primary/40 bg-primary/10 text-primary')}>{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
                 )}
               </div>
             </div>
@@ -1127,7 +1128,7 @@ export default function FighterProfilePage() {
                     <SkillCallout label="Weaknesses" dims={profile.weaknesses.slice(0, 3)} cls="text-rose-600" />
                   </div>
 
-                  <div className="mb-1 mt-2.5 shrink-0 text-[9px] font-bold uppercase tracking-wide text-blue-600">Group Averages</div>
+                  <div className="mb-1 mt-2.5 shrink-0 text-[9px] font-bold uppercase tracking-wide text-primary">Group Averages</div>
                   <div className="grid shrink-0 grid-cols-3 gap-1.5">
                     {profile.groups.map((g) => (
                       <div key={g.label} className="rounded-xl border bg-muted/40 py-2 text-center">
@@ -1315,9 +1316,9 @@ export default function FighterProfilePage() {
                       title={`Win Methods · ${career.ko + career.sub + career.dec}`}
                       unit=""
                       segments={[
-                        { label: 'KO/TKO', value: career.ko, cls: 'bg-viz-1' },
-                        { label: 'Submission', value: career.sub, cls: 'bg-viz-2' },
-                        { label: 'Decision', value: career.dec, cls: 'bg-viz-3' },
+                        { label: 'KO/TKO', value: career.ko, cls: 'bg-method-ko' },
+                        { label: 'Submission', value: career.sub, cls: 'bg-method-sub' },
+                        { label: 'Decision', value: career.dec, cls: 'bg-method-dec' },
                       ]}
                     />
                   </div>
@@ -1454,7 +1455,7 @@ export default function FighterProfilePage() {
                                 <Link
                                   to={`/ufc/fighters/${r.oppId}`}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="truncate text-[12.5px] font-bold hover:text-blue-600"
+                                  className="truncate text-[12.5px] font-bold hover:text-primary"
                                 >
                                   {opp?.name || 'Unknown'}
                                 </Link>

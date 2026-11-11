@@ -1,142 +1,82 @@
-import { BarChart3, Calendar, ChevronRight, Clock, History, Layers, Newspaper, Orbit, Shuffle, Swords, Target, TrendingUp } from 'lucide-react'
-import logoSrc from '../../assets/alocks-logo.png'
-import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { BarChart3, Calendar, Clock, History, Layers, Newspaper, Orbit, Shuffle, Target, TrendingUp } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/utils'
+import { BrandLockup } from './Brand'
 
-const navTree = [
+// The site is UFC-only, so navigation is flat: section headers with their pages
+// underneath. `match` lists extra paths that should light the item up (aliases and
+// former URLs that still route to the same page).
+const navSections = [
   {
-    id: 'ufc',
-    label: 'UFC',
-    icon: Swords,
-    path: '/ufc',
-    children: [
-      { id: 'model-upcoming', label: 'Upcoming', icon: Clock, path: '/model/upcoming' },
-      { id: 'picks', label: 'Picks', icon: Target, path: '/picks' },
-      { id: 'past-results', label: 'Past Results', icon: History, path: '/results' },
-      { id: 'hypothetical', label: 'Hypothetical', icon: Shuffle, path: '/ufc/hypothetical' },
-      { id: 'ufc-events', label: 'Events & Fights', icon: Calendar, path: '/ufc/events' },
-      { id: 'ufc-articles', label: 'Articles', icon: Newspaper, path: '/ufc/articles' },
-      { id: 'ufc-rankings', label: 'Rankings', icon: TrendingUp, path: '/ufc/rankings' },
-      { id: 'fighter-stats', label: 'Fighter Stats', icon: BarChart3, path: '/ufc/fighters/stats' },
-      { id: 'fighter-skills', label: 'Fighter Skills', icon: Layers, path: '/ufc/fighters/skills' },
-      { id: 'fighter-styles', label: 'Fighter Styles', icon: Orbit, path: '/ufc/fighters/styles' },
+    label: 'Predictions',
+    items: [
+      { label: 'Upcoming', icon: Clock, path: '/model/upcoming' },
+      { label: 'Picks', icon: Target, path: '/picks' },
+      { label: 'Past Results', icon: History, path: '/results' },
+      { label: 'Hypothetical', icon: Shuffle, path: '/ufc/hypothetical', match: ['/ufc/hypothetical/breakdown'] },
+    ],
+  },
+  {
+    label: 'Events',
+    items: [
+      { label: 'Events & Fights', icon: Calendar, path: '/ufc/events' },
+      { label: 'Articles', icon: Newspaper, path: '/ufc/articles' },
+    ],
+  },
+  {
+    label: 'Fighters',
+    items: [
+      { label: 'Rankings', icon: TrendingUp, path: '/ufc/rankings' },
+      { label: 'Fighter Stats', icon: BarChart3, path: '/ufc/fighters/stats' },
+      { label: 'Fighter Skills', icon: Layers, path: '/ufc/fighters/skills', match: ['/ufc/fighters/decompositions'] },
+      { label: 'Fighter Styles', icon: Orbit, path: '/ufc/fighters/styles' },
     ],
   },
 ]
 
-function TreeBranch({ node, navigate, activeId, setActiveId }) {
-  const [expanded, setExpanded] = useState(true)
-  const Icon = node.icon
-  const hasChildren = node.children?.length > 0
-  const isActive = activeId === node.id
-
-  return (
-    <div>
-      <button
-        onClick={() => {
-          // A branch with its own path is a page too: clicking it navigates and opens
-          // the subtree. The chevron below is the only control that collapses it, so
-          // visiting the section never hides its children.
-          if (node.path) {
-            setActiveId(node.id)
-            navigate(node.path)
-            if (hasChildren) setExpanded(true)
-          } else if (hasChildren) {
-            setExpanded(!expanded)
-          }
-        }}
-        className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-          'hover:bg-white/10',
-          hasChildren && 'font-medium text-white',
-          isActive && 'bg-white/15 text-white font-semibold',
-          !isActive && !hasChildren && 'text-blue-100',
-        )}
-      >
-        {hasChildren ? (
-          <ChevronRight
-            role="button"
-            aria-label={expanded ? 'Collapse' : 'Expand'}
-            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
-            className={cn(
-              'h-3.5 w-3.5 shrink-0 rounded transition-transform duration-200 hover:bg-white/20',
-              expanded && 'rotate-90'
-            )}
-          />
-        ) : (
-          <span className="w-3.5" />
-        )}
-        {Icon && <Icon className="h-4 w-4 shrink-0" />}
-        <span className="truncate">{node.label}</span>
-      </button>
-
-      {hasChildren && expanded && (
-        <div className="relative ml-[19px] border-l border-blue-400/30">
-          {node.children.map((child) => (
-            <TreeBranch
-              key={child.id}
-              node={child}
-              navigate={navigate}
-              activeId={activeId}
-              setActiveId={setActiveId}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function getInitialActiveId(pathname) {
-  function search(nodes) {
-    for (const node of nodes) {
-      // Children first: a branch and a child can share a prefix, and the deeper match
-      // is the one the user is actually on.
-      if (node.children) {
-        const found = search(node.children)
-        if (found) return found
-      }
-      if (node.path === pathname) return node.id
-    }
-    return null
-  }
-  return search(navTree)
-}
+const isActive = (item, pathname) => item.path === pathname || (item.match?.includes(pathname) ?? false)
 
 export default function Sidebar({ open, onClose }) {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [activeId, setActiveId] = useState(() => getInitialActiveId(location.pathname))
-
-  const handleNavigate = (path) => {
-    navigate(path)
-    onClose?.()
-  }
+  // Read on every render so back/forward and in-page links keep the highlight right.
+  const { pathname } = useLocation()
 
   const sidebarContent = (
-    <div className="flex h-full flex-col rounded-xl bg-gradient-to-b from-blue-600 to-blue-700 shadow-lg">
-      {/* Logo */}
-      <Link to="/" onClick={onClose} className="flex items-center gap-2.5 px-5 pt-5 pb-4">
-        <img src={logoSrc} alt="Alpha Locks" className="h-10 w-10 rounded-full" />
-        <div>
-          <div className="text-xl font-bold text-white tracking-tight leading-tight">Alpha Locks</div>
-          <div className="text-[10px] text-blue-200 tracking-wide">Sports Intelligence Firm</div>
-        </div>
+    <div className="flex h-full flex-col rounded-xl bg-ink shadow-lg">
+      <Link to="/" onClick={onClose} className="px-3.5 pt-5 pb-4 2xl:px-4">
+        <BrandLockup />
       </Link>
 
-      <div className="mx-4 border-t border-blue-400/30" />
+      <div className="mx-4 border-t border-white/10" />
 
-      {/* Tree Navigation */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
-        {navTree.map((node) => (
-          <TreeBranch
-            key={node.id}
-            node={node}
-            navigate={handleNavigate}
-            activeId={activeId}
-            setActiveId={setActiveId}
-          />
+      <nav className="flex-1 overflow-y-auto px-3 pb-3">
+        {navSections.map((section) => (
+          <div key={section.label} className="mt-4">
+            <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+              {section.label}
+            </div>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const Icon = item.icon
+                const active = isActive(item, pathname)
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={onClose}
+                    className={cn(
+                      'relative flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
+                      active
+                        ? 'bg-white/10 font-semibold text-white before:absolute before:inset-y-1 before:left-0 before:w-[3px] before:rounded-full before:bg-primary'
+                        : 'text-neutral-300 hover:bg-white/5 hover:text-white',
+                    )}
+                  >
+                    <Icon className={cn('h-4 w-4 shrink-0', active && 'text-primary')} />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
         ))}
       </nav>
     </div>
@@ -145,7 +85,8 @@ export default function Sidebar({ open, onClose }) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:block w-64 shrink-0 p-3 h-screen sticky top-0">
+      {/* 224px below 2xl: on a laptop the page needs the room more than the nav does. */}
+      <aside className="hidden md:block w-56 2xl:w-64 shrink-0 p-3 h-screen sticky top-0">
         {sidebarContent}
       </aside>
 

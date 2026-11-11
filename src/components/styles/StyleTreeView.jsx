@@ -418,7 +418,7 @@ export default function StyleTreeView({ data, byId, chosenId, fighterId, onSelec
   // One list style for heritage, heirs and siblings: family dot, name, debut · division, score.
   const lineRow = (f, sim, key, { active, sub } = {}) => (
     <li key={key}>
-      <button onClick={() => isolate(f.id)} className={cn('flex w-full items-center gap-2.5 rounded-md px-1 py-0.5 text-left hover:bg-muted', active && 'bg-blue-50')}>
+      <button onClick={() => isolate(f.id)} className={cn('flex w-full items-center gap-2.5 rounded-md px-1 py-0.5 text-left hover:bg-muted', active && 'bg-primary/[0.06]')}>
         <span className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-card" style={{ background: famColor(f.family) }} />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-[12px] font-bold">{f.name}</span>
@@ -578,7 +578,7 @@ export default function StyleTreeView({ data, byId, chosenId, fighterId, onSelec
               const next = !last ? g.parents.get(her.chain[i + 1])?.[her.chain[i + 1] === iso.id ? viaI : 0] : null
               return (
                 <li key={id}>
-                  <button onClick={() => isolate(id)} className={cn('flex w-full items-stretch gap-2.5 rounded-md px-1 text-left hover:bg-muted', last && 'bg-blue-50')}>
+                  <button onClick={() => isolate(id)} className={cn('flex w-full items-stretch gap-2.5 rounded-md px-1 text-left hover:bg-muted', last && 'bg-primary/[0.06]')}>
                     <span className="flex w-3 shrink-0 flex-col items-center">
                       <span className={cn('w-0.5 flex-1', i ? 'bg-border' : 'bg-transparent')} />
                       <span className={cn('shrink-0 rounded-full ring-2 ring-card', last ? 'h-3 w-3' : 'h-2.5 w-2.5')} style={{ background: famColor(f.family) }} />

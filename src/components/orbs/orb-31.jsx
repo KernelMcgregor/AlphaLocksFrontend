@@ -122,7 +122,7 @@ vec4 coronaRender(vec2 fragCoord) {
   if (t < uP_maxDist) col = shellColor(p) * uP_surfaceLit;
   col += godrays;
 
-  // ALocks: alpha carries whether the ray struck the shell, for the solid body below.
+  // Chinlytics: alpha carries whether the ray struck the shell, for the solid body below.
   return vec4(col, t < uP_maxDist ? 1.0 : 0.0);
 }
 
@@ -188,7 +188,7 @@ void main() {
   float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
   float a = clamp(lum * uP_alphaGain, 0.0, 1.0);
 
-  // ALocks: recoloured. The original is white light; here the glow takes the
+  // Chinlytics: recoloured. The original is white light; here the glow takes the
   // tint, and only its brightest part (the godrays converging on the centre of
   // the hollow) runs back to white, giving a white-hot core in a blue orb. Alpha
   // was already taken from the untinted luminance above, so tinting cannot make
@@ -196,7 +196,7 @@ void main() {
   float core = smoothstep(uP_coreFrom, 1.0, lum);
   col = mix(col * uC_tint, col, core);
 
-  // ALocks: the unlit shell has near-zero luminance, so on a light page it goes
+  // Chinlytics: the unlit shell has near-zero luminance, so on a light page it goes
   // transparent and reads as white porcelain rather than a blue orb. "solid"
   // paints the shell a shade of the tint instead (acc.a is the fraction of
   // samples that struck it), underneath the glow. 0 restores the original
@@ -217,8 +217,8 @@ void main() {
   gl_FragColor = vec4(col, a);
 }
 `;
-/** A lighter royal blue (Tailwind blue-400); the app's --color-primary is #2563eb. */
-export const ROYAL_BLUE = "#60a5fa";
+/** A lifted UFC red for the glowing shader; the app's --color-primary is #d20a0a. */
+export const UFC_RED = "#e8303a";
 export const shdr31Orb = {
     key: "shdr-31",
     label: "SHDR-31",
@@ -250,7 +250,7 @@ export const shdr31Orb = {
         { key: "coreFrom", label: "White core from", min: 0, max: 1, step: 0.01, default: 0.35 }
     ],
     colors: [
-        { key: "tint", label: "Tint", default: ROYAL_BLUE }
+        { key: "tint", label: "Tint", default: UFC_RED }
     ],
     statePresets: {
         /*
@@ -308,10 +308,10 @@ export const shdr31Orb = {
     }
 };
 /**
- * SHDR-31 tinted to the app's royal blue. `color` takes any hex to override it.
+ * SHDR-31 tinted to the app's UFC red. `color` takes any hex to override it.
  * Other props (state, paused, params...) pass through to ShaderOrb.
  */
-export function Orb31({ size = 280, color = ROYAL_BLUE, colors, ...rest }) {
+export function Orb31({ size = 280, color = UFC_RED, colors, ...rest }) {
     return <ShaderOrb variant={shdr31Orb} size={size} colors={{ tint: color, ...colors }} {...rest}/>;
 }
 export default Orb31;

@@ -51,10 +51,64 @@ function StatusItem({ label, children, show }) {
   )
 }
 
+const pad = (n) => String(n).padStart(2, '0')
+
+// How long until `ms` from now, in the units that matter at that distance: a week or
+// more out is just days; inside a week, d/h/m/s; inside a day, h/m/s; inside an hour, m/s.
+function countdownText(msLeft, fallbackDays) {
+  const s = Math.floor(msLeft / 1000)
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (d >= 7) return fallbackDays
+  if (d >= 1) return `${d}d ${pad(h)}h ${pad(m)}m ${pad(sec)}s`
+  if (h >= 1) return `${pad(h)}h ${pad(m)}m ${pad(sec)}s`
+  return `${pad(m)}m ${pad(sec)}s`
+}
+
+// Card length, for "Live" vs over: a main card runs ~3h; past that the result scrape
+// takes over and the event drops off this page.
+const LIVE_FOR_MS = 4 * 3600 * 1000
+
+/** Counts to the main card (ufc.com start time, UTC). Ticks every second only inside the
+ *  last week; further out the text is whole days and a minute's tick is plenty. Without
+ *  a start time (not yet published) it falls back to days from the event date. */
+function Countdown({ event }) {
+  const target = event.main_card_at ? Date.parse(event.main_card_at) : null
+  const [now, setNow] = useState(() => Date.now())
+  const close = target != null && target - now < 7 * 86400000 + 60000
+  useEffect(() => {
+    if (target == null) return undefined
+    const t = setInterval(() => setNow(Date.now()), close ? 1000 : 60000)
+    return () => clearInterval(t)
+  }, [target, close])
+
+  const days = daysUntil(event.date)
+  const byDate = days == null ? '' : days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`
+  if (target == null) return <span className="text-[13px] font-extrabold tabular-nums">{byDate}</span>
+
+  const left = target - now
+  if (left <= 0) {
+    return left > -LIVE_FOR_MS ? (
+      <span className="inline-flex items-center gap-1.5 text-[13px] font-extrabold text-primary">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" /> Live
+      </span>
+    ) : <span className="text-[13px] font-extrabold">Ended</span>
+  }
+  const daysLeft = Math.ceil(left / 86400000)
+  return (
+    <span className="text-[13px] font-extrabold tabular-nums">
+      {countdownText(left, `in ${daysLeft} days`)}
+    </span>
+  )
+}
+
+// "Sat 9:00 PM EST" in the viewer's own zone, from the UTC start.
+const startFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+
 function StatusBar({ event }) {
   const sum = summarizeEvent(event)
-  const days = daysUntil(event.date)
-  const when = days == null ? '' : days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`
   const { city, country } = parseLocation(event.location)
 
   return (
@@ -66,8 +120,14 @@ function StatusBar({ event }) {
         </StatusItem>
 
         <StatusItem label="Countdown">
-          <span className="text-[13px] font-extrabold tabular-nums">{when}</span>
+          <Countdown event={event} />
         </StatusItem>
+
+        {event.main_card_at && (
+          <StatusItem label="Main card">
+            <span className="text-[12.5px] font-semibold">{startFmt.format(new Date(event.main_card_at))}</span>
+          </StatusItem>
+        )}
 
         {/* ufcstats publishes only a date and a city for an event — no venue — so this
             stays empty until something fills event.venue. Kept rather than dropped so
@@ -189,8 +249,8 @@ export default function UpcomingPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex shrink-0 items-center gap-3">
-        <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+        <h1 className="page-title flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Clock className="h-5 w-5 text-white" />
           </span>
           Upcoming

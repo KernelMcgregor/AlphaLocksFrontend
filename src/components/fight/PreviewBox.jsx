@@ -3,7 +3,6 @@
 // faded out, and "Read all" opens the full piece on its own page. Clipping rather
 // than slicing the markdown keeps tables and headings intact instead of cutting one
 // in half.
-import { ArrowRight } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Link } from 'react-router-dom'
@@ -32,7 +31,7 @@ export default function PreviewBox({ preview, fightId, className, title = 'Previ
           to="/ufc/articles"
           className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
         >
-          See All Articles <ArrowRight className="h-3 w-3" />
+          See All Articles
         </Link>
       </div>
 
@@ -52,7 +51,7 @@ export default function PreviewBox({ preview, fightId, className, title = 'Previ
           to={`/ufc/fights/${fightId}/preview`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1 text-[11.5px] font-bold transition-colors hover:border-primary/50 hover:text-primary"
         >
-          Read all <ArrowRight className="h-3.5 w-3.5" />
+          Read all
         </Link>
       </div>
     </div>

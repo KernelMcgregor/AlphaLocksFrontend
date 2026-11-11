@@ -8,7 +8,7 @@
   --color-foreground: #0a0a0a;
   --color-card: #ffffff;
   --color-card-foreground: #0a0a0a;
-  --color-primary: #2563eb;
+  --color-primary: #d20a0a;
   --color-primary-foreground: #ffffff;
   --color-secondary: #f1f5f9;
   --color-secondary-foreground: #0f172a;
@@ -18,27 +18,44 @@
   --color-accent-foreground: #0f172a;
   --color-destructive: #ef4444;
   --color-border: #e2e8f0;
-  --color-ring: #2563eb;
+  --color-ring: #d20a0a;
+
+  /* UFC brand: gold marks champions and belts; ink is the UFC gray used for the
+     sidebar surface. */
+  --color-gold: #c1a14f;
+  /* Gold for text: #c1a14f is only 2.48:1 on white; this step is 4.81:1. */
+  --color-gold-foreground: #8c6e22;
+  --color-ink: #2d2d2d;
+  --font-display: "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
 
   /* Categorical chart slots. Validated as a set (all-pairs, both modes) for
      lightness band, chroma floor, CVD separation and normal-vision separation.
      Assign in fixed order 1→3; never cycle, never substitute a sequential ramp. */
-  --color-viz-1: #2a78d6;
-  --color-viz-2: #eb6834;
-  --color-viz-3: #1baf7a;
+  /* Finish method (KO/TKO, Submission, Decision). Domain-fixed like the corners, NOT
+     a categorical slot: every method mark in the app uses these, so a method keeps
+     its colour across pages. UFC red / ink / light gray — separated mostly by
+     lightness (CVD all-pairs dE >= 15.3); the neutrals fail the categorical
+     chroma/band checks by design, and every use carries a text label and count. */
+  --color-method-ko: #d20a0a;
+  --color-method-sub: #2d2d2d;
+  --color-method-dec: #a1a1aa;
+
+  --color-viz-1: #d20a0a;
+  --color-viz-2: #c1a14f;
+  --color-viz-3: #8a63d2;
+
+  /* UFC red / UFC gold / violet. All-pairs CVD worst dE 16.5 (deutan), normal
+     25.8. Gold is 2.41:1 on white, so marks in it carry visible labels. */
 
   /* Two-shade pair for "the fighter" vs "their opponents" — same hue, so the pair
      reads as one measure seen from both sides rather than two categories.
-     This is a sequential 2-step, not a categorical slot, so the validator's
-     lightness-band and chroma-floor checks (which keep sibling CATEGORIES from
-     dominating or reading gray) do not apply; separation and contrast do.
-     #2a78d6 <-> #7ab4f0: CVD dE 18.3, normal-vision 18.7, chroma PASS.
-     The soft step is 2.18:1 on white -> every mark using it carries a visible
-     numeric label, which is the relief that WARN requires. */
-  --color-viz-1-soft: #7ab4f0;
-  /* Negative arm of the diverging scale only — never a categorical slot, and not
-     --color-destructive, which is a reserved status colour. */
-  --color-viz-neg: #e34948;
+     This is a sequential 2-step, not a categorical slot. #ec8f8f -> #d20a0a passes
+     the ordinal checks (monotone L, single hue); the soft step is 2.30:1 on white
+     -> every mark using it carries a visible numeric label. */
+  --color-viz-1-soft: #ec8f8f;
+  /* Negative arm of the diverging scale only (red = above, indigo = below) —
+     never a categorical slot, and not --color-destructive (reserved status). */
+  --color-viz-neg: #4a3aa7;
 
 
   /* UFC corners. NOT a categorical chart slot: the corners are literally named
@@ -57,32 +74,32 @@
    them (they are read by inline styles and by canvas), and Tailwind drops theme
    variables nothing references. */
 :root {
-  --color-fam-1: #2a78d6;
-  --color-fam-2: #eb6834;
-  --color-fam-3: #1baf7a;
-  --color-fam-4: #eda100;
-  --color-fam-5: #e87ba4;
-  --color-fam-6: #008300;
-  --color-fam-7: #4a3aa7;
-  --color-fam-8: #e34948;
+  --color-fam-1: #d20a0a;
+  --color-fam-2: #c1a14f;
+  --color-fam-3: #8a63d2;
+  --color-fam-4: #1baf7a;
+  --color-fam-5: #2a78d6;
+  --color-fam-6: #e87ba4;
+  --color-fam-7: #008300;
+  --color-fam-8: #4a3aa7;
 }
 
 .dark {
   /* Families, stepped for the dark surface (same hues, selected not flipped). */
-  --color-fam-1: #3987e5;
-  --color-fam-2: #d95926;
-  --color-fam-3: #199e70;
-  --color-fam-4: #c98500;
-  --color-fam-5: #d55181;
-  --color-fam-6: #008300;
-  --color-fam-7: #9085e9;
-  --color-fam-8: #e66767;
+  --color-fam-1: #e8303a;
+  --color-fam-2: #c1a14f;
+  --color-fam-3: #9a78e0;
+  --color-fam-4: #199e70;
+  --color-fam-5: #3987e5;
+  --color-fam-6: #d55181;
+  --color-fam-7: #008300;
+  --color-fam-8: #9085e9;
 
   --color-background: #09090b;
   --color-foreground: #fafafa;
   --color-card: #111113;
   --color-card-foreground: #fafafa;
-  --color-primary: #3b82f6;
+  --color-primary: #e8303a;
   --color-primary-foreground: #ffffff;
   --color-secondary: #1e293b;
   --color-secondary-foreground: #f1f5f9;
@@ -92,22 +109,51 @@
   --color-accent-foreground: #f1f5f9;
   --color-destructive: #dc2626;
   --color-border: #1e293b;
-  --color-ring: #3b82f6;
+  --color-ring: #e8303a;
 
   /* Same three hues re-stepped for the dark surface, not an automatic flip. */
-  --color-viz-1: #3987e5;
-  --color-viz-2: #d95926;
-  --color-viz-3: #199e70;
-  /* Dark: the soft step goes LIGHTER, not darker — darker steps that clear the
-     15 dE separation floor fall below 3:1 on #111113. CVD 17.5, normal 18.5,
-     contrast PASS. */
-  --color-viz-1-soft: #8fc0f2;
-  --color-viz-neg: #e34948;
+  --color-viz-1: #e8303a;
+  --color-viz-2: #c1a14f;
+  --color-viz-3: #9a78e0;
+  /* Dark: the soft step goes LIGHTER, not darker. Dark mode is currently
+     switched off (Layout.jsx); re-validate these steps before enabling it. */
+  --color-viz-1-soft: #f4a3a3;
+  --color-viz-neg: #9085e9;
 
 
   /* Lifted for the dark surface rather than flipped. */
   --color-corner-red: #e8404f;
   --color-corner-blue: #3b82f6;
+}
+
+/* Rotation timer ring around a pill (HomePage Pill). Sits on the pill's border box with
+   its border-radius; a conic sweep shows through a 2px ring mask, clockwise from 12
+   o'clock over --ring-ms. */
+@property --ring-p { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@keyframes ring-sweep { to { --ring-p: 100%; } }
+.pill-ring {
+  position: absolute; inset: -1px; border-radius: inherit; padding: 2px; pointer-events: none;
+  background: conic-gradient(var(--color-primary) var(--ring-p), transparent 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: ring-sweep var(--ring-ms) linear forwards;
+}
+
+/* Tailwind v4 resets buttons to the default arrow cursor; anything clickable gets the hand. */
+button:not(:disabled), [role="button"] { cursor: pointer; }
+
+/* Page titles: the brand's display face (the CHINLYTICS wordmark and fight names), in
+   black. One class so every page's header matches. */
+.page-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  font-size: 30px;
+  color: #000;
 }
 
 body {

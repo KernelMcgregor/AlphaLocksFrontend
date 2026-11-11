@@ -36,7 +36,7 @@ function PickButton({ picked, disabled, onPick, className, children }) {
         'inline-flex items-center justify-center gap-1.5 rounded-lg font-bold transition-colors',
         disabled
           ? 'cursor-not-allowed bg-white/10 text-white/40'
-          : picked ? 'bg-white text-zinc-900 hover:bg-white/85' : 'bg-blue-600 text-white hover:bg-blue-500',
+          : picked ? 'bg-white text-zinc-900 hover:bg-white/85' : 'bg-primary text-white hover:bg-primary/85',
         className,
       )}
     >

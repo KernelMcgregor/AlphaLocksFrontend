@@ -17,8 +17,8 @@ export default function OddsComparisonChart({ data = [], title = 'Odds Movement'
               contentStyle={{ backgroundColor: 'var(--color-card)', border: '1px solid var(--color-border)' }}
             />
             <Legend />
-            <Line type="monotone" dataKey="home_odds" stroke="var(--color-primary)" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="away_odds" stroke="#ef4444" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="home_odds" stroke="var(--color-viz-1)" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="away_odds" stroke="var(--color-viz-2)" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </CardContent>

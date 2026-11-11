@@ -59,7 +59,7 @@ function EdgeLadder({ rows, minEv }) {
                 {r.key}
                 {threshold != null && (
                   <span className={cn('rounded px-1.5 py-px text-[9.5px] font-extrabold',
-                    betting ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-muted text-muted-foreground')}>
+                    betting ? 'bg-primary/10 text-primary dark:bg-primary/15 dark:text-red-300' : 'bg-muted text-muted-foreground')}>
                     {betting ? 'BETTING' : 'PASS'}
                   </span>
                 )}

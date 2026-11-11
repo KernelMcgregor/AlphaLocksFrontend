@@ -119,7 +119,7 @@ function Timeline({ tree, families, root, focusId, onFocus }) {
             const on = lit && (e.from === lit || e.to === lit)
             return (
               <path key={`${e.from}-${e.to}`} d={`M${a.x},${a.y} C${mx},${a.y} ${mx},${b.y} ${b.x},${b.y}`} fill="none"
-                className={on ? 'stroke-blue-600' : 'stroke-slate-300'}
+                className={on ? 'stroke-primary' : 'stroke-slate-300'}
                 strokeWidth={1 + 4 * Math.max(0, (e.sim - 0.35) / 0.5)} strokeLinecap="round" />
             )
           })}
@@ -272,12 +272,12 @@ export default function LineageView({ data, byId, fighterId, onSelect }) {
                 <div className="flex flex-wrap gap-1">
                   {focusedHeirs.slice(0, 16).map(({ f }) => (
                     <button key={f.id} onClick={() => onSelect(f.id)}
-                      className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-semibold hover:bg-muted', f.id === root?.id && 'border-blue-300 bg-blue-50 text-blue-700')}>
+                      className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-semibold hover:bg-muted', f.id === root?.id && 'border-primary/30 bg-primary/[0.06] text-primary')}>
                       {f.name}
                     </button>
                   ))}
                 </div>
-                <button onClick={() => onSelect(focused.id)} className="mt-3 text-[12px] font-semibold text-blue-600 hover:underline">
+                <button onClick={() => onSelect(focused.id)} className="mt-3 text-[12px] font-semibold text-primary hover:underline">
                   Trace {focused.name}'s own lineage
                 </button>
               </>
@@ -290,7 +290,7 @@ export default function LineageView({ data, byId, fighterId, onSelect }) {
                 <li key={f.id}>
                   <button onClick={() => setFocus({ root: fighterId, id: f.id })}
                     className={cn('grid w-full grid-cols-[16px_10px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1 text-left text-[12px] hover:bg-muted',
-                      f.id === focusId && 'bg-blue-50')}>
+                      f.id === focusId && 'bg-primary/[0.06]')}>
                     <span className="text-[10.5px] tabular-nums text-muted-foreground">{i + 1}</span>
                     <span className="h-2 w-2 rounded-full" style={{ background: famColor(f.family) }} />
                     <span className="truncate font-semibold">{f.name}</span>

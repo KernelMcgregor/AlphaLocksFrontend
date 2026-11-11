@@ -22,7 +22,7 @@ export default function FighterMini({ f }) {
             <span className="rounded border bg-muted/50 px-1 py-px text-[10px] font-bold tabular-nums">{f.record}</span>
           )}
           {f.rank != null && (
-            <span className="rounded border border-blue-500/40 bg-blue-500/10 px-1 py-px text-[10px] font-bold text-blue-600">
+            <span className="rounded border border-primary/40 bg-primary/10 px-1 py-px text-[10px] font-bold text-primary">
               #{f.rank}{f.division ? ` ${f.division}` : ''}
             </span>
           )}

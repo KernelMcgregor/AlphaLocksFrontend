@@ -155,8 +155,8 @@ export default function FighterStatsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="shrink-0 space-y-3 pb-3">
-        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600"><BarChart3 className="h-5 w-5 text-white" /></span>
+        <h1 className="page-title flex flex-wrap items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><BarChart3 className="h-5 w-5 text-white" /></span>
           Fighter Stats
         </h1>
         <DivisionPicker weightClasses={data.weight_classes} active={activeWc} onSelect={setActiveWc} />
@@ -197,7 +197,7 @@ export default function FighterStatsPage() {
                 {rows.map(({ fighter, career }) => (
                   <tr key={fighter.id} className="group border-b last:border-b-0 hover:bg-muted/40">
                     <td className="sticky left-0 z-[2] w-[46px] min-w-[46px] bg-card px-2 py-2 text-center group-hover:bg-muted/40">
-                      {isChampion(fighter) ? <BeltIcon className="mx-auto h-4 w-4 text-amber-500" /> : <span className={cn('tabular-nums', displayRank(fighter) <= 5 ? 'font-extrabold text-blue-600' : 'font-semibold text-muted-foreground')}>{displayRank(fighter)}</span>}
+                      {isChampion(fighter) ? <BeltIcon className="mx-auto h-4 w-4 text-gold" /> : <span className={cn('tabular-nums', displayRank(fighter) <= 5 ? 'font-extrabold text-primary' : 'font-semibold text-muted-foreground')}>{displayRank(fighter)}</span>}
                     </td>
                     <td className="sticky left-[46px] z-[2] w-[208px] min-w-[208px] border-r bg-card px-3 py-2 group-hover:bg-muted/40">
                       <Link to={`/ufc/fighters/${fighter.id}`} className="flex items-center gap-2.5">
@@ -217,7 +217,7 @@ export default function FighterStatsPage() {
                     {GROUPS.map((g) => g.cols.map((c, ci) => {
                       const lead = leaders[c.key] === fighter.id
                       return (
-                        <td key={c.key} className={cn('px-1 py-2 text-center text-[13px] tabular-nums', COL, GROUP_CELL[g.tone], ci === 0 && 'border-l-2 border-background', lead ? 'font-extrabold text-blue-600' : 'font-semibold text-foreground')}>
+                        <td key={c.key} className={cn('px-1 py-2 text-center text-[13px] tabular-nums', COL, GROUP_CELL[g.tone], ci === 0 && 'border-l-2 border-background', lead ? 'font-extrabold text-primary' : 'font-semibold text-foreground')}>
                           {career ? c.fmt(career[c.key], career) : <span className="text-muted-foreground/40">·</span>}
                         </td>
                       )

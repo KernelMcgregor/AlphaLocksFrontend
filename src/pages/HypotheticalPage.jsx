@@ -60,8 +60,8 @@ function SearchBox({ value, onChange, placeholder, className }) {
 
 function Title() {
   return (
-    <h1 className="flex shrink-0 items-center gap-2 text-2xl font-extrabold tracking-tight">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+    <h1 className="page-title flex shrink-0 items-center gap-2">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
         <Shuffle className="h-5 w-5 text-white" />
       </span>
       Hypothetical
@@ -82,11 +82,11 @@ function DivisionPills({ value, onChange, counts, ladder }) {
       onClick={() => onChange(key)}
       className={cn(
         'shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
-        value === key ? 'border-blue-500 bg-blue-600 text-white' : 'bg-card text-muted-foreground hover:text-foreground',
+        value === key ? 'border-primary bg-primary text-white' : 'bg-card text-muted-foreground hover:text-foreground',
       )}
     >
       {label}
-      {counts[key] != null && <span className={cn('ml-1', value === key ? 'text-blue-200' : 'text-muted-foreground/60')}>{counts[key]}</span>}
+      {counts[key] != null && <span className={cn('ml-1', value === key ? 'text-white/70' : 'text-muted-foreground/60')}>{counts[key]}</span>}
     </button>
   )
   return (

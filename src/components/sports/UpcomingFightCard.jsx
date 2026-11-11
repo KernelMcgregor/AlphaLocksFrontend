@@ -18,9 +18,9 @@ import { cn, formatOdds } from '../../lib/utils'
 const fullName = (f) => (f ? `${f.first_name} ${f.last_name}`.trim() : 'TBA')
 
 const METHODS = [
-  { key: 'ko_prob', label: 'KO', match: 'KO/TKO', text: 'text-red-500' },
-  { key: 'sub_prob', label: 'Sub', match: 'Submission', text: 'text-purple-500' },
-  { key: 'dec_prob', label: 'Dec', match: 'Decision', text: 'text-slate-500' },
+  { key: 'ko_prob', label: 'KO', match: 'KO/TKO', text: 'text-method-ko' },
+  { key: 'sub_prob', label: 'Sub', match: 'Submission', text: 'text-method-sub' },
+  { key: 'dec_prob', label: 'Dec', match: 'Decision', text: 'text-muted-foreground' },
 ]
 
 /**

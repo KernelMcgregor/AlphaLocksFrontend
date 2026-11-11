@@ -67,7 +67,7 @@ export default function FightRailCard({ fight, selected, onSelect }) {
           {weightLabel(fight.weight_class)}
         </span>
         {s.title && (
-          <span className="rounded border border-amber-500/50 bg-amber-500/10 px-1 text-[8.5px] font-extrabold uppercase tracking-wide text-amber-600">
+          <span className="rounded border border-gold/60 bg-gold/15 px-1 text-[8.5px] font-extrabold uppercase tracking-wide text-gold-foreground">
             Title
           </span>
         )}

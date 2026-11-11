@@ -16,7 +16,7 @@ export default function Navbar() {
         <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2 text-xl font-bold text-primary">
             <TrendingUp className="h-6 w-6" />
-            ALocks
+            Chinlytics
           </Link>
 
           <div className="flex items-center gap-1">

@@ -101,6 +101,9 @@ export const fetchEvents = (params = {}) => {
   return cachedRequest(`/ufc/events${qs ? `?${qs}` : ''}`)
 }
 export const fetchEventDetail = (id) => cachedRequest(`/ufc/events/${id}/detail`)
+// Completed fights whose fighters match every word of q (order-free), newest first, each
+// meeting numbered within its pair so rematches are distinguishable.
+export const searchFights = (q) => cachedRequest(`/ufc/fights/search?q=${encodeURIComponent(q)}`, 5 * 60 * 1000)
 
 export const fetchFights = (params = {}) => {
   const qs = new URLSearchParams(params).toString()
@@ -132,6 +135,13 @@ export const fetchModelMetrics = () => cachedRequest('/ufc/model/metrics')
 export const fetchMethodModelMetrics = () => cachedRequest('/ufc/method/metrics')
 export const fetchUpcomingEvents = () => cachedRequest('/ufc/upcoming', 10 * 60 * 1000) // 10 min
 
+// The home dashboard in one precomputed payload (P4P, last card, stat leaders, edges).
+// A fight article's picked artwork; `v` (when it was picked) busts the week-long cache.
+export const articleImageUrl = (fightId, v) => `${BASE_URL}/ufc/fights/${fightId}/article-image?v=${v}`
+// Pictures embedded in an article body, and their framing ({id: {focal_x, focal_y, ...}}).
+export const articleMediaUrl = (id) => `${BASE_URL}/ufc/article-media/${id}`
+export const fetchArticleMedia = (fightId) => cachedRequest(`/ufc/fights/${fightId}/article-media`, 60 * 1000)
+export const fetchHome = () => cachedRequest('/ufc/home', 5 * 60 * 1000)
 export const fetchRankings = () => cachedRequest('/ufc/rankings', 30 * 60 * 1000) // 30 min
 export const fetchAltRankings = (kind) => cachedRequest(`/ufc/alt-rankings/${kind}`, 30 * 60 * 1000) // bmf | p4p
 export const fetchArbitrage = () => cachedRequest('/ufc/arbitrage')

@@ -139,7 +139,7 @@ export default function SimilarFighters({ fighterId, className }) {
                       {f.first_name} {f.last_name}
                     </span>
                     {f.previous_rank == null && (
-                      <span className="shrink-0 rounded bg-blue-500/15 px-1 py-px text-[8.5px] font-bold uppercase tracking-wide text-blue-600">
+                      <span className="shrink-0 rounded bg-primary/15 px-1 py-px text-[8.5px] font-bold uppercase tracking-wide text-primary">
                         New
                       </span>
                     )}

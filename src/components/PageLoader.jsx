@@ -1,4 +1,4 @@
-// Full-page loading state: the royal-blue Orb31, centred in the content area.
+// Full-page loading state: the UFC-red Orb31, centred in the content area.
 //
 // Held back for a beat before it appears. Most page loads are now served from the
 // client or server cache in well under that, and a WebGL orb that mounts, compiles its

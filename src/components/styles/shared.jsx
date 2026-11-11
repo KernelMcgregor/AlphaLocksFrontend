@@ -111,7 +111,7 @@ export function FighterRow({ fighter, families, selected, onClick, right, dense,
     <button
       onClick={onClick}
       className={cn('flex w-full min-w-0 items-center gap-2.5 rounded-md px-2 text-left transition-colors', dense ? 'py-1' : 'py-1.5',
-        selected ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-muted/70')}
+        selected ? 'bg-primary/[0.06] ring-1 ring-primary/25' : 'hover:bg-muted/70')}
     >
       <FamilyAvatar fighter={fighter} size={dense ? 26 : 30} />
       <span className="min-w-0 flex-1">

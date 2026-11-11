@@ -176,8 +176,8 @@ export default function PicksPage() {
     // scroll container; the filter bar's `sticky top-0` pins to it.
     <div className="flex h-full flex-col gap-4 overflow-y-auto pb-8 pr-1">
       <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
-        <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+        <h1 className="page-title flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Target className="h-5 w-5 text-white" />
           </span>
           Picks

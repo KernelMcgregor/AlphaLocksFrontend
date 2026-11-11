@@ -17,8 +17,8 @@ const ORDER = [...STRIKING, ...GRAPPLING] // striking block, then grappling bloc
 
 // percentile → text color (no heatmap fills; quiet typographic emphasis)
 function cellTone(v) {
-  if (v >= 85) return 'font-extrabold text-blue-700 dark:text-blue-300'
-  if (v >= 70) return 'font-bold text-blue-600 dark:text-blue-400'
+  if (v >= 85) return 'font-extrabold text-primary dark:text-red-300'
+  if (v >= 70) return 'font-bold text-primary dark:text-red-300'
   if (v >= 45) return 'font-semibold text-foreground'
   if (v >= 35) return 'font-semibold text-rose-500/90'
   return 'font-extrabold text-rose-600'
@@ -26,10 +26,10 @@ function cellTone(v) {
 
 // The champion wears the belt; contenders are numbered from 1 (display_rank).
 function RankCell({ fighter }) {
-  if (isChampion(fighter)) return <BeltIcon className="mx-auto h-4 w-4 text-amber-500" />
+  if (isChampion(fighter)) return <BeltIcon className="mx-auto h-4 w-4 text-gold" />
   const rank = displayRank(fighter)
   return (
-    <span className={cn('tabular-nums', rank <= 5 ? 'font-extrabold text-blue-600' : 'font-semibold text-muted-foreground')}>
+    <span className={cn('tabular-nums', rank <= 5 ? 'font-extrabold text-primary' : 'font-semibold text-muted-foreground')}>
       {rank}
     </span>
   )
@@ -200,13 +200,13 @@ export default function FighterDecompositionsPage() {
         onClick={() => setActiveWc(wc.key)}
         className={cn(
           'rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
-          active && gold && 'border-amber-500 bg-amber-500 text-white shadow-sm',
-          active && !gold && 'border-blue-500 bg-blue-600 text-white shadow-sm',
-          !active && 'border-border bg-card text-muted-foreground hover:border-blue-300 hover:text-foreground',
+          active && gold && 'border-gold bg-gold text-white shadow-sm',
+          active && !gold && 'border-primary bg-primary text-white shadow-sm',
+          !active && 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
         )}
       >
         {wc.label}
-        <span className={cn('ml-1', active ? (gold ? 'text-amber-200' : 'text-blue-200') : 'text-muted-foreground/60')}>
+        <span className={cn('ml-1', active ? (gold ? 'text-white/75' : 'text-white/70') : 'text-muted-foreground/60')}>
           {wc.fighters.length}
         </span>
       </button>
@@ -216,10 +216,10 @@ export default function FighterDecompositionsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="shrink-0 space-y-3 pb-3">
-        <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600"><Layers className="h-5 w-5 text-white" /></span>
+        <h1 className="page-title flex flex-wrap items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><Layers className="h-5 w-5 text-white" /></span>
           Fighter Skills
-          <span className="text-sm font-medium text-muted-foreground">— all 15 model dimensions per fighter</span>
+          <span className="font-sans text-sm font-medium normal-case not-italic tracking-normal text-muted-foreground">— all 15 model dimensions per fighter</span>
         </h1>
 
         <div className="flex flex-wrap items-center justify-between gap-3">

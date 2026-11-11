@@ -6,7 +6,7 @@
 // fighter. Every method and rounds market shows the model's six-way finish split with
 // the cells the bet pays on highlighted, since that split is where its probability
 // comes from.
-import { ArrowUpRight, Check, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import CountryFlag from '../CountryFlag'
 import FighterImage from '../sports/FighterImage'
@@ -290,7 +290,7 @@ export default function PickCard({ row, basis, showEvent = false }) {
         <span className="ml-auto flex items-center gap-3">
           {row.price_captured_at && <span>{ago(row.price_captured_at)}</span>}
           <Link to={`/ufc/fights/${fight.fight_id}`} className="inline-flex items-center gap-0.5 font-semibold text-primary hover:underline">
-            Fight <ArrowUpRight className="h-3 w-3" />
+            Fight
           </Link>
         </span>
       </footer>

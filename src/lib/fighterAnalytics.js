@@ -97,7 +97,7 @@ export function deriveProfile(fighter, pct) {
     groups: [
       { label: 'Striking',  value: striking,  cls: 'text-amber-500',  stroke: 'stroke-amber-500' },
       { label: 'Grappling', value: grappling, cls: 'text-indigo-500', stroke: 'stroke-indigo-500' },
-      { label: 'Overall',   value: overall,   cls: 'text-blue-600',   stroke: 'stroke-blue-600' },
+      { label: 'Overall',   value: overall,   cls: 'text-primary',   stroke: 'stroke-primary' },
     ],
     overall,
     strikingScore: striking,
@@ -306,14 +306,14 @@ export function deriveForm(fights, fighterId) {
     longestWin,
     // Fixed categorical slots — same hue means the same method everywhere.
     winMethods: [
-      { label: 'KO/TKO', value: count(wins, 'KO/TKO'), cls: 'bg-viz-1' },
-      { label: 'Submission', value: count(wins, 'Submission'), cls: 'bg-viz-2' },
-      { label: 'Decision', value: count(wins, 'Decision'), cls: 'bg-viz-3' },
+      { label: 'KO/TKO', value: count(wins, 'KO/TKO'), cls: 'bg-method-ko' },
+      { label: 'Submission', value: count(wins, 'Submission'), cls: 'bg-method-sub' },
+      { label: 'Decision', value: count(wins, 'Decision'), cls: 'bg-method-dec' },
     ],
     lossMethods: [
-      { label: 'KO/TKO', value: count(losses, 'KO/TKO'), cls: 'bg-viz-1' },
-      { label: 'Submission', value: count(losses, 'Submission'), cls: 'bg-viz-2' },
-      { label: 'Decision', value: count(losses, 'Decision'), cls: 'bg-viz-3' },
+      { label: 'KO/TKO', value: count(losses, 'KO/TKO'), cls: 'bg-method-ko' },
+      { label: 'Submission', value: count(losses, 'Submission'), cls: 'bg-method-sub' },
+      { label: 'Decision', value: count(losses, 'Decision'), cls: 'bg-method-dec' },
     ],
     totalWins: wins.length,
     totalLosses: losses.length,

@@ -1,8 +1,8 @@
 import { cn, clock } from '../../lib/utils'
 
 // ---------------------------------------------------------------------------
-// Two values on a shared track. Default encoding: viz-1 (blue) is the subject,
-// viz-2 (orange) is the comparison. Two shades of one hue were tried first and did
+// Two values on a shared track. Default encoding: viz-1 (UFC red) is the subject,
+// viz-2 (UFC gold) is the comparison. Two shades of one hue were tried first and did
 // not separate at dot size; the two sides are two entities, so a validated
 // categorical pair is the honest encoding anyway.
 //

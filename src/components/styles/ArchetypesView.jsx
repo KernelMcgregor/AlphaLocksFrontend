@@ -102,13 +102,13 @@ function FamilyCard({ family, leaders, onSelect, cells, overall, max, ranks, lea
         </p>
       )}
 
-      <SectionLabel className="mb-1.5 mt-2.5 text-blue-600">Signature habits · family average</SectionLabel>
+      <SectionLabel className="mb-1.5 mt-2.5 text-primary">Signature habits · family average</SectionLabel>
       <div className="space-y-1.5">
         {definingTraits(family.profile).map(([key, v]) => <TraitBar key={key} trait={key} value={v} compact label={traitTitle(key)} />)}
       </div>
 
       <div className="mb-1 mt-2.5 flex items-baseline gap-2">
-        <SectionLabel className="text-blue-600">Fighters by division</SectionLabel>
+        <SectionLabel className="text-primary">Fighters by division</SectionLabel>
         <span className="ml-auto text-[10px] text-muted-foreground">solid = above its {Math.round(overall * 100)}% roster share</span>
       </div>
       {/* The chart takes whatever height the card has spare, so the grid can fill the

@@ -72,8 +72,8 @@ export default function FighterStylesPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 pb-3">
-        <h1 className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600"><Orbit className="h-5 w-5 text-white" /></span>
+        <h1 className="page-title flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary"><Orbit className="h-5 w-5 text-white" /></span>
           Fighter Styles
         </h1>
         {tabs}

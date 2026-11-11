@@ -72,7 +72,7 @@ export default function RadarChart({ axes, series, fit = false }) {
         ))}
         {spine.map((a, i) => {
           const [x, y] = polar(cx, cy, R, i, n)
-          return <line key={a.key} x1={cx} y1={cy} x2={x} y2={y} strokeWidth={hover?.i === i ? 1.8 : 1} className={hover?.i === i ? 'stroke-blue-500/70' : 'stroke-border'} />
+          return <line key={a.key} x1={cx} y1={cy} x2={x} y2={y} strokeWidth={hover?.i === i ? 1.8 : 1} className={hover?.i === i ? 'stroke-primary/70' : 'stroke-border'} />
         })}
 
         {/* plotted shapes — grow out of the centre on mount */}
@@ -81,7 +81,7 @@ export default function RadarChart({ axes, series, fit = false }) {
             <polygon
               key={s.key}
               points={s.axes.map((a, i) => polar(cx, cy, (R * a.value) / 100, i, n).join(',')).join(' ')}
-              className={s.color ? undefined : 'fill-blue-500/20 stroke-blue-600'}
+              className={s.color ? undefined : 'fill-primary/20 stroke-primary'}
               fill={s.color || undefined}
               // Two filled shapes must both stay readable where they overlap, so the
               // fill is lighter than the single-series case and the stroke carries
@@ -101,7 +101,7 @@ export default function RadarChart({ axes, series, fit = false }) {
                 cx={x}
                 cy={y}
                 r={on ? 4.6 : 2.6}
-                className={cn('fill-background transition-all duration-150', s.color ? undefined : 'stroke-blue-600')}
+                className={cn('fill-background transition-all duration-150', s.color ? undefined : 'stroke-primary')}
                 stroke={s.color || undefined}
                 strokeWidth={on ? 2.4 : 1.6}
               />
@@ -166,7 +166,7 @@ export default function RadarChart({ axes, series, fit = false }) {
             </div>
           ) : (
             <div className="mt-1.5 flex items-baseline gap-1">
-              <span className="text-xl font-extrabold leading-none tabular-nums text-blue-600">{ordinal(active.value)}</span>
+              <span className="text-xl font-extrabold leading-none tabular-nums text-primary">{ordinal(active.value)}</span>
               <span className="text-[10px] font-semibold text-muted-foreground">percentile</span>
             </div>
           )}

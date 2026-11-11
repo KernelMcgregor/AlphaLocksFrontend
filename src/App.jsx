@@ -11,7 +11,7 @@ import HypotheticalPage from './pages/HypotheticalPage'
 import RankingsPage from './pages/RankingsPage'
 import PicksPage from './pages/PicksPage'
 import PastResultsPage from './pages/PastResultsPage'
-import UFCHomePage from './pages/UFCHomePage'
+import HomePage from './pages/HomePage'
 import UFCPage from './pages/UFCPage'
 import UpcomingPage from './pages/UpcomingPage'
 
@@ -19,8 +19,9 @@ export default function App() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<UpcomingPage />} />
-        <Route path="/ufc" element={<UFCHomePage />} />
+        {/* The home dashboard: where the logo leads. Not in the sidebar. */}
+        <Route path="/" element={<HomePage />} />
+        <Route path="/ufc" element={<Navigate to="/" replace />} />
         <Route path="/ufc/events" element={<UFCPage />} />
         <Route path="/ufc/articles" element={<ArticlesPage />} />
         <Route path="/ufc/fights/:id" element={<FightDetailPage />} />

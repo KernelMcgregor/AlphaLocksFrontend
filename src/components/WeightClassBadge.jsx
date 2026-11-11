@@ -13,7 +13,7 @@ export default function WeightClassBadge({ weightClass }) {
       variant="outline"
       className={cn(
         'text-[10px] font-medium',
-        isTitle && 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+        isTitle && 'border-gold/60 bg-gold/15 text-gold-foreground dark:text-gold',
       )}
     >
       {isTitle && <BeltIcon className="h-3 w-3 mr-1 shrink-0" strokeWidth={2.25} />}

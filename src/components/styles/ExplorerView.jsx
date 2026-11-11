@@ -8,7 +8,7 @@
 //                    page's amber/indigo bars.
 //   Style DNA      — every trait as a cell, fighter and comps stacked, so shared traits
 //                    line up as columns of the same colour.
-import { ArrowUpRight, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CountryFlag from '../CountryFlag'
@@ -294,7 +294,7 @@ function StyleProfile({ fighter, className }) {
 // ---------------------------------------------------------------------------
 // Style DNA strip
 // ---------------------------------------------------------------------------
-// Diverging around the 50th percentile: blue above, red below, neutral grey at the
+// Diverging around the 50th percentile: red above, indigo below, neutral grey at the
 // middle. Hue carries direction; the cell's tooltip carries the value.
 function dnaColor(v) {
   const d = (v - 50) / 50
@@ -326,7 +326,7 @@ function DnaStrip({ rows, compareId, onCompare }) {
                   <span className="whitespace-nowrap text-[12px] font-extrabold">{r.name}</span>
                 ) : (
                   <button onClick={() => onCompare(r.id)}
-                    className={cn('whitespace-nowrap text-left text-[12px] font-semibold hover:underline', compareId === r.id && 'text-blue-600')}>
+                    className={cn('whitespace-nowrap text-left text-[12px] font-semibold hover:underline', compareId === r.id && 'text-primary')}>
                     {r.name}
                   </button>
                 )}
@@ -367,10 +367,10 @@ function Hero({ fighter, families, allFighters, onSelect }) {
         <div className="flex items-center gap-2">
           <CountryFlag countryCode={fighter.country_code} />
           <Link to={`/ufc/fighters/${fighter.id}`} className="inline-flex items-center gap-1 truncate text-[17px] font-extrabold leading-tight tracking-tight hover:underline">
-            {fighter.name}<ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+            {fighter.name}
           </Link>
           <span className="rounded-md border px-1.5 py-px text-[11px] font-bold tabular-nums">{fighter.record}</span>
-          <span className="rounded-md border border-blue-200 bg-blue-50 px-1.5 py-px text-[11px] font-bold text-blue-700">{divisionLabel(fighter.division)}</span>
+          <span className="rounded-md border border-primary/30 bg-primary/[0.06] px-1.5 py-px text-[11px] font-bold text-primary">{divisionLabel(fighter.division)}</span>
         </div>
         <BlendBar fighter={fighter} families={families} className="mt-1 w-[300px] max-w-full" />
       </div>

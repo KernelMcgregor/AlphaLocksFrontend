@@ -21,6 +21,8 @@ export default function FighterImage({
   //: 'contain' shows the whole body (profile heroes).
   fit = 'cover',
   alt = '',
+  //: 'lazy' for long lists, so off-screen rows don't fetch until scrolled to.
+  loading,
 }) {
   const src = fighterImageUrl(fighter)
   // Remember which src failed, not just that one did: these components sit in reused
@@ -35,6 +37,7 @@ export default function FighterImage({
       <img
         src={showSilhouette ? silhouette : src}
         alt={alt}
+        loading={loading}
         draggable={false}
         onError={() => setFailedSrc(src)}
         className={cn(

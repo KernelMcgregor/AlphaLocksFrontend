@@ -12,7 +12,6 @@
 // is what let the separate "odds across books" and "recent form" blocks go.
 //
 // Sized to its container: the page gives it one screen of height and nothing here scrolls.
-import { ArrowRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import FighterImage from './FighterImage'
@@ -21,16 +20,15 @@ import { fetchFightContext, peekCached } from '../../lib/api'
 import { cn, formatOdds } from '../../lib/utils'
 import { divisionAbbr, formatEdge, fullName, recordOf, summarizeFight, weightLabel } from '../../lib/upcomingSummary'
 
-// Name size by length, as complete class strings — a variant built at runtime never
-// reaches the stylesheet. Each step is itself a container-query clamp, so a name scales
-// with the column AND starts smaller when it is long: "ALATENGHEILI" and "DVALISHVILI"
-// overflowed a narrow column at the base size and broke across two lines mid-word.
-const NAME_SIZE = [
-  [9, 'text-[clamp(15px,14cqw,26px)]'],
-  [12, 'text-[clamp(13px,11cqw,21px)]'],
-  [Infinity, 'text-[clamp(11px,8.5cqw,17px)]'],
-]
-const nameSizeClass = (name) => NAME_SIZE.find(([max]) => (name || '').length <= max)[1]
+// Name size from the column's width (cqw), so a last name always fits: the size is the
+// column's inner width over the longest word's length, capped at 26px. It wraps only
+// between words ("DELLA MADDALENA"), never inside one. Length steps couldn't promise
+// that: "PROCHAZKA" is only 9 letters but broke across two lines mid-word at 1380.
+// 0.74em ~ one extrabold uppercase glyph; 28px is the name block's horizontal padding.
+const nameFontSize = (name) => {
+  const longest = Math.max(1, ...(name || 'TBA').split(/\s+/).map((w) => w.length))
+  return `min(26px, calc((100cqw - 28px) / ${(longest * 0.74).toFixed(2)}))`
+}
 
 const CORNERS = {
   red: { text: 'text-corner-red', bar: 'bg-corner-red' },
@@ -117,9 +115,9 @@ export function PortraitColumn({ fighter, corner, ctxSide, weightClass }) {
         <div className="text-[clamp(10px,7cqw,13px)] font-semibold leading-none text-muted-foreground">{fighter?.first_name}</div>
         <div
           className={cn(
-            'mt-0.5 break-words font-extrabold uppercase leading-[1.05] tracking-tight group-hover:underline',
-            nameSizeClass(fighter?.last_name),
+            'mt-0.5 line-clamp-2 font-extrabold uppercase leading-[1.05] tracking-tight group-hover:underline',
           )}
+          style={{ fontSize: nameFontSize(fighter?.last_name) }}
         >
           {fighter?.last_name || 'TBA'}
         </div>
@@ -161,9 +159,9 @@ function FormChips({ results, align }) {
 }
 
 const METHODS = [
-  { key: 'ko_prob', label: 'KO/TKO', match: 'KO/TKO', stroke: 'var(--color-red-500)', text: 'text-red-500' },
-  { key: 'sub_prob', label: 'Submission', match: 'Submission', stroke: 'var(--color-purple-500)', text: 'text-purple-500' },
-  { key: 'dec_prob', label: 'Decision', match: 'Decision', stroke: 'var(--color-slate-400)', text: 'text-slate-500' },
+  { key: 'ko_prob', label: 'KO/TKO', match: 'KO/TKO', stroke: 'var(--color-method-ko)', text: 'text-method-ko' },
+  { key: 'sub_prob', label: 'Submission', match: 'Submission', stroke: 'var(--color-method-sub)', text: 'text-method-sub' },
+  { key: 'dec_prob', label: 'Decision', match: 'Decision', stroke: 'var(--color-method-dec)', text: 'text-muted-foreground' },
 ]
 
 /**
@@ -286,7 +284,7 @@ export default function FeaturedFight({ fight, event }) {
         <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/50 px-4 py-2">
           <span className="text-[11px] text-muted-foreground">{weightLabel(fight.weight_class)}</span>
           {s.title && (
-            <span className="rounded border border-amber-500/50 bg-amber-500/10 px-1.5 text-[9.5px] font-extrabold uppercase tracking-wide text-amber-600">
+            <span className="rounded border border-gold/60 bg-gold/15 px-1.5 text-[9.5px] font-extrabold uppercase tracking-wide text-gold-foreground">
               Title
             </span>
           )}
@@ -416,7 +414,6 @@ export default function FeaturedFight({ fight, event }) {
               Analysis, projections and market moves
             </span>
           </span>
-          <ArrowRight className="ml-auto h-4 w-4 shrink-0" />
         </Link>
       </div>
 
