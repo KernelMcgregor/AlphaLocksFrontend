@@ -40,7 +40,8 @@ export default function PreviewBox({ preview, fightId, className, title = 'Previ
             own scale the h1 filled most of the box and the reader got a title
             instead of a preview. The full-length page keeps the real scale. */}
         <div className="prose prose-sm max-w-none text-foreground prose-headings:mb-1 prose-headings:mt-2 prose-headings:text-foreground prose-h1:text-[15px] prose-h1:leading-snug prose-h2:text-[13px] prose-h3:text-[12px] prose-p:my-1.5 prose-p:text-muted-foreground prose-strong:text-foreground prose-li:text-muted-foreground prose-table:text-sm prose-th:text-foreground prose-td:text-foreground">
-          <Markdown remarkPlugins={[remarkGfm]}>{preview.content}</Markdown>
+          {/* The article page renders the ```chin-*``` blocks; here they would show as raw code. */}
+          <Markdown remarkPlugins={[remarkGfm]}>{preview.content.replace(/```chin-[\s\S]*?```/g, '')}</Markdown>
         </div>
         {/* the article always overflows, so the fade is unconditional */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-card to-transparent" />

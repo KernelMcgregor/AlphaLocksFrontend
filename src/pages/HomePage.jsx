@@ -443,11 +443,14 @@ function RankingsStrip({ boards }) {
               </span>
               {f.is_champion && <BeltIcon className="absolute -bottom-0.5 -right-1 h-4 w-4 rounded-full bg-background p-0.5 text-gold" />}
             </div>
-            <div className="mt-1.5 flex max-w-full items-center justify-center gap-1">
+            <div className="mt-1.5 flex max-w-full items-center justify-center gap-1 text-[10px] text-muted-foreground">
               <CountryFlag countryCode={f.country_code} />
-              <span className="truncate text-[12px] font-bold">{f.last_name}</span>
+              <span className="truncate">{f.first_name}</span>
             </div>
-            <div className="w-full truncate text-[10px] text-muted-foreground">
+            <div className="@container w-full font-display font-extrabold italic uppercase leading-none tracking-tight" style={{ fontSize: fitName(f.last_name, 17) }}>
+              <span className="line-clamp-2 pr-[0.12em]">{f.last_name}</span>
+            </div>
+            <div className="mt-0.5 w-full truncate text-[10px] text-muted-foreground">
               {cross ? f.division_label : `${f.wins ?? 0}-${f.losses ?? 0}${f.draws ? `-${f.draws}` : ''}`}
             </div>
           </Link>
@@ -479,9 +482,11 @@ function StatLeaders({ boards }) {
   if (!board) return null
   return (
     <Card className="flex min-h-0 flex-col p-4">
-      <SectionHead title="Stat leaders"><HeadButton to="/ufc/fighters/stats">All stats</HeadButton></SectionHead>
-      <Pills items={boards.map((b) => ({ key: b.key, label: STAT_SHORT[b.key] || b.label, title: b.label }))} rot={rot} />
-      <div className="h-2 shrink-0" />
+      <div className="mb-2 flex items-center gap-3">
+        <h2 className="shrink-0 font-display text-[19px] font-extrabold italic uppercase leading-none tracking-tight">Stat leaders</h2>
+        <Pills className="flex-1" items={boards.map((b) => ({ key: b.key, label: STAT_SHORT[b.key] || b.label, title: b.label }))} rot={rot} />
+        <HeadButton to="/ufc/fighters/stats">All stats</HeadButton>
+      </div>
       <div key={board.key} className="grid animate-in fade-in grid-cols-5 gap-3 duration-500">
         {board.rows.map((r, k) => (
           <Link key={r.id} to={`/ufc/fighters/${r.id}`}

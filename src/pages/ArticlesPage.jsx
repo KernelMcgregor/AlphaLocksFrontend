@@ -42,8 +42,15 @@ function Byline({ r, light }) {
   )
 }
 
+// The newsroom's layouts that read differently get named on their cards.
+const LAYOUT_TAG = { rivalry: 'Rivalry', data: 'By the numbers', magazine: 'Long read' }
+
 function Kicker({ r, className }) {
-  return <div className={cn('font-display text-[12px] font-extrabold italic uppercase tracking-wide text-primary', className)}>{kicker(r)}</div>
+  return (
+    <div className={cn('font-display text-[12px] font-extrabold italic uppercase tracking-wide text-primary', className)}>
+      {kicker(r)}{LAYOUT_TAG[r.layout] && <span className="text-muted-foreground"> · {LAYOUT_TAG[r.layout]}</span>}
+    </div>
+  )
 }
 
 function TopStory({ r }) {
