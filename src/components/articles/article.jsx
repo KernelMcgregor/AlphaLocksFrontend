@@ -7,8 +7,9 @@ import remarkGfm from 'remark-gfm'
 import { Tweet } from 'react-tweet'
 import FighterImage from '../sports/FighterImage'
 import { articleImageUrl, articleMediaUrl } from '../../lib/api'
-import { cn, formatDate } from '../../lib/utils'
+import { cn, formatDate, formatOdds } from '../../lib/utils'
 import { takeawayItems } from './articleText'
+import { bestEdges } from './fightText'
 import { LineMovement, MethodsPanel, ModelBar, OddsTable, Panel, TaleOfTape } from './embeds'
 
 // Artwork: the picked image cropped on its focal point, or the two portraits.
@@ -129,7 +130,7 @@ export function PullQuote({ src, red, blue, size = 'md' }) {
   return (
     <figure className={cn('not-prose clear-both my-8 border-l-4 pl-5',
       corner === 0 ? 'border-corner-red' : corner === 1 ? 'border-corner-blue' : 'border-primary',
-      size === 'lg' && 'xl:-mx-10 xl:pl-8')}>
+      size === 'lg' && 'pl-6')}>
       <blockquote className={cn('font-serif italic leading-snug text-foreground', size === 'lg' ? 'text-[28px]' : 'text-[22px]')}>
         “{quote}”
       </blockquote>
@@ -207,12 +208,69 @@ function DataBlock({ lang, fight }) {
 }
 const DATA_BLOCKS = new Set(['chin-movement', 'chin-odds', 'chin-methods', 'chin-model', 'chin-tape'])
 
+// The closing call on one line, with the model's best edges on the bout beside it.
+function Verdict({ verdict, fight }) {
+  const edges = fight ? bestEdges(fight) : []
+  return (
+    <div className="not-prose clear-both mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg bg-ink px-5 py-3.5 font-sans text-white">
+      <div className="min-w-0 flex-1">
+        <div className="font-display text-[12px] font-extrabold italic uppercase tracking-wider text-primary">The pick</div>
+        <div className="font-display text-[24px] font-extrabold italic uppercase leading-tight tracking-tight">{verdict}</div>
+      </div>
+      {edges.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {edges.map((b) => (
+            <div key={b.key} className="rounded-md bg-white/[0.07] px-3 py-1.5">
+              <div className="text-[9.5px] font-semibold uppercase tracking-wider text-white/50">{b.market_title}</div>
+              <div className="flex items-baseline gap-2 whitespace-nowrap">
+                <span className="text-[12.5px] font-bold">{b.label}</span>
+                <span className="font-display text-[18px] font-extrabold italic tabular-nums">{formatOdds(b.price)}</span>
+                <span className="text-[11px] font-bold tabular-nums text-emerald-400">+{b.edge.toFixed(1)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// "UD W" -> "U Dec W", "SD L" -> "S Dec L", "MD" -> "M Dec" in table cells.
+const DEC = { UD: 'U Dec', SD: 'S Dec', MD: 'M Dec' }
+const decisionLabels = (node) => (typeof node === 'string' ? node.replace(/\b(UD|SD|MD)\b/g, (m) => DEC[m])
+  : Array.isArray(node) ? node.map(decisionLabels) : node)
+
+const textOf = (node) => (typeof node === 'string' || typeof node === 'number' ? String(node)
+  : Array.isArray(node) ? node.map(textOf).join('') : node?.props ? textOf(node.props.children) : '')
+
 export function ArticleBody({ body, red, blue, verdict, media, fight, meetings, quoteSize, className }) {
   return (
-    <div className={cn('prose prose-neutral max-w-none font-serif text-[16.5px] leading-[1.75] text-foreground/90 prose-headings:font-sans prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-foreground prose-h2:mb-2 prose-h2:mt-8 prose-h2:text-[22px] prose-strong:text-foreground prose-table:block prose-table:overflow-x-auto prose-table:font-sans prose-table:text-[13px] prose-th:text-foreground prose-th:whitespace-nowrap', className)}>
+    <div className={cn('prose prose-neutral max-w-none font-serif text-[16.5px] leading-[1.75] text-foreground/90 prose-headings:font-sans prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-foreground prose-h2:mb-2 prose-h2:mt-8 prose-h2:text-[22px] prose-strong:text-foreground prose-table:font-sans prose-table:text-[13px] prose-th:text-foreground prose-th:whitespace-nowrap', className)}>
       <Markdown
         remarkPlugins={[remarkGfm]}
         components={{
+          // Wide tables scroll inside the column on phones instead of widening the page.
+          // Tables in the site's style: a dark header row, striped rows, wins and losses
+          // coloured; wide ones scroll inside the column on phones.
+          table({ children }) {
+            return (
+              <div className="not-prose my-6 overflow-x-auto rounded-lg border border-border">
+                <table className="w-full border-collapse font-sans text-[13px] tabular-nums">{children}</table>
+              </div>
+            )
+          },
+          th({ children }) {
+            return <th className="whitespace-nowrap bg-ink px-3 py-2 text-left text-[10.5px] font-bold uppercase tracking-wider text-white/80">{children}</th>
+          },
+          tr({ children }) {
+            return <tr className="border-t border-border/70 first:border-t-0 even:bg-muted/40">{children}</tr>
+          },
+          td({ children }) {
+            children = decisionLabels(children)
+            const t = textOf(children).trim()
+            const tone = /^(win|w)\b|\bw$/i.test(t) ? 'font-bold text-emerald-600' : /^(loss|l)\b|\bl$/i.test(t) ? 'font-bold text-primary' : ''
+            return <td className={cn('whitespace-nowrap px-3 py-2', tone)}>{children}</td>
+          },
           pre({ children }) {
             const code = Array.isArray(children) ? children[0] : children
             const lang = /language-(chin-[\w-]+)/.exec(code?.props?.className || '')?.[1]
@@ -233,12 +291,7 @@ export function ArticleBody({ body, red, blue, verdict, media, fight, meetings, 
       >
         {body}
       </Markdown>
-      {verdict && (
-        <div className="not-prose clear-both mt-8 rounded-lg bg-ink px-5 py-4 text-white">
-          <div className="font-display text-[12px] font-extrabold italic uppercase tracking-wider text-primary">The pick</div>
-          <div className="mt-0.5 font-display text-[26px] font-extrabold italic uppercase leading-tight tracking-tight">{verdict}</div>
-        </div>
-      )}
+      {verdict && <Verdict verdict={verdict} fight={fight} />}
     </div>
   )
 }

@@ -140,6 +140,10 @@ export const fetchUpcomingEvents = () => cachedRequest('/ufc/upcoming', 10 * 60 
 export const articleImageUrl = (fightId, v) => `${BASE_URL}/ufc/fights/${fightId}/article-image?v=${v}`
 // Pictures embedded in an article body, and their framing ({id: {focal_x, focal_y, ...}}).
 export const articleMediaUrl = (id) => `${BASE_URL}/ufc/article-media/${id}`
+// News desk (services/ufc/newsroom/desk): stories, one story, its cover.
+export const fetchNews = (limit = 30) => cachedRequest(`/ufc/news?limit=${limit}`, 5 * 60 * 1000)
+export const fetchNewsStory = (slug) => cachedRequest(`/ufc/news/${slug}`, 5 * 60 * 1000)
+export const newsImageUrl = (slug, v) => `${BASE_URL}/ufc/news/${slug}/image?v=${v}`
 export const fetchArticleMedia = (fightId) => cachedRequest(`/ufc/fights/${fightId}/article-media`, 60 * 1000)
 export const fetchHome = () => cachedRequest('/ufc/home', 5 * 60 * 1000)
 export const fetchRankings = () => cachedRequest('/ufc/rankings', 30 * 60 * 1000) // 30 min

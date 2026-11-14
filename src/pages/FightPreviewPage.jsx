@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { parseArticle } from '../components/articles/articleText'
 import { layoutKey } from '../components/articles/fightText'
+import { BackButton, StickyBar } from '../components/articles/header'
 import { ArticleLayout } from '../components/articles/layouts'
-import { useRadar } from '../components/articles/useRadar'
+import { useFightContext, useRadar } from '../components/articles/useRadar'
 import PageLoader from '../components/PageLoader'
 import { fetchArticleMedia, fetchFight, peekCached } from '../lib/api'
 import { formatDate } from '../lib/utils'
@@ -26,7 +27,8 @@ export default function FightPreviewPage() {
 
   const cached = state.id === id ? null : peekCached(`/ufc/fights/${id}`)
   const fight = state.id === id ? state.fight : cached
-  const radar = useRadar(id, fight?.red_fighter, fight?.blue_fighter)
+  const ctx = useFightContext(id)
+  const radar = useRadar(ctx, fight?.red_fighter, fight?.blue_fighter)
   const [media, setMedia] = useState({})
   useEffect(() => { fetchArticleMedia(id).then(setMedia).catch(() => setMedia({})) }, [id])
   if (state.id !== id && !cached) return <PageLoader />
@@ -44,8 +46,11 @@ export default function FightPreviewPage() {
   const written = fight.preview.generated_at ? formatDate(String(fight.preview.generated_at).slice(0, 10)) : ''
   const minutes = Math.max(1, Math.round(fight.preview.content.split(/\s+/).length / 230))
   return (
-    <div className="h-full overflow-y-auto pb-6 pr-1">
-      <ArticleLayout kind={layoutKey(fight)} fight={fight} art={art} radar={radar} written={written} minutes={minutes} media={media} meetings={fight.preview.meetings} />
+    <div className="relative h-full overflow-y-auto pb-6 pr-1">
+      <StickyBar fight={fight} ctx={ctx} />
+      {/* Floats over the top-left corner of every layout's header. */}
+      <BackButton className="absolute left-3 top-3 z-20" />
+      <ArticleLayout kind={layoutKey(fight)} ctx={ctx} fight={fight} art={art} radar={radar} written={written} minutes={minutes} media={media} meetings={fight.preview.meetings} />
     </div>
   )
 }

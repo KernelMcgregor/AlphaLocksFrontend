@@ -191,3 +191,15 @@ body {
   /* charts translate via inline transition — kill it too */
   [style*="cubic-bezier(0.34, 1.42"] { transition: none !important; }
 }
+
+/* Article panels: a tab's content eases in when the toggle switches. */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* News sidebar: the rotating fighter tab's countdown bar. */
+@keyframes rotateBar {
+  from { width: 0; }
+  to { width: 100%; }
+}

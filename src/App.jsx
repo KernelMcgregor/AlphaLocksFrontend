@@ -3,6 +3,7 @@ import Layout from './components/layout/Layout'
 import ArticlesPage from './pages/ArticlesPage'
 import FightDetailPage from './pages/FightDetailPage'
 import FightPreviewPage from './pages/FightPreviewPage'
+import NewsStoryPage from './pages/NewsStoryPage'
 import FighterDecompositionsPage from './pages/FighterDecompositionsPage'
 import FighterProfilePage from './pages/FighterProfilePage'
 import FighterStatsPage from './pages/FighterStatsPage'
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/ufc/articles" element={<ArticlesPage />} />
         <Route path="/ufc/fights/:id" element={<FightDetailPage />} />
         <Route path="/ufc/fights/:id/preview" element={<FightPreviewPage />} />
+        <Route path="/ufc/news/:slug" element={<NewsStoryPage />} />
         <Route path="/ufc/rankings" element={<RankingsPage />} />
         {/* P4P and BMF are boards inside the Rankings page, chosen in its division picker. */}
         <Route path="/ufc/rankings/bmf" element={<Navigate to="/ufc/rankings?div=bmf_men" replace />} />

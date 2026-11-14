@@ -148,27 +148,31 @@ export default function RadarChart({ axes, series, fit = false }) {
             transform: 'translate(-50%, calc(-100% - 12px))',
           }}
         >
-          <div className="flex items-center gap-1.5">
-            <span className={cn('h-2 w-2 shrink-0 rounded-full', active.group === 'striking' ? 'bg-amber-500' : 'bg-indigo-500')} />
-            <span className="text-[11.5px] font-bold leading-tight">{active.full}</span>
-          </div>
           {multi ? (
-            <div className="mt-1.5 space-y-1 border-t pt-1.5">
-              {list.map((s) => (
-                <div key={s.key} className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
-                  <span className="truncate text-[10.5px] text-muted-foreground">{s.label}</span>
-                  <span className="ml-auto text-[11.5px] font-extrabold tabular-nums">
-                    {s.axes[hover.i]?.value == null ? '—' : ordinal(s.axes[hover.i].value)}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="space-y-1">
+                {list.map((s) => (
+                  <div key={s.key} className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
+                    <span className="truncate text-[10.5px] font-semibold">{s.label}</span>
+                    <span className="ml-auto text-[11.5px] font-extrabold tabular-nums">
+                      {s.axes[hover.i]?.value == null ? '—' : ordinal(s.axes[hover.i].value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
+            <>
+            <div className="flex items-center gap-1.5">
+              <span className={cn('h-2 w-2 shrink-0 rounded-full', active.group === 'striking' ? 'bg-amber-500' : 'bg-indigo-500')} />
+              <span className="text-[11.5px] font-bold leading-tight">{active.full}</span>
+            </div>
             <div className="mt-1.5 flex items-baseline gap-1">
               <span className="text-xl font-extrabold leading-none tabular-nums text-primary">{ordinal(active.value)}</span>
               <span className="text-[10px] font-semibold text-muted-foreground">percentile</span>
             </div>
+            </>
           )}
         </div>
       )}

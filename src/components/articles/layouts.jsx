@@ -10,61 +10,31 @@
 //   brief     prelims: one compact card
 import { Link } from 'react-router-dom'
 import { ArticleArt, ArticleBody, History, Takeaways } from './article'
+import { FaceOff } from './header'
 import { extractTakeaways } from './articleText'
-import { Byline, LineMovement, MatchupCard, MethodsPanel, ModelBar, OddsTable, Panel, RadarPanel, Tabs, TaleOfTape } from './embeds'
-import { eventShort, isTitle, lastName, marketRedProb, record, weightLabel } from './fightText'
+import { Byline, LineMovement, MarketsPanel, MatchupBox, MatchupCard, ModelBar } from './embeds'
+import { eventShort, isTitle, lastName, marketRedProb, topMethod, weightLabel } from './fightText'
 import FighterImage from '../sports/FighterImage'
-import { CORNERS } from '../fight/corners'
 import { cn, formatDate } from '../../lib/utils'
 
-function FeatureLayout({ fight, art, radar, written, minutes, media, meetings }) {
-  const { red_fighter: red, blue_fighter: blue, event } = fight
+function FeatureLayout({ fight, ctx, art, radar, written, minutes, media, meetings }) {
+  const { red_fighter: red, blue_fighter: blue } = fight
   const { items: takeaways, body } = extractTakeaways(art.body)
   return (
     <div className="space-y-5">
-      {/* Matchup banner */}
-      <div className="relative grid grid-cols-2 overflow-hidden rounded-xl bg-ink text-white sm:h-[210px] sm:grid-cols-[minmax(0,220px)_1fr_minmax(0,220px)]">
-        {[red, blue].map((f, k) => (
-          <div key={k} className={cn('relative h-[170px] overflow-hidden sm:h-auto', k ? 'order-2 sm:order-3' : 'order-1')}>
-            <FighterImage fighter={f} fit="contain" className="absolute inset-0 flex items-end justify-center" imgClassName="h-[120%] w-auto max-w-none object-top" />
-            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black to-transparent" />
-            <div className={cn('absolute bottom-3 px-4', k ? 'right-0 text-right' : 'left-0')}>
-              <div className="text-[10.5px] text-white/70">{record(f)}</div>
-              <div className="font-display text-[26px] font-extrabold italic uppercase leading-none tracking-tight">{lastName(f)}</div>
-            </div>
-          </div>
-        ))}
-        <div className="order-3 col-span-2 flex flex-col items-center justify-center px-6 py-4 sm:order-2 sm:col-span-1 sm:py-0">
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider">
-            <span className="rounded bg-primary px-1.5 py-0.5">{eventShort(event?.name)} · {formatDate(event?.date)}</span>
-            {isTitle(fight.weight_class) && <span className="rounded bg-gold px-1.5 py-0.5 text-ink">{weightLabel(fight.weight_class)} title</span>}
-          </div>
-          <div className="w-full max-w-[340px] [&_.text-muted-foreground]:text-white/60"><ModelBar fight={fight} size="lg" /></div>
-          <Link to={`/ufc/fights/${fight.id}`} className="mt-3 rounded-md border border-white/25 px-3 py-1 text-[12px] font-semibold hover:bg-white/10">Full fight page</Link>
-        </div>
-      </div>
+      <FaceOff fight={fight} art={art} meetings={meetings} ctx={ctx} tint={false} />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <article className="rounded-xl border border-border bg-card px-5 py-6 sm:px-8 sm:py-7">
-          <div className="font-display text-[12px] font-extrabold italic uppercase tracking-wide text-primary">{eventShort(event?.name)} preview</div>
-          <h1 className="mt-1 text-[30px] font-extrabold sm:text-[38px] leading-[1.08] tracking-tight">{art.title}</h1>
-          {art.dek && <p className="mt-3 font-serif text-[18px] leading-relaxed text-muted-foreground">{art.dek}</p>}
+          {art.dek && <p className="font-serif text-[19px] leading-relaxed text-muted-foreground">{art.dek}</p>}
           <div className="mt-4 border-t border-border pt-3"><Byline written={written} minutes={minutes} /></div>
           <Takeaways items={takeaways} />
           {fight.article_image && (
             <ArticleArt image={fight.article_image} fightId={fight.id} red={red} blue={blue} className="mb-6 h-[340px] rounded-lg" />
           )}
-          <ArticleBody body={body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} />
+          <ArticleBody body={body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} className="mt-5" />
         </article>
-        <aside className="space-y-4 self-start xl:sticky xl:top-0">
-          <Tabs tabs={[
-            ...(radar?.length ? [{ label: 'Radar', node: <RadarPanel series={radar} /> }] : []),
-            { label: 'Odds', node: <OddsTable fight={fight} /> },
-            { label: 'Methods', node: <MethodsPanel fight={fight} /> },
-          ]} />
-          <LineMovement fight={fight} />
-          <TaleOfTape fight={fight} />
-        </aside>
+        <Sidebar fight={fight} radar={radar} className="xl:sticky xl:top-[76px]" />
       </div>
     </div>
   )
@@ -74,9 +44,9 @@ function StandardLayout({ fight, art, radar, written, minutes, media, meetings }
   const { red_fighter: red, blue_fighter: blue, event } = fight
   return (
     <div className="space-y-5">
-      <header className="overflow-hidden rounded-xl border border-border bg-card">
+      <header data-article-header className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="px-5 pb-5 pt-6 sm:px-8">
-          <div className="text-[11.5px] text-muted-foreground">
+          <div className="pl-8 text-[11.5px] text-muted-foreground">
             <Link to="/ufc/articles" className="hover:text-primary">Articles</Link> › {eventShort(event?.name)} › Preview
           </div>
           <div className="mt-2 font-display text-[12px] font-extrabold italic uppercase tracking-wide text-primary">
@@ -92,13 +62,30 @@ function StandardLayout({ fight, art, radar, written, minutes, media, meetings }
         <article className="rounded-xl border border-border bg-card px-5 py-6 sm:px-8 sm:py-7">
           <ArticleBody body={art.body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} />
         </article>
-        <aside className="space-y-4 self-start xl:sticky xl:top-0">
-          <MatchupCard fight={fight} />
-          {radar?.length > 0 && <Panel title="Skill profile"><RadarPanel series={radar} /></Panel>}
-          <Panel title="Odds by book"><OddsTable fight={fight} /></Panel>
-          <TaleOfTape fight={fight} />
-        </aside>
+        <Sidebar fight={fight} radar={radar} className="xl:sticky xl:top-[76px]"><MatchupCard fight={fight} /></Sidebar>
       </div>
+    </div>
+  )
+}
+
+// The model's pick as a card over the cover: who, how likely, and the likeliest finish.
+function PickCard({ fight }) {
+  const p = fight.prediction?.red_prob
+  if (p == null) return null
+  const red = p >= 0.5
+  const pick = red ? fight.red_fighter : fight.blue_fighter
+  return (
+    <div className="w-[260px] shrink-0 rounded-xl bg-black/55 p-3.5 backdrop-blur">
+      <div className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">Model pick</div>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate font-display text-[30px] font-extrabold italic uppercase leading-none">{lastName(pick)}</span>
+        <span className={cn('font-display text-[26px] font-extrabold italic tabular-nums', red ? 'text-corner-red' : 'text-corner-blue')}>{Math.round((red ? p : 1 - p) * 100)}%</span>
+      </div>
+      <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-white/15">
+        <div className="h-full bg-corner-red" style={{ width: `${p * 100}%` }} />
+        <div className="h-full flex-1 bg-corner-blue" />
+      </div>
+      {topMethod(fight.method_prediction) && <div className="mt-1.5 text-[11px] text-white/70">Likeliest: {topMethod(fight.method_prediction)}</div>}
     </div>
   )
 }
@@ -128,83 +115,54 @@ function EdgeHero({ fight }) {
   )
 }
 
-function RivalryLayout({ fight, art, written, minutes, media, meetings }) {
-  const { red_fighter: red, blue_fighter: blue, event } = fight
+function RivalryLayout({ fight, ctx, radar, art, written, minutes, media, meetings }) {
+  const { red_fighter: red, blue_fighter: blue } = fight
   const rematch = meetings?.length > 0
   return (
     <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-xl bg-ink text-white">
-        <div className="absolute inset-0 grid grid-cols-2">
-          <div style={{ background: `linear-gradient(110deg, ${CORNERS[0].css} -40%, transparent 70%)` }} />
-          <div style={{ background: `linear-gradient(250deg, ${CORNERS[1].css} -40%, transparent 70%)` }} />
-        </div>
-        <div className="relative grid h-[230px] grid-cols-2 sm:h-[300px]">
-          {[red, blue].map((f, k) => (
-            <div key={k} className="relative overflow-hidden">
-              <FighterImage fighter={f} fit="contain" className={cn('absolute inset-0 flex items-end', k ? 'justify-start' : 'justify-end')}
-                imgClassName={cn('h-[118%] w-auto max-w-none object-top', !k && '-scale-x-100')} />
-              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 to-transparent" />
-              <div className={cn('absolute bottom-3 px-4 sm:bottom-5 sm:px-6', k ? 'right-0 text-right' : 'left-0')}>
-                <div className="text-[11px] text-white/70">{record(f)}</div>
-                <div className="font-display text-[30px] font-extrabold italic uppercase leading-none tracking-tight sm:text-[44px]">{lastName(f)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-display text-[54px] font-extrabold italic leading-none text-white/90 sm:text-[84px]">
-          {rematch ? `${meetings.length + 1}` : 'VS'}
-        </div>
-        <div className="absolute left-1/2 top-3 flex -translate-x-1/2 gap-2 text-[10px] font-extrabold uppercase tracking-wider">
-          <span className="rounded bg-primary px-1.5 py-0.5">{rematch ? 'Rematch' : 'Grudge match'}</span>
-          <span className="rounded bg-white/15 px-1.5 py-0.5">{eventShort(event?.name)} · {formatDate(event?.date)}</span>
-        </div>
-      </div>
+      <FaceOff fight={fight} art={art} meetings={meetings} ctx={ctx} />
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <article className="rounded-xl border border-border bg-card px-5 py-6 sm:px-8 sm:py-7">
-          <div className="font-display text-[12px] font-extrabold italic uppercase tracking-wide text-primary">{art.matchup}</div>
-          <h1 className="mt-1 text-[30px] font-extrabold leading-[1.08] tracking-tight sm:text-[40px]">{art.title}</h1>
-          {art.dek && <p className="mt-3 font-serif text-[18px] leading-relaxed text-muted-foreground">{art.dek}</p>}
+          {art.dek && <p className="font-serif text-[19px] leading-relaxed text-muted-foreground">{art.dek}</p>}
           <div className="mt-4 border-t border-border pt-3"><Byline written={written} minutes={minutes} /></div>
           {rematch && !/```chin-history/.test(art.body) && <History meetings={meetings} red={red} blue={blue} />}
-          <ArticleBody body={art.body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} />
+          <ArticleBody body={art.body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} className="mt-5" />
         </article>
-        <aside className="space-y-4 self-start xl:sticky xl:top-0">
-          <Panel><ModelBar fight={fight} size="lg" /></Panel>
-          <LineMovement fight={fight} />
-          <Tabs tabs={[{ label: 'Methods', node: <MethodsPanel fight={fight} /> }, { label: 'Odds', node: <OddsTable fight={fight} /> }]} />
-          <TaleOfTape fight={fight} />
-        </aside>
+        <Sidebar fight={fight} radar={radar} className="xl:sticky xl:top-[76px]" />
       </div>
     </div>
   )
 }
 
-function MagazineLayout({ fight, art, written, minutes, media, meetings }) {
+function MagazineLayout({ fight, radar, art, written, minutes, media, meetings }) {
   const { red_fighter: red, blue_fighter: blue, event } = fight
   return (
     <div className="space-y-6">
-      <header className="relative overflow-hidden rounded-xl">
-        <ArticleArt image={fight.article_image} fightId={fight.id} red={red} blue={blue} dark className="h-[340px] sm:h-[480px]" />
+      <header data-article-header className="relative overflow-hidden rounded-xl">
+        <ArticleArt image={fight.article_image} fightId={fight.id} red={red} blue={blue} dark className="h-[300px] sm:h-[420px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 mx-auto max-w-[760px] px-5 pb-6 text-white sm:pb-9">
-          <div className="font-display text-[12px] font-extrabold italic uppercase tracking-wider text-primary">{eventShort(event?.name)} · {art.matchup}</div>
-          <h1 className="mt-1 text-[32px] font-extrabold leading-[1.04] tracking-tight sm:text-[50px]">{art.title}</h1>
+        <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end gap-x-8 gap-y-4 px-5 pb-6 text-white sm:px-8 sm:pb-8">
+          <div className="min-w-0 max-w-[820px] flex-1">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider">
+              <span className="rounded bg-primary px-1.5 py-0.5">{art.matchup}</span>
+              <span className="rounded bg-white/15 px-1.5 py-0.5">{event?.name} · {formatDate(event?.date)}</span>
+            </div>
+            <h1 className="mt-2 text-[32px] font-extrabold leading-[1.04] tracking-tight sm:text-[48px]">{art.title}</h1>
+          </div>
+          <PickCard fight={fight} />
         </div>
       </header>
-      <article className="mx-auto max-w-[700px] px-1">
-        {art.dek && <p className="font-serif text-[20px] leading-relaxed text-foreground first-letter:float-left first-letter:mr-2 first-letter:font-display first-letter:text-[64px] first-letter:font-extrabold first-letter:leading-[0.85] first-letter:text-primary">{art.dek}</p>}
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
-          <Byline written={written} minutes={minutes} />
-          <div className="w-full max-w-[280px]"><ModelBar fight={fight} /></div>
-        </div>
-        <ArticleBody body={art.body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings}
-          quoteSize="lg" className="mt-2 text-[17.5px]" />
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <Panel title="How it ends"><MethodsPanel fight={fight} /></Panel>
-          <TaleOfTape fight={fight} />
-        </div>
-      </article>
+      {/* The long read keeps its narrow column; the numbers sit to its left. */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <Sidebar fight={fight} radar={radar} className="order-2 xl:sticky xl:top-[76px] xl:order-1" />
+        <article className="order-1 mx-auto w-full max-w-[700px] px-1 xl:order-2 xl:mx-0">
+          {art.dek && <p className="font-serif text-[20px] leading-relaxed text-foreground first-letter:float-left first-letter:mr-2 first-letter:font-display first-letter:text-[64px] first-letter:font-extrabold first-letter:leading-[0.85] first-letter:text-primary">{art.dek}</p>}
+          <div className="mt-5 border-y border-border py-3"><Byline written={written} minutes={minutes} /></div>
+          <ArticleBody body={art.body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings}
+            quoteSize="lg" className="mt-5 text-[17.5px]" />
+        </article>
+      </div>
     </div>
   )
 }
@@ -214,8 +172,8 @@ function DataLayout({ fight, art, radar, written, minutes, media, meetings }) {
   const { items: takeaways, body } = extractTakeaways(art.body)
   return (
     <div className="space-y-5">
-      <div className="overflow-hidden rounded-xl bg-ink p-4 text-white sm:p-6">
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-[10px] font-extrabold uppercase tracking-wider">
+      <div data-article-header className="overflow-hidden rounded-xl bg-ink p-4 text-white sm:p-6">
+        <div className="mb-3 flex flex-wrap items-center gap-2 pl-9 text-[10px] font-extrabold uppercase tracking-wider">
           <span className="rounded bg-primary px-1.5 py-0.5">By the numbers</span>
           <span className="rounded bg-white/15 px-1.5 py-0.5">{eventShort(event?.name)} · {formatDate(event?.date)}</span>
           {isTitle(fight.weight_class) && <span className="rounded bg-gold px-1.5 py-0.5 text-ink">{weightLabel(fight.weight_class)} title</span>}
@@ -235,29 +193,26 @@ function DataLayout({ fight, art, radar, written, minutes, media, meetings }) {
           {art.dek && <p className="font-serif text-[18px] leading-relaxed text-muted-foreground">{art.dek}</p>}
           <div className="mt-4 border-t border-border pt-3"><Byline written={written} minutes={minutes} /></div>
           <Takeaways items={takeaways} />
-          <ArticleBody body={body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} />
+          <ArticleBody body={body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} className="mt-5" />
         </article>
-        <aside className="space-y-4 self-start xl:sticky xl:top-0">
-          <Panel title="How it ends"><MethodsPanel fight={fight} /></Panel>
-          <Panel title="Odds by book"><OddsTable fight={fight} /></Panel>
-          {radar?.length > 0 && <Panel title="Skill profile"><RadarPanel series={radar} /></Panel>}
-        </aside>
+        <Sidebar fight={fight} radar={radar} className="xl:sticky xl:top-[76px]" />
       </div>
     </div>
   )
 }
 
-function BriefLayout({ fight, art, written, minutes, media, meetings }) {
+function BriefLayout({ fight, radar, art, written, minutes, media, meetings }) {
   const { red_fighter: red, blue_fighter: blue, event } = fight
   const { items: takeaways, body } = extractTakeaways(art.body)
   return (
-    <article className="mx-auto max-w-[780px] overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex items-center gap-2 bg-ink px-4 py-2 text-[11px] text-white/80 sm:px-6">
-        <b className="font-display italic text-primary">{eventShort(event?.name)}</b>
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <article className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex min-h-[48px] flex-wrap items-center gap-x-3 gap-y-0.5 bg-ink py-2 pl-14 pr-4 text-[11px] text-white/80 sm:pr-6">
+        <b className="font-display text-[13px] italic uppercase text-white">{event?.name}</b>
         <span>{weightLabel(fight.weight_class)}</span>
         {event?.date && <span className="ml-auto">{formatDate(event.date)}</span>}
       </div>
-      <div className="grid grid-cols-[72px_1fr_72px] items-center gap-3 border-b border-border px-4 py-3 sm:grid-cols-[96px_1fr_96px] sm:px-6">
+      <div data-article-header className="grid grid-cols-[72px_1fr_72px] items-center gap-3 border-b border-border px-4 py-3 sm:grid-cols-[96px_1fr_96px] sm:px-6">
         {[red, blue].map((f, k) => (
           <div key={k} className={cn('relative h-[72px] overflow-hidden rounded-lg bg-muted/50 sm:h-[96px]', k ? 'order-3' : 'order-1')}>
             <FighterImage fighter={f} fit="contain" className="absolute inset-0 flex items-end justify-center" imgClassName="h-[115%] w-auto max-w-none object-top" />
@@ -267,7 +222,7 @@ function BriefLayout({ fight, art, written, minutes, media, meetings }) {
           <div className="mb-1 flex justify-between font-display text-[18px] font-extrabold italic uppercase leading-none sm:text-[22px]">
             <span>{lastName(red)}</span><span>{lastName(blue)}</span>
           </div>
-          <ModelBar fight={fight} />
+          <ModelBar fight={fight} names={false} />
         </div>
       </div>
       <div className="px-5 py-6 sm:px-8">
@@ -276,10 +231,23 @@ function BriefLayout({ fight, art, written, minutes, media, meetings }) {
         {art.dek && <p className="mt-2 font-serif text-[17px] leading-relaxed text-muted-foreground">{art.dek}</p>}
         <div className="mt-3"><Byline written={written} minutes={minutes} /></div>
         <Takeaways items={takeaways} />
-        <ArticleBody body={body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} />
-        <div className="mt-6"><TaleOfTape fight={fight} /></div>
+        <ArticleBody body={body} red={red} blue={blue} verdict={art.verdict} media={media} fight={fight} meetings={meetings} className="mt-5" />
       </div>
     </article>
+    <Sidebar fight={fight} radar={radar} />
+    </div>
+  )
+}
+
+// The numbers beside every article, in one order: the tape (with the skill radar behind
+// its toggle), then the markets.
+function Sidebar({ fight, radar, className, children }) {
+  return (
+    <aside className={cn('space-y-4 self-start', className)}>
+      {children}
+      <MatchupBox fight={fight} radar={radar} />
+      <MarketsPanel fight={fight} />
+    </aside>
   )
 }
 
