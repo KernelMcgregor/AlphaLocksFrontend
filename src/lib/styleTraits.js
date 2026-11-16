@@ -144,6 +144,17 @@ export const traitTitle = (key) => cap(traitLabel(key))
 // A fighter's blend: [{family, share}], strongest first (backend style_page_service). A
 // second family at 25%+ is named as a lean, e.g. "Wrestle-control, leaning Strike-and-pounce".
 export const LEAN_MIN = 0.25
+// A family name as said of one fighter: 'Patient tacticians' -> 'Patient tactician',
+// 'Striker-finishers' -> 'Striker-finisher'. The families' stored names are plural.
+export const familyName = (name) => (name || '').replace(/(\w)s$/, '$1')
+
+// A style detail's (/ufc/styles/fighters/{id}) main family, named for one fighter.
+export const familyOf = (detail) => {
+  const f = detail?.fighter
+  const top = f?.blend?.[0]?.family ?? f?.family
+  return top != null ? familyName(detail?.families?.[top]?.name) || null : null
+}
+
 export const blendOf = (fighter) => fighter?.blend?.length ? fighter.blend : [{ family: fighter?.family, share: 1 }]
 export const leanOf = (fighter) => {
   const b = blendOf(fighter)
@@ -152,5 +163,23 @@ export const leanOf = (fighter) => {
 export const styleLabel = (fighter, families) => {
   const name = families?.[fighter?.family]?.name
   const lean = leanOf(fighter)
-  return lean != null && families?.[lean] ? `${name}, leaning ${families[lean].name}` : name
+  return lean != null && families?.[lean] ? `${familyName(name)}, leaning ${familyName(families[lean].name)}` : familyName(name)
+}
+
+// Both fighters far from average in the same direction = a real shared trait; the
+// weaker of the two extremes is how strongly it is shared.
+export function mostAlike(a, b, n = 4) {
+  return HABIT_TRAITS
+    .map((k) => ({ k, a: a[k], b: b[k] }))
+    .filter((t) => t.a != null && t.b != null && (t.a - 50) * (t.b - 50) > 0)
+    .sort((x, y) => Math.min(Math.abs(y.a - 50), Math.abs(y.b - 50)) - Math.min(Math.abs(x.a - 50), Math.abs(x.b - 50)))
+    .slice(0, n)
+}
+
+export function mostDifferent(a, b, n = 4) {
+  return HABIT_TRAITS
+    .map((k) => ({ k, a: a[k], b: b[k] }))
+    .filter((t) => t.a != null && t.b != null)
+    .sort((x, y) => Math.abs(y.a - y.b) - Math.abs(x.a - x.b))
+    .slice(0, n)
 }

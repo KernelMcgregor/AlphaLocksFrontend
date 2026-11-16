@@ -20,7 +20,7 @@ export function PaceColumns({ rounds, panel, accent = 'bg-viz-1' }) {
     <div className="flex flex-col rounded-lg border border-border bg-muted/20 p-2.5">
       <div className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-wide text-foreground/70">{panel.label}</div>
       {/* bars fill the box rather than sitting in a narrow centred track */}
-      <div className="flex h-[152px] flex-1 items-end gap-[4px]">
+      <div className="flex h-[100px] flex-1 items-end gap-[4px]">
         {rounds.map((r) => {
           const v = r[panel.key]
           const isPeak = v != null && v === peak
@@ -31,7 +31,7 @@ export function PaceColumns({ rounds, panel, accent = 'bg-viz-1' }) {
               </span>
               <div
                 className={cn('w-full rounded-t-[4px]', accent, r.n < 3 && 'opacity-45')}
-                style={{ height: `${Math.max(3, ((v ?? 0) / max) * 128)}px` }}
+                style={{ height: `${Math.max(3, ((v ?? 0) / max) * 80)}px` }}
               />
             </div>
           )
@@ -92,11 +92,6 @@ export function SurvivalTable({ survival }) {
           })}
         </tbody>
       </table>
-      <p className="mt-1.5 text-[9px] leading-snug text-muted-foreground/80">
-        {fighterMode
-          ? 'Share of bouts reaching the round that they were not stopped in.'
-          : 'Share of bouts reaching the round where the fight carried on past it.'}
-      </p>
     </div>
   )
 }

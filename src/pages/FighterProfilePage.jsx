@@ -1,16 +1,20 @@
 // src/pages/FighterProfilePage.jsx
-import { ArrowLeft, ChevronLeft, ChevronRight, Flame, Menu, Swords, Timer, TrendingUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Flame, Menu, Swords, Timer, TrendingUp } from 'lucide-react'
 import BeltIcon from '../components/ui/belt-icon'
-import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
-import HeaderActions from '../components/layout/HeaderActions'
+import FighterCover, { ProfileBar } from '../components/hero/FighterHero'
+import DecisionLuck from '../components/fighter/DecisionLuck'
+import { StyleSection, StyleStack } from '../components/styles/FighterStyle'
+import { FamilyTag } from '../components/hero/parts'
+import { useStyleDetail } from '../hooks/useStyleDetail'
 import SimilarFighters from '../components/sports/SimilarFighters'
 import { Card, CardContent } from '../components/ui/card'
+import { ScrollArea } from '../components/ui/scroll-area'
 import { SlideTabs } from '../components/ui/slide-tabs'
 import { Tip } from '../components/ui/tip'
 import FighterMini from '../components/sports/FighterMini'
-import WavingFlag from '../components/sports/WavingFlag'
 // Shared chart vocabulary — these used to live in this file. See components/viz/.
 import ActivityBars from '../components/viz/ActivityBars'
 import BumpChart from '../components/viz/BumpChart'
@@ -30,7 +34,7 @@ import { useScrollSpy, useSlidingWindow } from '../components/viz/hooks'
 // NOTE: add `export const fetchFighterStats = (id) => cachedRequest(`/ufc/fighters/${id}/stats`)`
 // to src/lib/api.js — the endpoint already exists in routers/ufc.py.
 import PageLoader from '../components/PageLoader'
-import { fetchEvents, fetchFighter, fetchFighterCareerStats, fetchFighterFights, fetchFighterRankHistory, fetchFighterStats, fetchRankings } from '../lib/api'
+import { fetchEvents, fetchExternalFights, fetchFighter, fetchFighterCareerStats, fetchFighterFights, fetchFighterRankHistory, fetchFighterStats, fetchRankings } from '../lib/api'
 import { clock, cn, formatDate, formatRecord, isChampion, displayRank } from '../lib/utils'
 import { aggregateCareer, buildPercentile, deriveForm, deriveProfile, deriveRoundPacing, deriveRoundSurvival, deriveTwoWay, methodLabel, resultCode, RESULT_BADGE } from '../lib/fighterAnalytics'
 import FighterImage from '../components/sports/FighterImage'
@@ -44,6 +48,7 @@ const NOW = Date.now()
 // Order here is the order they appear in the scrolling column.
 const SECTIONS = [
   { key: 'skills', label: 'Skills' },
+  { key: 'style', label: 'Style' },
   { key: 'overview', label: 'Career Overview' },
   { key: 'career', label: 'Career Stats' },
   { key: 'fights', label: 'Fight History' },
@@ -54,6 +59,12 @@ const SECTIONS = [
 function val(v) {
   const t = typeof v === 'string' ? v.trim() : v
   return !t || t === '--' ? null : t
+}
+
+// "US" -> "United States", in the reader's language.
+const REGIONS = new Intl.DisplayNames(undefined, { type: 'region' })
+function countryName(code) {
+  try { return code ? REGIONS.of(code.toUpperCase()) : null } catch { return null }
 }
 
 // Backend division keys are snake_case ("light_heavyweight", "p4p_men").
@@ -192,8 +203,63 @@ function FightDetail({ detail, data, finishRound }) {
 // section tabs under it, and one scrolling column of the same components.
 // ---------------------------------------------------------------------------
 
+// A bout outside the UFC: no stats to expand, a blank portrait, and the promotion badged.
+function PromotionBadge({ name }) {
+  if (!name) return null
+  return <span className="shrink-0 rounded bg-ink px-1.5 py-px text-[9.5px] font-extrabold uppercase tracking-wide text-white">{name}</span>
+}
+
+function OppName({ r, className }) {
+  return r.oppId
+    ? <Link to={`/ufc/fighters/${r.oppId}`} className={cn('hover:text-primary', className)}>{r.oppName}</Link>
+    : <span className={className}>{r.oppName}</span>
+}
+
+function ExternalRow({ r }) {
+  return (
+    <tr className="border-b border-border/60">
+      <td />
+      <td className="py-1.5">
+        <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded-md text-[10px] font-extrabold text-white', RESULT_BADGE[r.result] || 'bg-slate-400')}>{r.result}</span>
+      </td>
+      <td className="py-1.5 pr-2">
+        <span className="flex items-center gap-2">
+          <FighterImage fighter={r.oppId ? { id: r.oppId, has_image: true } : null} className="h-6 w-6 shrink-0 rounded-full bg-muted" />
+          <OppName r={r} className="text-[12.5px] font-bold" />
+          <PromotionBadge name={r.promotion} />
+        </span>
+      </td>
+      <td className="py-1.5 pr-2 text-[11.5px] font-semibold text-foreground/70">{r.method || '—'}</td>
+      <td className="py-1.5 pr-2 text-[11.5px] tabular-nums text-muted-foreground">{r.round ? `R${r.round}` : '—'}</td>
+      <td className="py-1.5 pr-2 text-[11.5px] tabular-nums text-muted-foreground">{r.time || '—'}</td>
+      <td className="py-1.5 pr-2 text-[11px] text-muted-foreground">{r.date ? formatDate(r.date) : '—'}</td>
+      <td className="max-w-[180px] truncate py-1.5 text-[11px] text-muted-foreground/80" title={r.eventName}>{r.eventName || '—'}</td>
+    </tr>
+  )
+}
+
+function ExternalCard({ r, first }) {
+  return (
+    <div className={cn('flex min-h-14 items-center gap-2.5 px-3 py-2.5', !first && 'border-t border-border/60')}>
+      <span className={cn('flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-xs font-extrabold text-white', RESULT_BADGE[r.result] || 'bg-slate-400')}>{r.result}</span>
+      <FighterImage fighter={r.oppId ? { id: r.oppId, has_image: true } : null} className="h-8 w-8 shrink-0 rounded-full bg-muted" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <OppName r={r} className="text-[13.5px] font-bold" />
+          <PromotionBadge name={r.promotion} />
+        </div>
+        <div className="truncate text-[11.5px] text-muted-foreground">
+          <span className="font-semibold text-foreground/70">{r.method}</span>
+          {r.round ? ` · R${r.round}` : ''}{r.time ? ` ${r.time}` : ''}{r.date ? ` · ${formatDate(r.date)}` : ''}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const MOBILE_SECTIONS = [
   { key: 'skills', label: 'Skills' },
+  { key: 'style', label: 'Style' },
   { key: 'overview', label: 'Overview' },
   { key: 'career', label: 'Career Stats' },
   { key: 'fights', label: 'Fights' },
@@ -219,9 +285,10 @@ const openSidebar = () => window.dispatchEvent(new CustomEvent('alocks:open-side
 function MobileFighterProfile({
   fighter, record, isChamp, ranked, divisionLabel, bio, profile, form, career, tiles, twoWay,
   pacing, survival, recent, oppData, statsByFight, openFight, toggleFight, upcoming, cstats,
-  eventMap, strikeMode, setStrikeMode, trend, years,
+  eventMap, strikeMode, setStrikeMode, trend, years, styleDetail, onOpen, history,
 }) {
-  const { scrollRef, register, active, scrollTo } = useScrollSpy(MOBILE_SECTIONS)
+  const sections = useMemo(() => MOBILE_SECTIONS.filter((s) => s.key !== 'style' || styleDetail), [styleDetail])
+  const { scrollRef, register, active, scrollTo } = useScrollSpy(sections)
   const [condensed, setCondensed] = useState(false)
 
   // Hysteresis (28px down / 4px up) so the header doesn't flutter at the threshold.
@@ -269,9 +336,9 @@ function MobileFighterProfile({
 
         {/* identity — the headshot's bottom edge sits on the tab bar; the portrait
             is taller than its box so the lower body crops off */}
-        <div className="flex items-stretch gap-3 pr-3.5">
+        <div className="flex items-stretch gap-3 bg-ink pr-3.5 text-white">
           <div
-            className="relative shrink-0 self-end overflow-hidden rounded-tr-2xl bg-gradient-to-b from-muted to-border/60"
+            className="relative shrink-0 self-end overflow-hidden rounded-tr-2xl bg-white/5"
             style={{ width: condensed ? 60 : 104, height: condensed ? 72 : 136, transition: 'width .22s ease, height .22s ease' }}
           >
             <FighterImage
@@ -287,35 +354,37 @@ function MobileFighterProfile({
           </div>
 
           <div className={cn('flex min-w-0 flex-1 flex-col gap-[3px] transition-[padding] duration-200', condensed ? 'py-2' : 'pb-2.5 pt-3')}>
-            <div className="flex min-w-0 items-center gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] font-semibold leading-tight text-white/70">
               <CountryFlag countryCode={fighter.country_code} />
-              <h1 className={cn('truncate font-extrabold leading-none tracking-tight transition-[font-size] duration-200', condensed ? 'text-base' : 'text-[19px]')}>{name}</h1>
+              <span className="truncate">{fighter.first_name}</span>
             </div>
+            <h1 className={cn('font-display font-extrabold italic uppercase leading-[0.95] tracking-tight transition-[font-size] duration-200', condensed ? 'text-[20px]' : 'text-[30px]')}>
+              <span className="sr-only">{fighter.first_name} </span>{fighter.last_name}
+            </h1>
 
             {condensed ? (
-              <div className="truncate text-xs font-semibold tabular-nums text-muted-foreground">
-                <span className="text-foreground">{record}</span>
-                {ranked && divisionLabel && <> · <span className={isChampion(ranked) ? 'text-gold-foreground' : 'text-primary'}>{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span></>}
-                {ranked && <> · Power {ranked.score.toFixed(0)}</>}
+              <div className="truncate text-xs font-semibold tabular-nums text-white/60">
+                <span className="text-white">{record}</span>
+                {ranked && divisionLabel && <> · <span className={isChampion(ranked) ? 'text-gold' : 'text-white'}>{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span></>}
               </div>
             ) : (
               <>
-                {fighter.nickname && <div className="text-xs leading-tight text-muted-foreground">"{fighter.nickname}"</div>}
+                {fighter.nickname && <div className="text-xs italic leading-tight text-white/55">"{fighter.nickname}"</div>}
                 <div className="mt-0.5 flex flex-wrap gap-1.5">
-                  <span className="rounded-md border bg-background px-1.5 py-0.5 text-[11px] font-bold tabular-nums">{record}</span>
+                  <span className="rounded bg-white px-1.5 py-0.5 text-[11px] font-extrabold tabular-nums text-ink">{record}</span>
                   {ranked && divisionLabel && (
-                    <span className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-bold', isChampion(ranked) ? 'border-gold/50 bg-gold/15 text-gold-foreground' : 'border-primary/40 bg-primary/10 text-primary')}>{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
+                    <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-extrabold', isChampion(ranked) ? 'bg-gold text-ink' : 'bg-white/12 text-white')}>{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
                   )}
-                  {ranked && <span className="rounded-md bg-primary px-1.5 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
+                  <FamilyTag style={styleDetail?.fighter} families={styleDetail?.families} />
                 </div>
               </>
             )}
 
             {bioCells.length > 0 && (
-              <div className={cn('flex justify-between gap-2 border-t border-border/60', condensed ? 'mt-0.5 pt-0.5' : 'mt-1.5 pt-1.5')}>
+              <div className={cn('flex justify-between gap-2 border-t border-white/10', condensed ? 'mt-0.5 pt-0.5' : 'mt-1.5 pt-1.5')}>
                 {bioCells.map(([k, v]) => (
                   <div key={k} className="min-w-0">
-                    {!condensed && <div className="text-[9.5px] font-bold uppercase leading-tight tracking-wide text-muted-foreground">{k}</div>}
+                    {!condensed && <div className="text-[9.5px] font-bold uppercase leading-tight tracking-wide text-white/50">{k}</div>}
                     <div className="truncate text-[12.5px] font-bold leading-snug tabular-nums">{k === 'Age' && condensed ? `${v}y` : v}</div>
                   </div>
                 ))}
@@ -323,10 +392,10 @@ function MobileFighterProfile({
             )}
 
             {!condensed && (from || team) && (
-              <div className="truncate text-[11px] text-muted-foreground">
-                {from && <><span className="font-bold text-foreground/80">From</span> {from}</>}
+              <div className="truncate text-[11px] text-white/60">
+                {from && <><span className="font-bold text-white/85">From</span> {from}</>}
                 {from && team && ' · '}
-                {team && <><span className="font-bold text-foreground/80">Team</span> {team}</>}
+                {team && <><span className="font-bold text-white/85">Team</span> {team}</>}
               </div>
             )}
           </div>
@@ -334,7 +403,7 @@ function MobileFighterProfile({
 
         {/* section tabs — scrollspy over the column below */}
         <div className="flex overflow-x-auto border-t border-border px-2 [scrollbar-width:none]">
-          {MOBILE_SECTIONS.map((sec) => (
+          {sections.map((sec) => (
             <button
               key={sec.key}
               type="button"
@@ -362,7 +431,6 @@ function MobileFighterProfile({
               <div className="flex flex-col gap-3">
                 <div className={card}>
                   <RadarChart axes={profile.axes} />
-                  <p className="mt-1 text-center text-[10px] text-muted-foreground">Tap an axis for detail · radius = percentile</p>
                   <div className="mt-2.5 grid grid-cols-3 gap-1.5">
                     {profile.groups.map((g) => (
                       <div key={g.label} className="rounded-xl border bg-muted/40 py-2 text-center">
@@ -392,6 +460,12 @@ function MobileFighterProfile({
               <p className="text-sm text-muted-foreground">No ranked skill decomposition for this fighter (unranked or insufficient rounds).</p>
             )}
           </Section>
+
+          {styleDetail && (
+            <Section id="style" title="Style" register={register}>
+              <StyleStack detail={styleDetail} onOpen={onOpen} />
+            </Section>
+          )}
 
           <Section id="overview" title="Career Overview" register={register}>
             {form ? (
@@ -486,6 +560,7 @@ function MobileFighterProfile({
                       size={trend.size}
                       domain={trend.rankAxis?.domain}
                       ticks={trend.rankAxis?.ticks}
+                      log={trend.rankAxis?.log}
                       yLabel={trend.usingRank ? 'RANK' : 'SIG. STR/MIN'}
                       invertY={trend.usingRank}
                       formatValue={trend.usingRank ? (v) => `#${Math.round(v)}` : (v) => v.toFixed(2)}
@@ -618,13 +693,14 @@ function MobileFighterProfile({
             )}
           </Section>
 
-          <Section id="fights" title="Fight History" note={`${recent.length} fights`} register={register}>
-            {recent.length === 0 ? (
+          <Section id="fights" title="Fight History" note={`${history.length} fights`} register={register}>
+            {history.length === 0 ? (
               <p className="text-sm text-muted-foreground">No fight history available.</p>
             ) : (
               // Card rows instead of the desktop table — tap a row to expand its stat line.
               <div className="overflow-hidden rounded-xl border border-border bg-card">
-                {recent.map((r, i) => {
+                {history.map((r, i) => {
+                  if (r.external) return <ExternalCard key={r.id} r={r} first={i === 0} />
                   const opp = oppData[String(r.oppId)]
                   const open = openFight === r.id
                   return (
@@ -678,11 +754,27 @@ function MobileFighterProfile({
 export default function FighterProfilePage() {
   const { id } = useParams()
   const [state, setState] = useState({ loading: true, error: null, fighter: null, fights: [], career: null, ranked: null, divisionLabel: null, divisionFighters: null })
-  const { scrollRef, register, active, scrollTo } = useScrollSpy(SECTIONS)
+  const navigate = useNavigate()
+  // The style section needs a style row (3+ decided bouts); without one it has no tab.
+  // `families` arrived with the lineage fields: an older API leaves the section off.
+  const { detail: rawStyle } = useStyleDetail(id)
+  const styleDetail = rawStyle?.families ? rawStyle : null
+  const sections = useMemo(() => SECTIONS.filter((s) => s.key !== 'style' || styleDetail), [styleDetail])
+  // 64: the slim bar pinned over the top of the scroll once the cover has gone.
+  const { scrollRef, register, active, scrollTo } = useScrollSpy(sections, 64)
+  const coverRef = useRef(null)
+  const [pastCover, setPastCover] = useState(false)
   const [openFight, setOpenFight] = useState(null) // one expanded row at a time
   const [strikeMode, setStrikeMode] = useState('pct') // strike map: share vs per-minute
   const [oppData, setOppData] = useState({}) // { [fighterId]: { name, image_url } }
+  const [external, setExternal] = useState({ id: null, rows: [] }) // non-UFC bouts (Sherdog)
   const isMobile = useIsMobile()
+
+  useEffect(() => {
+    let live = true
+    fetchExternalFights(id).then((rows) => live && setExternal({ id, rows: rows || [] })).catch(() => {})
+    return () => { live = false }
+  }, [id])
 
   useEffect(() => {
     let cancelled = false
@@ -721,6 +813,17 @@ export default function FighterProfilePage() {
   }, [id])
 
   const { loading, error, fighter, fights, career, ranked, divisionLabel, divisionFighters } = state
+
+  // The slim bar slides in once the cover has scrolled up under where it sits, so the
+  // two never show the same name at once.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return undefined
+    const onScroll = () => setPastCover(el.scrollTop > (coverRef.current?.offsetHeight ?? 400) - 60)
+    onScroll()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [scrollRef, loading, isMobile])
 
   // Resolve opponent data (name + image) for the recent-fights list.
   useEffect(() => {
@@ -806,6 +909,17 @@ export default function FighterProfilePage() {
 
   const form = useMemo(() => (fighter ? deriveForm(fights, fighter.id) : null), [fights, fighter])
 
+  // The full pro record: UFC bouts (expandable, with stats) and the rest from Sherdog
+  // (summary only, promotion badged), newest first.
+  const history = useMemo(() => {
+    const ext = external.id === id ? external.rows : []
+    const rows = [...recent, ...ext.map((b, i) => ({
+      id: `ext-${i}`, external: true, result: b.result, oppId: b.opponent_id, oppName: b.opponent_name,
+      promotion: b.promotion, method: b.method, round: b.round, time: b.time, date: b.date, eventName: b.event_name,
+    }))]
+    return rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+  }, [recent, external, id])
+
   // Per-fight stat rows keyed by fight, split into the totals row and the rounds.
   const statsByFight = useMemo(() => {
     const map = {}
@@ -870,6 +984,22 @@ export default function FighterProfilePage() {
   const rankAxis = useMemo(() => {
     if (!usingRank) return null
     const worst = Math.max(...rankTrend.map((p) => p.rank), 1)
+    // Past #15 a linear axis crams a label every 5 ranks into the box; switch to a log
+    // scale with a few round ticks instead.
+    if (worst > 15) {
+      // The axis starts at their best rank, not #1, and keeps round ticks spaced evenly on
+      // the log scale (at most ~5), so a career spent at #20-#60 isn't drawn under an empty top.
+      const best = Math.min(...rankTrend.map((p) => p.rank))
+      const lo = Math.max(0.85, best * 0.85)
+      const hi = worst * 1.12
+      const minGap = Math.log(hi / lo) / 5
+      const ticks = []
+      for (const v of [1, 2, 3, 5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 300, 400]) {
+        if (v < lo || v > hi) continue
+        if (!ticks.length || Math.log(v / ticks[ticks.length - 1]) >= minGap) ticks.push(v)
+      }
+      return { domain: [lo, hi], ticks, log: true }
+    }
     const ticks = [1]
     for (let v = 5; v <= worst; v += 5) ticks.push(v)
     return { domain: [1, Math.max(worst + 0.4, 2)], ticks }
@@ -951,154 +1081,46 @@ export default function FighterProfilePage() {
         strikeMode={strikeMode} setStrikeMode={setStrikeMode}
         trend={{ data: trendData, usingRank, rankAxis, win: trendWin, size: TREND_WIN }}
         years={{ win: yearWin, size: YEAR_WIN }}
+        styleDetail={styleDetail} onOpen={(fid) => navigate(`/ufc/fighters/${fid}`)}
+        history={history}
       />
     )
   }
 
+  const lastBout = form?.results?.[0]
+  const vitals = [
+    ['Age', bio.age ? `${bio.age} yrs` : null],
+    ['Height', val(fighter.height)],
+    ['Reach', val(fighter.reach)],
+    ['Stance', val(fighter.stance)],
+    ['Country', countryName(fighter.country_code)],
+    ['Fighting out of', val(fighter.trains_at)],
+  ].filter(([, v]) => v)
+  // The cover's headline numbers; any the data can't back drop out.
+  const coverStats = [
+    form && form.streak > 0 && ['Streak', `${form.streak}${form.streakWin ? 'W' : 'L'}`, `Best run ${form.longestWin}`],
+    career?.hasStats && ['Finish rate', `${career.finishRate}%`],
+    tiles?.slpm != null && career?.hasStats && ['Sig. str / min', tiles.slpm.toFixed(2)],
+    tiles?.sigAcc != null && career?.hasStats && ['Str. accuracy', `${tiles.sigAcc}%`],
+    tiles?.td15 != null && career?.hasStats && ['TD / 15', tiles.td15.toFixed(2)],
+    tiles?.kd15 != null && career?.hasStats && ['KD / 15', tiles.kd15.toFixed(2)],
+  ].filter(Boolean)
+  const tabs = sections.map((sec) => (sec.key === 'fights' ? { ...sec, badge: history.length || null } : sec))
+  const nOther = history.length - recent.length
+  const historyNote = nOther ? `${recent.length} UFC · ${nOther} other` : `${recent.length} fights`
+  const ident = { fighter, record, ranked, divisionLabel, isChamp, style: styleDetail?.fighter, families: styleDetail?.families }
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden lg:flex-row">
-      {/* Actions live in the Layout breadcrumb row — see HeaderActions. */}
-      <HeaderActions>
-        <SlideTabs
-          size="sm"
-          value={active}
-          onChange={scrollTo}
-          tabs={SECTIONS.map((sec) => (
-            sec.key === 'fights' ? { ...sec, badge: recent.length || null } : sec
-          ))}
-        />
-        <Link to="/ufc/fighters/stats" className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground">
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to fighters
-        </Link>
-      </HeaderActions>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* One scroll for the whole page: the cover first, then the sections. `relative`
+          matters: the spy reads section.offsetTop against the offset parent. */}
+      <ScrollArea viewportRef={scrollRef} className="min-h-0 flex-1" viewportClassName="relative">
+        <ProfileBar show={pastCover} {...ident} tabs={tabs} active={active} onTab={scrollTo} />
+        <FighterCover coverRef={coverRef} {...ident} stats={coverStats} vitals={vitals}
+          last={lastBout ? { fightId: lastBout.id, opp: oppData[String(lastBout.oppId)], oppId: lastBout.oppId, date: lastBout.date, result: lastBout.draw ? 'D' : lastBout.win ? 'W' : 'L' } : {}}
+          next={upcoming ? { fightId: upcoming.id, opp: oppData[String(upcoming.oppId)], oppId: upcoming.oppId, date: upcoming.date } : {}} />
 
-      {/* ---------------- LEFT: identity + scores ---------------- */}
-      <div className="flex shrink-0 flex-col gap-3 overflow-y-auto lg:w-[280px]">
-          {/* identity */}
-          <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border p-2.5">
-            {/* flex-1 so the portrait takes any leftover column height — otherwise the
-                slack collects as dead space between this card and the one below. */}
-            <div className="relative flex min-h-[132px] flex-1 items-end justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-b from-primary/10 to-transparent">
-              <WavingFlag countryCode={fighter.country_code} />
-              <FighterImage
-                fighter={fighter}
-                fit="contain"
-                alt={`${fighter.first_name} ${fighter.last_name}`}
-                className="relative z-10 h-full w-full"
-              />
-              {isChamp && (
-                <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md border border-gold/50 bg-background/90 px-2 py-0.5 text-[10px] font-bold text-gold-foreground backdrop-blur">
-                  <BeltIcon className="h-3 w-3" /> CHAMPION
-                </div>
-              )}
-            </div>
-
-            <div className="mt-1.5 shrink-0">
-              <div className="flex items-center gap-2">
-                <CountryFlag countryCode={fighter.country_code} />
-                <h1 className="text-lg font-extrabold leading-none tracking-tight">{fighter.first_name} {fighter.last_name}</h1>
-              </div>
-              {fighter.nickname && <div className="mt-0.5 text-[11px] text-muted-foreground">"{fighter.nickname}"</div>}
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                <span className="rounded-md border bg-background px-2 py-0.5 text-[11px] font-bold tabular-nums">{record}</span>
-                {ranked && <span className="rounded-md bg-primary px-2 py-0.5 text-[11px] font-bold text-white tabular-nums">Power {ranked.score.toFixed(0)}</span>}
-                {ranked && divisionLabel && (
-                  <span className={cn('rounded-md border px-2 py-0.5 text-[11px] font-bold', isChampion(ranked) ? 'border-gold/50 bg-gold/15 text-gold-foreground' : 'border-primary/40 bg-primary/10 text-primary')}>{isChampion(ranked) ? `${divisionLabel} Champion` : `#${displayRank(ranked)} ${divisionLabel}`}</span>
-                )}
-              </div>
-            </div>
-
-            {/* bio — fixed row groups. Each row lays its surviving fields out evenly,
-                and a row with nothing in it disappears, so sparse fields (style ~23%,
-                gym ~24%, leg reach ~35%) collapse cleanly instead of leaving holes. */}
-            <div className="mt-2 flex shrink-0 flex-col gap-1.5 border-t pt-2">
-              {[
-                [['Age', bio.age ? `${bio.age} yrs` : null], ['Height', val(fighter.height)], ['Weight', val(fighter.weight)]],
-                [['Reach', val(fighter.reach)], ['Leg reach', val(fighter.leg_reach) ? `${fighter.leg_reach}"` : null]],
-                [['Stance', val(fighter.stance)], ['Style', val(fighter.fighting_style)]],
-                [
-                  ['UFC debut', bio.debut],
-                  // completed bouts in the fight log; career.fightCount only counts
-                  // the ones that also have stat rows, so it undercounts
-                  ['UFC fights', form?.results?.length || career?.fightCount || null],
-                  ['Last activity', form?.daysSinceLast != null ? `${form.daysSinceLast} days` : null],
-                ],
-                [['From', val(fighter.birthplace)]],
-                [['Team', val(fighter.trains_at)]],
-              ].map((row) => row.filter(([, v]) => v)).filter((row) => row.length).map((row) => (
-                <div key={row.map(([k]) => k).join('-')} className="flex gap-2">
-                  {row.map(([k, v]) => (
-                    <div key={k} className="min-w-0 flex-1">
-                      <div className="truncate whitespace-nowrap text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">{k}</div>
-                      <div className="truncate text-[13.5px] font-semibold leading-snug" title={String(v)}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* last / next fight, side by side under the bio */}
-          <div className="grid shrink-0 grid-cols-2 gap-2 rounded-lg border border-border p-2.5">
-            {(() => {
-              const last = form?.results?.[0]
-              const opp = last ? oppData[String(last.oppId)] : null
-              return (
-                <div className="min-w-0">
-                  <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-foreground/70">Last fight</div>
-                  {last ? (
-                    <Tip content={<FighterMini f={opp} />}>
-                    <Link to={`/ufc/fighters/${last.oppId}`} className="flex items-center gap-2 rounded-md transition-colors hover:bg-muted/50">
-                      <div className="relative shrink-0">
-                        <FighterImage fighter={opp} className="h-8 w-8 rounded-full bg-muted" />
-                        <span className={cn(
-                          'absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-extrabold text-white ring-2 ring-card',
-                          last.draw ? 'bg-slate-400' : last.win ? 'bg-emerald-500' : 'bg-rose-500',
-                        )}>{last.draw ? 'D' : last.win ? 'W' : 'L'}</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[12px] font-bold leading-tight">{opp?.name || 'Unknown'}</div>
-                        <div className="truncate text-[10px] text-muted-foreground">{last.date ? formatDate(last.date) : '—'}</div>
-                      </div>
-                    </Link>
-                    </Tip>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">No recorded fights</p>
-                  )}
-                </div>
-              )
-            })()}
-
-            {(() => {
-              const opp = upcoming ? oppData[String(upcoming.oppId)] : null
-              return (
-                <div className="min-w-0 border-l border-border pl-2.5">
-                  <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-foreground/70">Next fight</div>
-                  {upcoming ? (
-                    <Tip content={<FighterMini f={opp} />}>
-                    <Link to={`/ufc/fighters/${upcoming.oppId}`} className="flex items-center gap-2 rounded-md transition-colors hover:bg-muted/50">
-                      <FighterImage fighter={opp} className="h-8 w-8 shrink-0 rounded-full bg-muted" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[12px] font-bold leading-tight">{opp?.name || 'TBA'}</div>
-                        <div className="truncate text-[10px] text-muted-foreground">{formatDate(upcoming.date)}</div>
-                      </div>
-                    </Link>
-                    </Tip>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">Not scheduled</p>
-                  )}
-                </div>
-              )
-            })()}
-          </div>
-
-        </div>
-
-      {/* ------ RIGHT: one card, four tabs (skills / overview / stats / fights) ------ */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
-        {/* one scroll container, one section per tab. `relative` matters: the spy
-            reads section.offsetTop, which is measured against the offset parent. */}
-        <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="mt-3 rounded-xl border border-border bg-card p-4">
           {/* the rule belongs to the gap between sections, so it is applied to
               every section that follows another rather than to each one */}
           <div className="flex flex-col gap-5 [&>section+section]:border-t-2 [&>section+section]:border-foreground [&>section+section]:pt-5">
@@ -1112,7 +1134,7 @@ export default function FighterProfilePage() {
             {profile ? (
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(240px,320px)_1fr]">
                 {/* radar + best/worst axes */}
-                <div className="flex flex-col rounded-lg border border-border p-3">
+                <div className="flex flex-col rounded-xl border border-border p-3">
                   <div className="mb-1 flex shrink-0 items-center gap-2">
                     <span className="text-[13px] font-extrabold tracking-tight">Skill Radar</span>
                     <span className="text-[11px] text-muted-foreground">vs {divisionLabel}</span>
@@ -1120,9 +1142,6 @@ export default function FighterProfilePage() {
                   {/* radar takes the slack and scales down when the window is short;
                       max-h-full keeps it inside the card instead of forcing a scroll */}
                   <RadarChart axes={profile.axes} />
-                  <p className="mt-1 shrink-0 text-center text-[10px] text-muted-foreground">
-                    Hover an axis for detail · radius = percentile
-                  </p>
                   <div className="mt-2.5 shrink-0 space-y-2 border-t pt-2.5">
                     <SkillCallout label="Strengths" dims={profile.strengths.slice(0, 3)} cls="text-emerald-600" />
                     <SkillCallout label="Weaknesses" dims={profile.weaknesses.slice(0, 3)} cls="text-rose-600" />
@@ -1140,7 +1159,7 @@ export default function FighterProfilePage() {
                 </div>
 
                 {/* skill decomposition */}
-                <div className="flex flex-col rounded-lg border border-border p-3">
+                <div className="flex flex-col rounded-xl border border-border p-3">
                   <div className="mb-2 flex shrink-0 items-center gap-2">
                     <span className="text-[13px] font-extrabold tracking-tight">Skill Decomposition</span>
                     <span className="text-[11px] text-muted-foreground">vs {divisionLabel}</span>
@@ -1168,6 +1187,12 @@ export default function FighterProfilePage() {
             )}
           </Section>
 
+          {styleDetail && (
+            <Section id="style" title="Style" register={register}>
+              <StyleSection detail={styleDetail} onOpen={(fid) => navigate(`/ufc/fighters/${fid}`)} />
+            </Section>
+          )}
+
           <Section id="overview" title="Career Overview" register={register}>
             {form ? (
               <div className="grid flex-1 gap-3 lg:grid-cols-2">
@@ -1190,7 +1215,7 @@ export default function FighterProfilePage() {
                     />
                   </div>
 
-                  <div className="rounded-lg border border-border p-3">
+                  <div className="rounded-xl border border-border p-3">
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Recent form</span>
                       <span className="text-[10px] text-muted-foreground">most recent first</span>
@@ -1199,7 +1224,7 @@ export default function FighterProfilePage() {
                   </div>
 
                   {form.activity.length > 1 && (
-                    <div className="rounded-lg border border-border p-2.5">
+                    <div className="rounded-xl border border-border p-2.5">
                       <div className="mb-1.5 flex items-center justify-between gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Fights per year</span>
                         {form.activity.length > 6 && (
@@ -1218,8 +1243,15 @@ export default function FighterProfilePage() {
                     </div>
                   )}
 
+                  {trendData.length <= 1 && (
+                    <div className="flex min-h-[230px] flex-1 flex-col rounded-xl border border-border p-2.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Rank after each fight</span>
+                      <p className="flex flex-1 items-center justify-center text-[12px] text-muted-foreground">No rank history yet</p>
+                    </div>
+                  )}
+
                   {trendData.length > 1 && (
-                    <div className="flex h-[230px] flex-col rounded-lg border border-border p-2.5">
+                    <div className="flex min-h-[230px] flex-1 flex-col rounded-xl border border-border p-2.5">
                       <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">
                           {usingRank ? 'Rank after each fight' : 'Output per fight'}
@@ -1234,6 +1266,7 @@ export default function FighterProfilePage() {
                         size={TREND_WIN}
                         domain={rankAxis?.domain}
                         ticks={rankAxis?.ticks}
+                        log={rankAxis?.log}
                         yLabel={usingRank ? 'RANK' : 'SIG. STR/MIN'}
                         invertY={usingRank}
                         formatValue={usingRank ? (v) => `#${Math.round(v)}` : (v) => v.toFixed(2)}
@@ -1262,14 +1295,14 @@ export default function FighterProfilePage() {
                 </div>
 
                 <div className="flex min-h-0 flex-col gap-3">
-                  <div className="space-y-3 rounded-lg border border-border p-2.5">
+                  <div className="space-y-3 rounded-xl border border-border p-2.5">
                     {/* third person singular once the name is in: "wins" / "loses" */}
                     <SplitBar title={`How ${fighter.last_name} wins · ${form.totalWins}`} segments={form.winMethods} unit="" />
                     <SplitBar title={`How ${fighter.last_name} loses · ${form.totalLosses}`} segments={form.lossMethods} unit="" />
                   </div>
 
                   {career?.hasStats && (
-                    <div className="rounded-lg border border-border p-2.5">
+                    <div className="rounded-xl border border-border p-2.5">
                       <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-foreground/70">Career rates</div>
                       {/* Win%/Finish% live in the left panel — these are per-time rates instead. */}
                       <div className="grid grid-cols-3 gap-1.5">
@@ -1283,7 +1316,7 @@ export default function FighterProfilePage() {
                     </div>
                   )}
 
-                  <SimilarFighters fighterId={fighter.id} className="flex flex-1 flex-col" />
+                  <DecisionLuck fighterId={fighter.id} className="flex-1" />
                 </div>
               </div>
             ) : (
@@ -1300,7 +1333,7 @@ export default function FighterProfilePage() {
             {career?.hasStats ? (
               <div className="flex flex-col gap-3">
               <div className="grid gap-3 xl:grid-cols-3">
-                <div className="rounded-lg border border-border p-3">
+                <div className="rounded-xl border border-border p-3">
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-foreground/70">Outcomes</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     <StatTile label="Win %" value={`${career.winPct}%`} />
@@ -1323,7 +1356,7 @@ export default function FighterProfilePage() {
                     />
                   </div>
                 </div>
-                <div className="rounded-lg border border-border p-3">
+                <div className="rounded-xl border border-border p-3">
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-amber-600">Striking</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     <StatTile label="Sig. Str / Min" value={career.slpm.toFixed(2)} />
@@ -1336,7 +1369,7 @@ export default function FighterProfilePage() {
                     <StatTile label="Sig. Strikes Thrown" value={career.totals.sigAtt.toLocaleString()} />
                   </div>
                 </div>
-                <div className="rounded-lg border border-border p-3">
+                <div className="rounded-xl border border-border p-3">
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-indigo-600">Grappling</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     <StatTile label="TD / 15" value={career.td15.toFixed(2)} />
@@ -1361,7 +1394,7 @@ export default function FighterProfilePage() {
                   render. */}
               {twoWay?.hasTwoWay && (
                 <div className="grid gap-3 xl:grid-cols-[1.05fr_1fr]">
-                  <div className="rounded-lg border border-border p-3">
+                  <div className="rounded-xl border border-border p-3">
                     <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                       <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Offense vs defense</span>
                       {/* one legend serves both cards in this row — same encoding */}
@@ -1372,7 +1405,7 @@ export default function FighterProfilePage() {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-border p-3">
+                  <div className="rounded-xl border border-border p-3">
                     <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[10px] font-bold uppercase tracking-wide text-foreground/70">Strike profile</span>
                       <SlideTabs
@@ -1401,7 +1434,7 @@ export default function FighterProfilePage() {
               )}
 
               {pacing.length > 1 && (
-                <div className="rounded-lg border border-border p-3">
+                <div className="rounded-xl border border-border p-3">
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-foreground/70">Pacing by round</div>
                   <RoundPacing rounds={pacing} survival={survival} />
                 </div>
@@ -1412,13 +1445,13 @@ export default function FighterProfilePage() {
             )}
           </Section>
 
-          <Section id="fights" title="Fight History" note={`${recent.length} fights`} register={register}>
-            {recent.length === 0 ? (
+          <Section id="fights" title="Fight History" note={historyNote} register={register}>
+            {history.length === 0 ? (
               <p className="text-sm text-muted-foreground">No fight history available.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[620px] border-collapse text-sm">
-                  <thead className="sticky top-0 z-10 bg-card">
+                  <thead>
                     <tr className="border-b border-border text-left text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
                       <th className="w-6 py-1.5" />
                       <th className="w-8 py-1.5 font-bold">W/L</th>
@@ -1431,7 +1464,8 @@ export default function FighterProfilePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {recent.map((r) => {
+                    {history.map((r) => {
+                      if (r.external) return <ExternalRow key={r.id} r={r} />
                       const opp = oppData[String(r.oppId)]
                       const open = openFight === r.id
                       const data = statsByFight[String(r.id)]
@@ -1450,16 +1484,18 @@ export default function FighterProfilePage() {
                               </span>
                             </td>
                             <td className="py-1.5 pr-2">
-                              <Tip className="flex items-center gap-2" content={<FighterMini f={opp} />}>
+                              <span className="flex items-center gap-2">
                                 <FighterImage fighter={opp} className="h-6 w-6 shrink-0 rounded-full bg-muted" />
-                                <Link
-                                  to={`/ufc/fighters/${r.oppId}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="truncate text-[12.5px] font-bold hover:text-primary"
-                                >
-                                  {opp?.name || 'Unknown'}
-                                </Link>
-                              </Tip>
+                                <Tip className="inline-flex min-w-0" content={<FighterMini f={opp} />}>
+                                  <Link
+                                    to={`/ufc/fighters/${r.oppId}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="truncate text-[12.5px] font-bold hover:text-primary"
+                                  >
+                                    {opp?.name || 'Unknown'}
+                                  </Link>
+                                </Tip>
+                              </span>
                             </td>
                             <td className="py-1.5 pr-2 text-[11.5px] font-semibold text-foreground/70">{r.method}</td>
                             <td className="py-1.5 pr-2 text-[11.5px] tabular-nums text-muted-foreground">{r.round ? `R${r.round}` : '—'}</td>
@@ -1485,7 +1521,7 @@ export default function FighterProfilePage() {
 
           </div>
         </div>
-      </div>
+      </ScrollArea>
     </div>
   )
 }

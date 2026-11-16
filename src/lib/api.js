@@ -54,7 +54,11 @@ export const peekCached = (path) => getCached(path)
 // otherwise — so it is correct whether or not the cache has been filled, and it keeps
 // working when a UFC `?itok=` signature expires. Returns null when the fighter has no
 // portrait at all, so callers can render their initials fallback.
-export const fighterImageUrl = (fighter) => {
+// pose 'right': the right-facing (blue-corner) portrait, when the fighter has one.
+export const fighterImageUrl = (fighter, pose) => {
+  if (pose === 'right' && fighter?.id && fighter.has_right_image) {
+    return `${BASE_URL}/ufc/fighters/${fighter.id}/image?pose=right`
+  }
   if (!fighter?.id) return fighter?.image_url || null
   if (!fighter.image_url && !fighter.has_image) return null
   return `${BASE_URL}/ufc/fighters/${fighter.id}/image`
@@ -79,6 +83,12 @@ export const fetchCareerStatsFor = (ids) => {
 // table; returns [] until `python -m app.services.ufc.rank_history_backfill` has run.
 export const fetchFighterRankHistory = (id) =>
   cachedRequest(`/ufc/fighters/${id}/rank-history`, 30 * 60 * 1000)
+// Pro bouts outside the UFC (Sherdog record), newest first; [] when the fighter isn't linked.
+export const fetchExternalFights = (id) =>
+  cachedRequest(`/ufc/fighters/${id}/external-fights`, 30 * 60 * 1000)
+// Decisions deserved (deserve to win) against decisions won. Changes only after an event.
+export const fetchDecisionLuck = (id) =>
+  cachedRequest(`/ufc/fighters/${id}/decision-luck`, 30 * 60 * 1000)
 // Stylistic comparables. Recomputed only after an event, so a long TTL is safe.
 export const fetchSimilarFighters = (id, { limit = 10, sameDivisionOnly = false } = {}) =>
   cachedRequest(

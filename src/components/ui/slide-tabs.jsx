@@ -17,7 +17,10 @@ const SIZES = {
   lg: { list: 'p-1', tab: 'px-5 py-2 text-sm gap-2', radius: 'rounded-full', inset: 'inset-y-1', track: 'rounded-full' },
 }
 
-export function SlideTabs({ tabs, value, onChange, size = 'default', className }) {
+// `tone="brand"`: for dark surfaces. A red pill, the selected label white and the rest a
+// softer white, set directly rather than by the default blend-mode trick.
+export function SlideTabs({ tabs, value, onChange, size = 'default', className, pillClassName, tone }) {
+  const brand = tone === 'brand'
   const listRef = useRef(null)
   const tabRefs = useRef({})
   const [pill, setPill] = useState({ left: 0, width: 0, ready: false })
@@ -43,14 +46,16 @@ export function SlideTabs({ tabs, value, onChange, size = 'default', className }
     <div
       ref={listRef}
       role="tablist"
-      className={cn('relative isolate inline-flex w-fit items-center bg-muted', sz.track, sz.list, className)}
+      className={cn('relative isolate inline-flex w-fit items-center', brand ? 'bg-white/10' : 'bg-muted', sz.track, sz.list, className)}
     >
       {/* sliding pill */}
       <div
         aria-hidden
         className={cn(
-          'absolute -z-10 bg-foreground shadow-sm',
+          'absolute -z-10 shadow-sm',
+          brand ? 'bg-primary' : 'bg-foreground',
           sz.radius,
+          pillClassName,
           sz.inset,
           pill.ready && 'transition-[left,width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]'
         )}
@@ -66,7 +71,8 @@ export function SlideTabs({ tabs, value, onChange, size = 'default', className }
           aria-selected={value === t.key}
           onClick={() => onChange(t.key)}
           className={cn(
-            'relative z-10 inline-flex cursor-pointer items-center whitespace-nowrap font-semibold text-white mix-blend-difference',
+            'relative z-10 inline-flex cursor-pointer items-center whitespace-nowrap font-semibold',
+            brand ? (value === t.key ? 'text-white' : 'text-white/70 transition-colors hover:text-white') : 'text-white mix-blend-difference',
             'outline-none focus-visible:ring-2 focus-visible:ring-ring',
             sz.tab,
             sz.radius

@@ -11,7 +11,7 @@ import { useDivisionRanks } from '../../hooks/useDivisionRanks'
 import { byP4P, useP4P } from '../../hooks/useP4P'
 import { cn } from '../../lib/utils'
 import { ordinal } from '../../lib/fighterAnalytics'
-import { blendOf, divisionLabel, famColor, styleLabel, traitGroup, traitTitle } from '../../lib/styleTraits'
+import { blendOf, divisionLabel, famColor, familyName, styleLabel, traitGroup, traitTitle } from '../../lib/styleTraits'
 
 export function Panel({ title, note, action, children, className, bodyClassName }) {
   return (
@@ -53,6 +53,23 @@ export function TraitBar({ trait, value, label, compact }) {
   )
 }
 
+// A few habits as chips with their percentile: what a fighter does most, or least.
+export function HabitChips({ label, cls, items, right }) {
+  return (
+    <div>
+      <SectionLabel className={cn('mb-1', cls, right && 'text-right')}>{label}</SectionLabel>
+      <div className={cn('flex flex-wrap gap-1', right && 'justify-end')}>
+        {items.map(([k, v]) => (
+          <span key={k} className="inline-flex items-baseline gap-1 rounded-md border bg-muted/40 px-1.5 py-0.5 text-[10.5px]">
+            <span className="font-medium text-foreground/80">{traitTitle(k)}</span>
+            <span className="font-extrabold tabular-nums">{ordinal(v)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function FamilyChip({ family, className }) {
   if (!family) return null
   return (
@@ -65,7 +82,8 @@ export function FamilyChip({ family, className }) {
 
 // A fighter's family blend as one stacked bar plus named shares. Style is a continuum with
 // four real families (style_page_service), so a fighter is shown as a mix, not a box.
-export function BlendBar({ fighter, families, className }) {
+// `singular`: name the families as said of one fighter ('Patient tactician').
+export function BlendBar({ fighter, families, className, singular }) {
   const blend = blendOf(fighter).filter((b) => families?.[b.family])
   if (!blend.length) return null
   return (
@@ -79,7 +97,7 @@ export function BlendBar({ fighter, families, className }) {
         {blend.map((b) => (
           <span key={b.family} className="inline-flex items-center gap-1">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: famColor(b.family) }} />
-            <span className="font-semibold">{families[b.family].name}</span>
+            <span className="font-semibold">{singular ? familyName(families[b.family].name) : families[b.family].name}</span>
             <span className="tabular-nums text-muted-foreground">{Math.round(b.share * 100)}%</span>
           </span>
         ))}

@@ -402,13 +402,22 @@ function FightLink({ id, primary }) {
 
 // The winner mark, identical on every photo (hero and rows, either corner): a strip
 // across the bottom of the portrait.
-function WinStrip({ big }) {
+// The result strip under a portrait: green under the winner, gray under both on a draw.
+const stripOf = (d, side) => (d.winner === side ? 'win' : d.outcome === 'Draw' ? 'draw' : null)
+
+function ResultStrip({ result, big, side }) {
+  if (!result) return null
+  const draw = result === 'draw'
   return (
-    <span className={cn(
-      'absolute inset-x-0 bottom-0 z-20 bg-emerald-600 text-center font-extrabold uppercase tracking-wider text-white',
-      big ? 'py-1 text-[11px]' : 'py-px text-[9px]',
+    // On the hero it also fades toward the middle, so it has no hard inner edge.
+    <span style={big && side ? { WebkitMaskImage: `linear-gradient(to ${side === 'red' ? 'right' : 'left'}, #000 70%, transparent)`, maskImage: `linear-gradient(to ${side === 'red' ? 'right' : 'left'}, #000 70%, transparent)` } : undefined}
+      className={cn(
+      'absolute inset-x-0 bottom-0 z-20 text-center font-extrabold uppercase tracking-wider text-white',
+      // On the dark hero the strip fades up out of the bottom like the flag does.
+      big ? cn('bg-gradient-to-t to-transparent pb-2 pt-10 text-[11px]', draw ? 'from-slate-500' : 'from-emerald-600 via-emerald-600/85')
+        : cn('py-px text-[9px]', draw ? 'bg-slate-500' : 'bg-emerald-600'),
     )}>
-      {big ? 'Winner' : 'Win'}
+      {draw ? 'Draw' : big ? 'Winner' : 'Win'}
     </span>
   )
 }
@@ -416,36 +425,40 @@ function WinStrip({ big }) {
 // ---------------------------------------------------------------------------
 // Hero: the selected fight (the main event by default)
 // ---------------------------------------------------------------------------
-function HeroPortrait({ fighter, won }) {
+function HeroPortrait({ fighter, result, side }) {
   return (
-    <div className="relative hidden w-[110px] shrink-0 overflow-hidden bg-muted @min-[600px]/hero:block @min-[760px]/hero:w-[130px] @min-[1150px]/hero:w-[170px]">
-      <WavingFlag key={fighter?.country_code} countryCode={fighter?.country_code} />
-      <div className="absolute inset-x-0 bottom-0 z-[5] h-1/3 bg-gradient-to-t from-black/25 to-transparent" />
+    <div className="relative hidden w-[110px] shrink-0 overflow-hidden @min-[600px]/hero:block @min-[760px]/hero:w-[170px] @min-[1000px]/hero:w-[240px]">
+      <div className="absolute inset-0 opacity-70"><WavingFlag key={fighter?.country_code} countryCode={fighter?.country_code} /></div>
+      <div className={cn('absolute inset-0 z-[5] from-ink via-ink/30 to-transparent', side === 'blue' ? 'bg-gradient-to-r' : 'bg-gradient-to-l')} />
+      <div className="absolute inset-x-0 bottom-0 z-[5] h-1/3 bg-gradient-to-t from-ink to-transparent" />
       <FighterImage
         fighter={fighter}
         fit="contain"
         alt={fighter ? fullName(fighter) : ''}
         className="absolute inset-0 z-10 flex items-end justify-center"
-        imgClassName="h-[94%] w-auto max-w-none object-bottom"
+        imgClassName="h-full w-full object-contain object-bottom"
       />
-      {won && <WinStrip big />}
+      <ResultStrip result={result} big side={side} />
     </div>
   )
 }
 
 function HeroName({ fighter, side, d, narrow }) {
   const lost = d.winner && d.winner !== side
+  const name = lastName(fighter)
+  // Never cut off: the longest word shrinks to fit the column (0.68em per glyph of the
+  // italic display face, plus the slant), and names wrap only at spaces.
+  const longest = Math.max(...name.split(/\s+/).map((w) => w.length), 1)
+  const fontSize = `min(${narrow ? 36 : 46}px, calc(100cqw / ${(longest * 0.68 + 0.3).toFixed(2)}))`
   return (
-    <div className={cn('min-w-0', side === 'red' && 'text-right')}>
-      <div className="truncate text-[11px] text-muted-foreground">{fighter?.first_name}</div>
-      {/* Two lines reserved when narrow, so a name that wraps doesn't grow the panel. */}
-      <div className={cn(
-        'flex font-display font-extrabold italic uppercase leading-none tracking-tight',
+    <div className={cn('@container min-w-0', side === 'red' && 'text-right')}>
+      <div className="truncate text-[14px] leading-tight text-muted-foreground">{fighter?.first_name}</div>
+      <div style={{ fontSize }} className={cn(
+        'flex font-display font-extrabold italic uppercase leading-[0.9] tracking-tight',
         side === 'red' ? 'justify-end' : 'justify-start',
-        narrow ? 'h-[42px] items-center text-[21px]' : 'h-[28px] items-center text-[28px]',
         lost ? 'text-muted-foreground/60' : side === 'red' ? 'text-corner-red' : 'text-corner-blue',
       )}>
-        <span className={narrow ? 'line-clamp-2' : 'truncate'}>{lastName(fighter)}</span>
+        <span className="pr-[0.1em]">{name}</span>
       </div>
       <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">{record(fighter)}</div>
     </div>
@@ -479,6 +492,13 @@ function StatBlock({ title, children }) {
   )
 }
 
+// The selected fight on the ink of the fight-page covers: every light-theme token the
+// pieces inside use is re-pointed at white-on-ink, and the corner colours lifted so they
+// read on the dark ground.
+const INK = '[--color-foreground:#fff] [--color-muted-foreground:rgba(255,255,255,.6)] [--color-border:rgba(255,255,255,.12)] '
+  + '[--color-muted:rgba(255,255,255,.12)] [--color-background:#2d2d2d] [--color-card:transparent] [--color-gold-foreground:#c1a14f] '
+  + '[--color-corner-red:#ff4d4d] [--color-corner-blue:#5b9bff] bg-ink text-white'
+
 function FightHero({ d }) {
   const { fight } = d
   const r = d.stats?.red
@@ -492,16 +512,17 @@ function FightHero({ d }) {
     // the app sidebar take a different share of a laptop and a desktop. Narrower, the
     // portraits slim down (gone only on phones), the result drops under the weight
     // class, the gauge sits under the names and the stats stack.
-    <div className="@container/hero flex overflow-hidden rounded-xl border border-border bg-card">
-      <HeroPortrait fighter={d.red} won={d.winner === 'red'} />
+    <div className={cn('@container/hero flex overflow-hidden rounded-xl', INK)}>
+      <HeroPortrait fighter={d.red} result={stripOf(d, 'red')} side="red" />
 
       <div ref={centerRef} className="mx-auto flex w-full min-w-0 max-w-[920px] flex-1 flex-col gap-2 px-4 py-3">
         {/* weight · result · button, one line. Decisions' `details` are the judges'
             cards: left to the fight page. A finish's details ("Punch to Head") stay. */}
-        <div className="flex h-7 items-center gap-3">
+        {/* Narrow, the result goes under the weight class instead of beside it. */}
+        <div className={cn('flex items-center gap-3', narrow ? 'min-h-7 flex-wrap gap-y-1' : 'h-7')}>
           <WeightTag weight={d.weight} rounds={d.rounds} className="shrink-0" />
           {d.done && (
-            <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <div className={cn('flex items-center gap-2', narrow ? 'order-last basis-full' : 'min-w-0 flex-1 justify-end')}>
               <span className="whitespace-nowrap text-[12.5px] font-bold">
                 {d.winner ? `${lastName(d.winner === 'red' ? d.red : d.blue)} wins` : d.outcome}
               </span>
@@ -552,7 +573,7 @@ function FightHero({ d }) {
         )}
       </div>
 
-      <HeroPortrait fighter={d.blue} won={d.winner === 'blue'} />
+      <HeroPortrait fighter={d.blue} result={stripOf(d, 'blue')} side="blue" />
     </div>
   )
 }
@@ -560,44 +581,39 @@ function FightHero({ d }) {
 // ---------------------------------------------------------------------------
 // Card rows
 // ---------------------------------------------------------------------------
-function RowTile({ fighter, won }) {
+function RowTile({ fighter, result }) {
   return (
-    <div className="relative hidden w-14 shrink-0 self-stretch overflow-hidden bg-card sm:block">
+    <div className="relative hidden w-[70px] shrink-0 self-stretch overflow-hidden bg-card sm:block xl:w-[84px]">
       <FighterImage fighter={fighter} className="absolute inset-0" imgClassName="object-top" />
-      {won && <WinStrip />}
+      <ResultStrip result={result} />
     </div>
   )
 }
 
 // Name and record on the outside; odds get their own column on the inside.
-function RowName({ fighter, side, d }) {
+function RowName({ fighter, side, d, odds }) {
   const lost = d.winner && d.winner !== side
   const name = lastName(fighter)
-  // Wrap only at spaces ("Cortes Acosta" takes two lines); a long single word shrinks to
-  // the column instead of breaking mid-word. 0.78em: a bold uppercase glyph plus margin.
-  const longest = Math.max(...name.split(/\s+/).map((w) => w.length), 1)
-  const fontSize = `min(13.5px, calc(100cqw / ${(longest * 0.78).toFixed(2)}))`
+  // One line, never cut: a long name ("Cortes Acosta") shrinks to the column, since a
+  // second line would push the odds out of the row. 0.72em: a bold uppercase glyph.
+  const fontSize = `min(21px, calc(100cqw / ${(Math.max(name.length, 1) * 0.72).toFixed(2)}))`
   return (
     <div className={cn('@container min-w-0', side === 'blue' && 'text-right')}>
-      <div className={cn('flex items-center gap-1 text-[10.5px] text-muted-foreground', side === 'blue' && 'justify-end')}>
+      <div className={cn('flex items-center gap-1 text-[11.5px] text-muted-foreground', side === 'blue' && 'justify-end')}>
         {side === 'red' && <CountryFlag countryCode={fighter?.country_code} />}
         <span className="truncate">{fighter?.first_name}</span>
         {side === 'blue' && <CountryFlag countryCode={fighter?.country_code} />}
       </div>
-      <div style={{ fontSize }} className={cn('line-clamp-2 font-extrabold uppercase leading-[1.1] tracking-tight', lost ? 'text-muted-foreground/60' : 'text-foreground')}>
+      <div style={{ fontSize }} className={cn('whitespace-nowrap font-extrabold uppercase leading-[1.1] tracking-tight', lost ? 'text-muted-foreground/60' : 'text-foreground')}>
         {name}
       </div>
-      <div className="mt-0.5 text-[10.5px] tabular-nums text-muted-foreground">{record(fighter)}</div>
+      <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{record(fighter)}</div>
+      {odds != null && (
+        <div className={cn('text-[12.5px] tabular-nums', odds < 0 ? 'font-extrabold text-foreground' : 'font-semibold text-muted-foreground')}>
+          {formatOdds(odds)}
+        </div>
+      )}
     </div>
-  )
-}
-
-function OddsCell({ odds }) {
-  if (odds == null) return <span className="text-center text-[11px] text-muted-foreground/50">–</span>
-  return (
-    <span className={cn('text-center text-[11.5px] tabular-nums', odds < 0 ? 'font-extrabold text-foreground' : 'font-semibold text-muted-foreground')}>
-      {formatOdds(odds)}
-    </span>
   )
 }
 
@@ -614,10 +630,9 @@ function FightRow({ d, selected, onSelect }) {
         selected ? 'border-foreground/70 ring-1 ring-foreground/70' : 'border-border hover:bg-muted/40',
       )}
     >
-      <RowTile fighter={d.red} won={d.winner === 'red'} />
-      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_36px_minmax(146px,210px)_36px_minmax(0,1fr)] items-center gap-2 px-2.5">
-        <RowName fighter={d.red} side="red" d={d} />
-        <OddsCell odds={fight.red_odds} />
+      <RowTile fighter={d.red} result={stripOf(d, 'red')} />
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(84px,1fr)_minmax(150px,2fr)_minmax(84px,1fr)] items-center gap-4 px-3">
+        <RowName fighter={d.red} side="red" d={d} odds={fight.red_odds} />
 
         <div className="flex min-w-0 flex-col gap-[3px] py-2">
           <WeightTag weight={d.weight} className="justify-center" />
@@ -635,10 +650,9 @@ function FightRow({ d, selected, onSelect }) {
           </div>
         </div>
 
-        <OddsCell odds={fight.blue_odds} />
-        <RowName fighter={d.blue} side="blue" d={d} />
+        <RowName fighter={d.blue} side="blue" d={d} odds={fight.blue_odds} />
       </div>
-      <RowTile fighter={d.blue} won={d.winner === 'blue'} />
+      <RowTile fighter={d.blue} result={stripOf(d, 'blue')} />
     </div>
   )
 }
@@ -648,13 +662,14 @@ function FightRow({ d, selected, onSelect }) {
 // ---------------------------------------------------------------------------
 
 // The whole UFC history (~1,300 cards) in one request; the list and its search are
-// client-side. The path must match what fetchEvents({ limit: 2000 }) requests.
-const EVENTS_PATH = '/ufc/events?limit=2000'
-// Newest first, completed cards only (upcoming ones live on the Upcoming page). A
-// sorted copy: the array is the api cache's own, shared with every other reader.
+// client-side. The path must match what fetchEvents(EVENTS_PARAMS) requests.
+// `completed`: only cards with results in, so a card stays on Upcoming until it is scored.
+const EVENTS_PARAMS = { limit: 2000, completed: true }
+const EVENTS_PATH = '/ufc/events?limit=2000&completed=true'
+// Newest first. A sorted copy: the array is the api cache's own, shared with every
+// other reader.
 function completed(events) {
-  const today = new Date().toISOString().slice(0, 10)
-  return events.filter((e) => e.date?.slice(0, 10) <= today).sort((a, b) => new Date(b.date) - new Date(a.date))
+  return [...events].sort((a, b) => new Date(b.date) - new Date(a.date))
 }
 
 export default function UFCPage() {
@@ -682,7 +697,7 @@ export default function UFCPage() {
   const heroRef = useRef(null)
 
   useEffect(() => {
-    fetchEvents({ limit: 2000 })
+    fetchEvents(EVENTS_PARAMS)
       .then((all) => setEvents(completed(all)))
       .catch(() => {})
       .finally(() => setLoading(false))

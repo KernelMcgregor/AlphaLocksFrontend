@@ -12,11 +12,16 @@
 // route.
 //
 // Completed fights are NOT handled here — see CompletedFightPage.
-import { ArrowLeft, Brain, Flame, Info, Timer, Trophy } from 'lucide-react'
+import { Brain, Flame, Info, Timer, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, useNavigate } from 'react-router-dom'
-import HeaderActions from '../components/layout/HeaderActions'
+import { Link } from 'react-router-dom'
+import FightCover, { FightBar, MarketCall, ModelCall, PreviewTeaser } from '../components/hero/FightHero'
+import { ScrollArea } from '../components/ui/scroll-area'
+import { usePastCover } from '../hooks/usePastCover'
+import { familyName, familyOf } from '../lib/styleTraits'
+import StyleMatchup from '../components/fight/StyleMatchup'
+import { useStyleDetail } from '../hooks/useStyleDetail'
 import { PortraitColumn } from '../components/sports/FeaturedFight'
 import FighterImage from '../components/sports/FighterImage'
 import FighterMini from '../components/sports/FighterMini'
@@ -47,9 +52,7 @@ import {
 import { buildProjectedKeys, deriveFightFlow } from '../lib/fightProjection'
 import { cn, formatDate, formatOdds } from '../lib/utils'
 import { buildShapWaterfall } from '../lib/shapWaterfall'
-import EventLine from '../components/fight/EventLine'
 import MatchupCard from '../components/fight/MatchupCard'
-import PreviewBox from '../components/fight/PreviewBox'
 import { CORNERS, fullName, impliedFromOdds } from '../components/fight/corners'
 import { CornerColumns, CornerHead, Empty } from '../components/fight/layout'
 
@@ -134,7 +137,7 @@ function buildVictoryKeys(ctx) {
 function ModelVerdict({ prediction, methodPrediction, red, blue }) {
   if (!prediction) {
     return (
-      <div className="shrink-0 rounded-lg border border-border p-2.5">
+      <div className="shrink-0 rounded-xl border border-border p-2.5">
         <div className="text-[9px] font-bold uppercase tracking-wide text-foreground/70">Model</div>
         <p className="mt-1 text-[11px] text-muted-foreground">No prediction for this fight yet.</p>
       </div>
@@ -156,7 +159,7 @@ function ModelVerdict({ prediction, methodPrediction, red, blue }) {
   ].sort((a, b) => b.prob - a.prob) : []
 
   return (
-    <div className="shrink-0 rounded-lg border border-border p-2.5">
+    <div className="shrink-0 rounded-xl border border-border p-2.5">
       {/* Label, pick and number on one line: the rail's remaining height belongs
           to the radar underneath, and a header row of its own bought nothing. */}
       <div className="flex items-center gap-1.5">
@@ -218,7 +221,7 @@ function ModelVerdict({ prediction, methodPrediction, red, blue }) {
 // is the whole-profile view of the same percentiles the keys pick pairs out of.
 function RadarPanel({ series }) {
   return (
-    <div className="flex min-w-0 flex-col rounded-lg border border-border p-2.5">
+    <div className="flex min-w-0 flex-col rounded-xl border border-border p-2.5">
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-[9px] font-bold uppercase tracking-wide text-foreground/70">Skill Radar</span>
         {series.map((sr) => (
@@ -401,9 +404,7 @@ function CommonOpponent({ row, red, blue, oppData }) {
 // `tabsHost`: in the flanked layout the section tabs go into this element (the host
 // page's toolbar) instead of the Layout's header row, which then stays empty and hides.
 export default function UpcomingFightPage({ fight, matchup, flanked = false, tabsHost = null }) {
-  const showBack = !flanked
-  const navigate = useNavigate()
-  const { red_fighter: red, blue_fighter: blue, prediction, method_prediction, odds, method_odds, shap_values, preview, event } = fight
+  const { red_fighter: red, blue_fighter: blue, prediction, method_prediction, odds, method_odds, shap_values, preview } = fight
   // Exchange quotes ride along on the fight payload; the price *curves* do not —
   // lib/matchup.js fetches those.
   const exchanges = fight.prediction_markets || null
@@ -427,6 +428,12 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
 
   const redId = red?.id
   const blueId = blue?.id
+  // Each corner's style row, for the hero's family tags and the Styles section. Not on
+  // the Hypothetical page (flanked), which keeps its own layout.
+  const redStyle = useStyleDetail(flanked ? null : redId)
+  const blueStyle = useStyleDetail(flanked ? null : blueId)
+  const styles = { red: redStyle.detail, blue: blueStyle.detail }
+  const hasStyles = Boolean(styles.red || styles.blue)
 
   const derive = useMemo(() => {
     const out = {}
@@ -722,20 +729,22 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
   const sections = useMemo(() => [
     flanked && prediction && { key: 'model', label: 'Model' },
     { key: 'matchup', label: 'Matchup' },
+    hasStyles && { key: 'styles', label: 'Styles' },
     flow && { key: 'flow', label: 'Fight Flow' },
     { key: 'form', label: 'Form' },
     { key: 'tendencies', label: 'Tendencies' },
     !flanked && prediction && { key: 'model', label: 'Model & Market' },
-  ].filter(Boolean), [prediction, flow, flanked])
+  ].filter(Boolean), [prediction, flow, flanked, hasStyles])
 
-  const { scrollRef, register, active, scrollTo } = useScrollSpy(sections)
+  // 64: the slim bar pinned over the top of the scroll once the cover has gone.
+  const { scrollRef, register, active, scrollTo } = useScrollSpy(sections, flanked ? 0 : 64)
+  const [coverRef, pastCover] = usePastCover(scrollRef, flanked)
 
   // The model's section, rendered first in the flanked layout and last otherwise.
   const modelSection = prediction && (
               <Section
                 id="model"
                 title={flanked ? 'Model' : 'Model & Market'}
-                note={flanked ? 'Who wins, how, and what moved the number' : 'Where the probability comes from, and what the market is paying'}
                 register={register}
               >
                 {flanked && (
@@ -747,7 +756,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                   const fav = waterfall.side === 'red' ? red : blue
                   const favMarket = value?.sides?.[waterfall.side === 'red' ? 0 : 1]?.implied ?? null
                   return (
-                    <div className="mb-3 rounded-lg border border-border p-3">
+                    <div className="mb-3 rounded-xl border border-border p-3">
                       <div className="mb-2 flex flex-wrap items-baseline gap-2">
                         <span className="text-[13px] font-extrabold tracking-tight">Winner model attribution</span>
                         <span className="text-[9.5px] text-muted-foreground">{fav.last_name} win probability</span>
@@ -789,7 +798,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                     separate "model vs market" and "method market" panels are gone; the board
                     stays for per-book prices. */}
                 <div className={cn('grid gap-3', !flanked && 'lg:grid-cols-2')}>
-                  <div className="flex flex-col rounded-lg border border-border p-3">
+                  <div className="flex flex-col rounded-xl border border-border p-3">
                     {method_prediction?.red_ko_prob != null ? (
                       <OutcomeGrid
                         rows={[
@@ -811,7 +820,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                     )}
                   </div>
 
-                  {!flanked && <div className="rounded-lg border border-border p-3">
+                  {!flanked && <div className="rounded-xl border border-border p-3">
                     <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                       <span className="text-[13px] font-extrabold tracking-tight">Moneyline board</span>
                       <span className="text-[9.5px] text-muted-foreground">
@@ -902,7 +911,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                   </div>}
                 </div>
 
-                <div className="mt-3 rounded-lg border border-border p-3">
+                <div className="mt-3 rounded-xl border border-border p-3">
                   {fight.round_prediction?.curve?.length ? (
                     <SurvivalCurve
                       prediction={fight.round_prediction}
@@ -924,7 +933,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                 </div>
 
                 {marketHistory && Object.keys(marketHistory).length > 0 && (
-                  <div className="mt-3 rounded-lg border border-border p-3">
+                  <div className="mt-3 rounded-xl border border-border p-3">
                     <MarketMovement
                       series={marketHistory}
                       modelProb={prediction?.red_prob}
@@ -938,44 +947,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
               </Section>
             )
 
-  return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden lg:flex-row">
-      {flanked && tabsHost && createPortal(
-        <SlideTabs size="sm" value={active} onChange={scrollTo} tabs={sections} />, tabsHost,
-      )}
-      {!flanked && <HeaderActions>
-        <EventLine event={event} weightClass={fight.weight_class} scheduledRounds={ctx?.scheduled_rounds} />
-        <SlideTabs size="sm" value={active} onChange={scrollTo} tabs={sections} />
-        {showBack && <button
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back
-        </button>}
-      </HeaderActions>}
-
-      {/* ---------------- LEFT: the fight itself ---------------- */}
-      {/* 320px, down from 360: the tale of the tape and both odds boards still
-          fit, and the 40px go to the sections, where the charts actually use them. */}
-      {flanked && (
-        <div className="hidden min-h-0 w-[clamp(150px,17%,260px)] shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:flex lg:flex-col [&>a]:flex-1">
-          <PortraitColumn fighter={red} corner="red" ctxSide={ctx?.red} weightClass={fight.weight_class} />
-        </div>
-      )}
-      {!flanked && <div className="flex min-h-0 shrink-0 flex-col gap-3 overflow-y-auto lg:w-[320px] lg:overflow-hidden">
-        <MatchupCard red={red} blue={blue} ctx={ctx} weightClass={fight.weight_class} />
-        <ModelVerdict
-          prediction={prediction}
-          methodPrediction={method_prediction}
-          red={red}
-          blue={blue}
-        />
-        {preview?.content && <PreviewBox preview={preview} fightId={fight.id} className="lg:flex-1" />}
-      </div>}
-
-      {/* ---------------- RIGHT: one scroll, many sections ---------------- */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
-        <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto p-4">
+  const body = (
           <div className="flex flex-col gap-5 [&>section+section]:border-t-2 [&>section+section]:border-foreground [&>section+section]:pt-5">
             {flanked && modelSection}
 
@@ -983,7 +955,6 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
             <Section
               id="matchup"
               title="Matchup"
-              note="Both skill profiles, and where each corner can win it"
               register={register}
             >
               {/* The skill radar beside the routes to a win, then both careers
@@ -992,7 +963,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                 <RadarPanel series={radarSeries} />
 
                 {/* ---- Keys to victory ---- */}
-                <div className="min-w-0 rounded-lg border border-border p-3">
+                <div className="min-w-0 rounded-xl border border-border p-3">
                   <div className="mb-2 flex flex-wrap items-baseline gap-2">
                     <span className="text-[13px] font-extrabold tracking-tight">Keys to victory</span>
                     <Tip content={(
@@ -1030,7 +1001,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                 </div>
               </div>
 
-              <div className="mt-3 rounded-lg border border-border p-3">
+              <div className="mt-3 rounded-xl border border-border p-3">
                 <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                   <div className="flex items-baseline gap-2">
                     <span className="text-[13px] font-extrabold tracking-tight">Fighter Comparison</span>
@@ -1063,12 +1034,17 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
               </div>
             </Section>
 
+            {hasStyles && (
+              <Section id="styles" title="Styles" register={register}>
+                <StyleMatchup red={red} blue={blue} styles={styles} />
+              </Section>
+            )}
+
             {/* ---- Fight Flow: the expected-stats projection ---- */}
             {flow && (
               <Section
                 id="flow"
                 title="Fight Flow"
-                note="How the fight is projected to play out, stat by stat"
                 register={register}
               >
                 <FightFlow
@@ -1084,7 +1060,6 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
             <Section
               id="form"
               title="Form"
-              note="Last 10 bouts, then who they have both faced"
               register={register}
             >
               {!loaded ? <Empty>Loading fight history…</Empty> : (
@@ -1148,7 +1123,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
               )}
 
               {ctx?.common_opponents?.length > 0 && (
-                <div className="mt-3 rounded-lg border border-border p-3">
+                <div className="mt-3 rounded-xl border border-border p-3">
                   <div className="mb-2 flex items-baseline gap-2">
                     <span className="text-[13px] font-extrabold tracking-tight">Common opponents</span>
                     <span className="text-[10.5px] text-muted-foreground">{ctx.common_opponents.length} shared</span>
@@ -1164,7 +1139,6 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
             <Section
               id="tendencies"
               title="Tendencies"
-              note="Rated skills per corner, then career averages"
               register={register}
             >
               {hasSkills && (
@@ -1198,7 +1172,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
 
               {!loaded ? <Empty>Loading career stats…</Empty> : (
                 <>
-                  <div className="rounded-lg border border-border p-3">
+                  <div className="rounded-xl border border-border p-3">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[13px] font-extrabold tracking-tight">Where they strike</span>
                       <SlideTabs
@@ -1245,7 +1219,7 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                       // deriveRoundPacing returns the round array itself
                       if (!d?.pacing?.length) return null
                       return (
-                        <div key={corner.key} className="rounded-lg border border-border p-3">
+                        <div key={corner.key} className="rounded-xl border border-border p-3">
                           <div className="mb-2 flex items-center gap-1.5">
                             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: corner.css }} />
                             <span className="text-[12px] font-extrabold">{fullName(fighter)}</span>
@@ -1263,13 +1237,55 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
             {!flanked && modelSection}
 
           </div>
+  )
+
+  // The Hypothetical page keeps its own layout: portraits flanking one scrolling column.
+  if (!flanked) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <ScrollArea viewportRef={scrollRef} className="min-h-0 flex-1" viewportClassName="relative">
+          <FightBar show={pastCover} fight={fight} tabs={sections} active={active} onTab={scrollTo} />
+          <FightCover coverRef={coverRef} fight={fight} ctx={ctx} styles={styles} rounds={ctx?.scheduled_rounds}
+            tape={<MatchupCard red={red} blue={blue} ctx={ctx} weightClass={fight.weight_class} tapeOnly bare
+              families={{ red: familyOf(styles.red) || familyName(fight.styles?.red), blue: familyOf(styles.blue) || familyName(fight.styles?.blue) }} />}>
+            <ModelCall prediction={prediction} methodPrediction={method_prediction} red={red} blue={blue} />
+            <MarketCall fight={fight} />
+            {preview?.content && <PreviewTeaser fight={fight} />}
+          </FightCover>
+          <div className="mt-3 rounded-xl border border-border bg-card p-4">{body}</div>
+        </ScrollArea>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
+      {flanked && tabsHost && createPortal(
+        <SlideTabs size="sm" value={active} onChange={scrollTo} tabs={sections} />, tabsHost,
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:flex-row">
+      {/* ---------------- LEFT: the fight itself ---------------- */}
+      {/* 320px, down from 360: the tale of the tape and both odds boards still
+          fit, and the 40px go to the sections, where the charts actually use them. */}
+      {flanked && (
+        <div className="hidden min-h-0 w-[clamp(150px,17%,260px)] shrink-0 overflow-hidden rounded-xl border border-border bg-card lg:flex lg:flex-col [&>a]:flex-1">
+          <PortraitColumn fighter={red} corner="red" ctxSide={ctx?.red} weightClass={fight.weight_class} />
+        </div>
+      )}
+
+      {/* ---------------- RIGHT: one scroll, many sections ---------------- */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+        <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto p-4">
+          {body}
         </div>
       </div>
       {flanked && (
-        <div className="hidden min-h-0 w-[clamp(150px,17%,260px)] shrink-0 overflow-hidden rounded-lg border border-border bg-card lg:flex lg:flex-col [&>a]:flex-1">
+        <div className="hidden min-h-0 w-[clamp(150px,17%,260px)] shrink-0 overflow-hidden rounded-xl border border-border bg-card lg:flex lg:flex-col [&>a]:flex-1">
           <PortraitColumn fighter={blue} corner="blue" ctxSide={ctx?.blue} weightClass={fight.weight_class} />
         </div>
       )}
+      </div>
     </div>
   )
 }

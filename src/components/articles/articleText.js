@@ -6,7 +6,9 @@
 export function splitHeadline(h = '') {
   const [matchup, ...rest] = h.split('|')
   const tail = rest.join('|').trim()
-  const i = tail.indexOf(':')
+  // Fight Night names carry their own colon ("UFC Fight Night: Adesanya vs. Magomedov"),
+  // so the title starts after the last one.
+  const i = tail.lastIndexOf(':')
   return {
     matchup: matchup.trim(),
     event: i < 0 ? null : tail.slice(0, i).trim(),

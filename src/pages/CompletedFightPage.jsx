@@ -18,69 +18,34 @@
 // everything else is the same fight payload the upcoming page reads. `review` here is
 // lib/matchup.loadReview: the pre-fight context, both fight logs, the market curves.
 // Upcoming fights are NOT handled here — see UpcomingFightPage.
-import { ArrowLeft } from 'lucide-react'
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import EventLine from '../components/fight/EventLine'
+import FightCover, { FightBar, ModelCall, PreviewTeaser } from '../components/hero/FightHero'
+import { ScrollArea } from '../components/ui/scroll-area'
+import { usePastCover } from '../hooks/usePastCover'
+import { familyName, familyOf } from '../lib/styleTraits'
+import StyleMatchup from '../components/fight/StyleMatchup'
 import MatchupCard from '../components/fight/MatchupCard'
-import PreviewBox from '../components/fight/PreviewBox'
-import { CORNERS } from '../components/fight/corners'
 import { Box, CornerLegend } from '../components/fight/layout'
 import DeserveToWin from '../components/fight/review/DeserveToWin'
 import { Expectations, KeysRevisited } from '../components/fight/review/Expectations'
 import MarketRecap from '../components/fight/review/MarketRecap'
-import { ModelGrade, RailReport } from '../components/fight/review/ModelReport'
+import { ModelGrade } from '../components/fight/review/ModelReport'
 import RankMovement from '../components/fight/review/RankMovement'
 import RoundsAndJudges from '../components/fight/review/RoundsAndJudges'
 import StatsBoard from '../components/fight/review/StatsBoard'
-import HeaderActions from '../components/layout/HeaderActions'
-import { SlideTabs } from '../components/ui/slide-tabs'
 import ProbabilityWaterfall from '../components/viz/ProbabilityWaterfall'
 import Section from '../components/viz/Section'
 import { useScrollSpy } from '../components/viz/hooks'
 import { buildProjectedKeys } from '../lib/fightProjection'
 import {
-  expectationRows, gradeKeys, methodClass, METHOD_LABEL, recordGoingIn, settledProps,
+  expectationRows, gradeKeys, methodClass, recordGoingIn, settledProps,
   splitStats, winnerSide,
 } from '../lib/fightReview'
 import { buildShapWaterfall } from '../lib/shapWaterfall'
-
-// The result itself, under the portraits: how and when it ended, and who refereed.
-function ResultBox({ fight, side }) {
-  const cls = methodClass(fight.method)
-  const winner = side === 'red' ? fight.red_fighter : side === 'blue' ? fight.blue_fighter : null
-  const method = (fight.method || '').trim()
-  // A decision's `details` is the judges' totals, which the Rounds section shows in
-  // full; a finish's is the finishing sequence, which belongs here.
-  const details = cls !== 'dec' ? fight.details?.trim() : null
-  return (
-    <div className="shrink-0 rounded-lg border border-border p-2.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[9px] font-bold uppercase tracking-wide text-foreground/70">Result</span>
-        {fight.finish_round && (
-          <span className="text-[10.5px] font-bold tabular-nums text-muted-foreground">
-            R{fight.finish_round}{fight.finish_time ? ` · ${fight.finish_time}` : ''}
-          </span>
-        )}
-      </div>
-      <div className="mt-0.5 flex items-center gap-1.5">
-        {winner && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: side === 'red' ? CORNERS[0].css : CORNERS[1].css }} />}
-        <span className="truncate text-[14px] font-black">
-          {winner ? `${winner.last_name} by ${cls ? METHOD_LABEL[cls] : method}` : method || 'No result'}
-        </span>
-      </div>
-      {(cls === 'dec' || (method && cls && !method.startsWith(METHOD_LABEL[cls]))) && (
-        <div className="text-[10.5px] text-muted-foreground">{method}</div>
-      )}
-      {details && <div className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">{details}</div>}
-      {fight.referee && <div className="mt-1 text-[10px] text-muted-foreground">Referee: {fight.referee.trim()}</div>}
-    </div>
-  )
-}
+import { useStyleDetail } from '../hooks/useStyleDetail'
 
 export default function CompletedFightPage({ fight, review }) {
-  const navigate = useNavigate()
-  const { red_fighter: red, blue_fighter: blue, prediction, shap_values, preview, event } = fight
+  const { red_fighter: red, blue_fighter: blue, prediction, shap_values, preview } = fight
   const post = fight.review || {}
   const ctx = review?.ctx || null
   const side = winnerSide(fight)
@@ -103,54 +68,51 @@ export default function CompletedFightPage({ fight, review }) {
   const props = useMemo(() => settledProps(fight.prop_markets, fight, side), [fight, side])
 
   const dtw = post.deserve_to_win
+  const redStyle = useStyleDetail(red?.id)
+  const blueStyle = useStyleDetail(blue?.id)
+  const styles = { red: redStyle.detail, blue: blueStyle.detail }
+  const hasStyles = Boolean(styles.red || styles.blue)
   const sections = useMemo(() => [
     dtw && { key: 'deserve', label: 'Deserve to Win' },
     prediction && { key: 'model', label: 'Model' },
     { key: 'rounds', label: post.scorecards ? 'Rounds & Judges' : 'Rounds' },
     (xsRows || keys.length > 0) && { key: 'expected', label: 'Expectations' },
+    hasStyles && { key: 'styles', label: 'Styles' },
     { key: 'stats', label: 'Stats' },
     { key: 'market', label: 'Market' },
-  ].filter(Boolean), [dtw, prediction, post.scorecards, xsRows, keys])
+  ].filter(Boolean), [dtw, prediction, post.scorecards, xsRows, keys, hasStyles])
 
-  const { scrollRef, register, active, scrollTo } = useScrollSpy(sections)
+  // 64: the slim bar pinned over the top of the scroll once the cover has gone.
+  const { scrollRef, register, active, scrollTo } = useScrollSpy(sections, 64)
+  const [coverRef, pastCover] = usePastCover(scrollRef)
+
+  const goingIn = {
+    side,
+    records,
+    ranks: { red: post.rankings?.red?.before ?? null, blue: post.rankings?.blue?.before ?? null },
+  }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden lg:flex-row">
-      <HeaderActions>
-        <EventLine event={event} weightClass={fight.weight_class} scheduledRounds={ctx?.scheduled_rounds} />
-        <SlideTabs size="sm" value={active} onChange={scrollTo} tabs={sections} />
-        <button
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back
-        </button>
-      </HeaderActions>
-
-      {/* ---------------- LEFT: the result ---------------- */}
-      <div className="flex min-h-0 shrink-0 flex-col gap-3 overflow-y-auto lg:w-[320px] lg:overflow-hidden">
-        <MatchupCard red={red} blue={blue} ctx={ctx} weightClass={fight.weight_class}
-          result={{
-            winnerSide: side,
-            records,
-            ranks: { red: post.rankings?.red?.before ?? null, blue: post.rankings?.blue?.before ?? null },
-          }} />
-        <ResultBox fight={fight} side={side} />
-        <RankMovement rankings={post.rankings} red={red} blue={blue} />
-        <RailReport prediction={prediction} grade={post.grade} red={red} blue={blue} />
-        {preview?.content && <PreviewBox preview={preview} fightId={fight.id} title="Our preview" className="lg:flex-1" />}
-      </div>
-
-      {/* ---------------- RIGHT: one scroll, many sections ---------------- */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
-        <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto p-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <ScrollArea viewportRef={scrollRef} className="min-h-0 flex-1" viewportClassName="relative">
+        <FightBar show={pastCover} fight={fight} tabs={sections} active={active} onTab={scrollTo} />
+        <FightCover coverRef={coverRef} fight={fight} ctx={ctx} styles={styles} result={goingIn} rounds={ctx?.scheduled_rounds}
+          cols="lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]"
+          tape={<MatchupCard red={red} blue={blue} ctx={ctx} weightClass={fight.weight_class} tapeOnly bare
+              families={{ red: familyOf(styles.red) || familyName(fight.styles?.red), blue: familyOf(styles.blue) || familyName(fight.styles?.blue) }}
+            result={{ winnerSide: side, records, ranks: goingIn.ranks }} />}>
+          <ModelCall prediction={prediction} methodPrediction={fight.method_prediction} red={red} blue={blue}
+            hit={post.grade ? post.grade.correct : null} />
+          <RankMovement rankings={post.rankings} red={red} blue={blue} />
+          {preview?.content && <PreviewTeaser fight={fight} />}
+        </FightCover>
+        <div className="mt-3 rounded-xl border border-border bg-card p-4">
           <div className="flex flex-col gap-5 [&>section+section]:border-t-2 [&>section+section]:border-foreground [&>section+section]:pt-5">
 
             {dtw && (
               <Section
                 id="deserve"
                 title="Deserve to Win"
-                note={cls === 'dec' || !cls ? 'Who the performance favoured, whatever the cards said' : 'Who was winning when it ended'}
                 register={register}
               >
                 <DeserveToWin dtw={dtw} fight={fight} side={side} finished={cls === 'ko' || cls === 'sub'} />
@@ -158,7 +120,7 @@ export default function CompletedFightPage({ fight, review }) {
             )}
 
             {prediction && (
-              <Section id="model" title="Model" note="The pre-fight call, graded against the closing market" register={register}>
+              <Section id="model" title="Model" register={register}>
                 <ModelGrade grade={post.grade} red={red} blue={blue} />
                 {waterfall && (() => {
                   const fav = waterfall.side === 'red' ? red : blue
@@ -191,30 +153,35 @@ export default function CompletedFightPage({ fight, review }) {
             <Section
               id="rounds"
               title={post.scorecards ? 'Rounds & Judges' : 'Rounds'}
-              note={post.scorecards ? 'Every round as the judges, the model and the numbers saw it' : 'Every round as the model and the numbers saw it'}
               register={register}
             >
               <RoundsAndJudges fight={fight} rounds={rounds} total={total} scorecards={post.scorecards} dtw={dtw} />
             </Section>
 
             {(xsRows || keys.length > 0) && (
-              <Section id="expected" title="Against Expectations" note="Output against the pre-fight projection" register={register}>
+              <Section id="expected" title="Against Expectations" register={register}>
                 <Expectations rows={xsRows} red={red} blue={blue} />
                 {keys.length > 0 && <div className="mt-3"><KeysRevisited keys={keys} red={red} blue={blue} /></div>}
               </Section>
             )}
 
-            <Section id="stats" title="Stats" note="The whole fight or any round" register={register}>
+            {hasStyles && (
+              <Section id="styles" title="Styles" register={register}>
+                <StyleMatchup red={red} blue={blue} styles={styles} />
+              </Section>
+            )}
+
+            <Section id="stats" title="Stats" register={register}>
               <StatsBoard fight={fight} total={total} rounds={rounds} />
             </Section>
 
-            <Section id="market" title="Market" note="Where the money went, and what cashed" register={register}>
+            <Section id="market" title="Market" register={register}>
               <MarketRecap fight={fight} line={post.line} side={side} props={props} marketHistory={review?.marketHistory} />
             </Section>
 
           </div>
         </div>
-      </div>
+      </ScrollArea>
     </div>
   )
 }

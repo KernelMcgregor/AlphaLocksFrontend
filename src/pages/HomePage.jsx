@@ -16,7 +16,7 @@ import BeltIcon from '../components/ui/belt-icon'
 import { Card } from '../components/ui/card'
 import PageLoader from '../components/PageLoader'
 import { articleImageUrl, fetchHome, fetchUpcomingEvents, peekCached } from '../lib/api'
-import { cn, formatDate, formatOdds } from '../lib/utils'
+import { cn, fitName, formatDate, formatOdds } from '../lib/utils'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,12 +54,6 @@ const consensus = (fight) => ({
   red: median((fight.odds || []).map((o) => o.red_odds)),
   blue: median((fight.odds || []).map((o) => o.blue_odds)),
 })
-// Largest size at which a surname's longest word fits its column (cqw), capped; wraps
-// only between words. 0.74em ~ one condensed italic capital, with slant room.
-const fitName = (name, cap = 20) => {
-  const longest = Math.max(1, ...(name || 'TBA').split(/\s+/).map((w) => w.length))
-  return `min(${cap}px, calc(100cqw / ${(longest * 0.74).toFixed(2)}))`
-}
 // The model's likeliest method for the bout.
 function topMethod(mp) {
   if (!mp) return null

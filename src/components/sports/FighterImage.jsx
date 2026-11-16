@@ -23,8 +23,10 @@ export default function FighterImage({
   alt = '',
   //: 'lazy' for long lists, so off-screen rows don't fetch until scrolled to.
   loading,
+  //: 'right' for the right-facing portrait where one exists (blue corner).
+  pose,
 }) {
-  const src = fighterImageUrl(fighter)
+  const src = fighterImageUrl(fighter, pose)
   // Remember which src failed, not just that one did: these components sit in reused
   // rows, and a bare boolean would pin every later fighter in that slot to the
   // silhouette until something forced a remount.

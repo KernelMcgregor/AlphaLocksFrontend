@@ -19,13 +19,13 @@ import { cn } from '../../lib/utils'
 import { ordinal } from '../../lib/fighterAnalytics'
 import { useStyleDetail } from '../../hooks/useStyleDetail'
 import {
-  HABIT_TRAITS, SKILL_GROUPS, TENDENCY_GROUPS, TRAIT_GROUPS, divisionLabel, famColor, radarAxes, traitLabel, traitTitle,
+  HABIT_TRAITS, SKILL_GROUPS, TENDENCY_GROUPS, TRAIT_GROUPS, divisionLabel, famColor, mostAlike, mostDifferent, radarAxes,
+  traitLabel, traitTitle,
 } from '../../lib/styleTraits'
 import { BlendBar, FamilyAvatar, FighterPicker, Panel, SectionLabel, TraitBar } from './shared'
 
 const N_CONSTELLATION = 12
 const N_DNA = 6
-const N_COMPARE = 4
 // Comparisons and the does-most / does-least chips are about habits: what a fighter tries.
 const TENDENCY_KEYS = HABIT_TRAITS
 
@@ -38,7 +38,8 @@ const TENDENCY_KEYS = HABIT_TRAITS
 // edge. (Comps' scores sit close together, ~0.8-0.95, so a fixed 0.5-1 scale bunched them
 // in the middle of an empty circle.)
 const INNER = 0.34          // closest comp's distance, as a share of the ellipse radius
-const LABEL_ROOM = 125      // horizontal space kept for side labels
+const NODE_GAP = 54         // min px along the ring between neighbouring comps (36px photos + room)
+const LABEL_CHAR = 6.6      // px per character of an 11.5px bold name
 const N_RINGS = 3
 
 function useBoxSize() {
@@ -58,27 +59,68 @@ function driversText(drivers) {
   return (drivers || []).map((d) => `${d.z >= 0 ? 'high' : 'low'} ${traitLabel(d.feature)}`).join(' · ')
 }
 
-function Constellation({ fighter, comps, families, compareId, onCompare }) {
+// `tips` off: no hover card (the profile page, where a click opens the comparison).
+export function Constellation({ fighter, comps, families, compareId, onCompare, tips = true }) {
   const [hover, setHover] = useState(null)
   const [ref, { w, h }] = useBoxSize()
-  const C = { x: w / 2, y: h / 2 }
-  const RX = Math.max(60, w / 2 - LABEL_ROOM)
-  const RY = Math.max(50, h / 2 - 36)
   const sims = comps.map((c) => c.similarity)
   const hi = Math.max(...sims, 0)
   const lo = Math.min(...sims, hi - 0.01)
-  const frac = (sim) => INNER + (1 - INNER) * (hi - sim) / ((hi - lo) || 1)
+  // Neighbours sit 360/n degrees apart, so the innermost ring must be wide enough that two
+  // comps on it never touch: the closest comp's distance rises with the comp count.
+  const inner = Math.min(0.8, Math.max(INNER, (NODE_GAP * comps.length) / (2 * Math.PI * Math.max(50, h / 2 - 36))))
+  const frac = (sim) => inner + (1 - inner) * (hi - sim) / ((hi - lo) || 1)
   // Same-family comps sit together around the ring; within a family, most similar first.
-  const nodes = useMemo(() => {
+  const placed = useMemo(() => {
     const sorted = [...comps].sort((a, b) => (a.family - b.family) || (b.similarity - a.similarity))
-    return sorted.map((c, i) => {
-      const a = (i / sorted.length) * Math.PI * 2 - Math.PI / 2
-      const f = INNER + (1 - INNER) * (hi - c.similarity) / ((hi - lo) || 1)
-      return { ...c, cx: C.x + RX * f * Math.cos(a), cy: C.y + RY * f * Math.sin(a), a }
+    return sorted.map((c, i) => ({ ...c, a: (i / sorted.length) * Math.PI * 2 - Math.PI / 2 }))
+  }, [comps])
+  // Stretch the ellipse, and slide its centre, until the outermost names and photos meet the
+  // box edges on every side, so the chart fills its panel instead of keeping fixed margins.
+  const fit = useMemo(() => {
+    const PAD = 6
+    const items = placed.map((n) => {
+      const f = inner + (1 - inner) * (hi - n.similarity) / ((hi - lo) || 1)
+      const cos = Math.cos(n.a)
+      const sin = Math.sin(n.a)
+      const lw = n.name.length * LABEL_CHAR
+      const vertical = Math.abs(cos) < 0.4
+      // How far the photo and its name reach past the node centre on each side.
+      const reach = vertical
+        ? { l: Math.max(18, lw / 2), r: Math.max(18, lw / 2), t: sin < 0 ? 37 : 18, b: sin < 0 ? 18 : 37 }
+        : { l: cos < 0 ? 23 + lw : 18, r: cos < 0 ? 18 : 23 + lw, t: 18, b: 18 }
+      return { dx: f * cos, dy: f * sin, ...reach }
     })
-  }, [comps, C.x, C.y, RX, RY, hi, lo])
+    // Largest radius whose extents fit the span; returns [radius, offset of the centre].
+    const solve = (span, d, lo2, hi2) => {
+      const extent = (R) => {
+        const min = Math.min(...items.map((it) => it[d] * R - it[lo2]))
+        const max = Math.max(...items.map((it) => it[d] * R + it[hi2]))
+        return [min, max]
+      }
+      let a = 0
+      let b = span
+      for (let k = 0; k < 30; k++) {
+        const m = (a + b) / 2
+        const [min, max] = extent(m)
+        if (max - min <= span - 2 * PAD) a = m
+        else b = m
+      }
+      const [min] = extent(a)
+      return [a, PAD - min]
+    }
+    if (!items.length || !w || !h) return { RX: 60, RY: 50, cx: w / 2, cy: h / 2 }
+    const [RX, cx] = solve(w, 'dx', 'l', 'r')
+    const [RY, cy] = solve(h, 'dy', 't', 'b')
+    return { RX: Math.max(60, RX), RY: Math.max(50, RY), cx, cy }
+  }, [placed, inner, hi, lo, w, h])
+  const { RX, RY } = fit
+  const C = { x: fit.cx, y: fit.cy }
+  const nodes = useMemo(() => placed.map((c) => {
+    const f = inner + (1 - inner) * (hi - c.similarity) / ((hi - lo) || 1)
+    return { ...c, cx: C.x + RX * f * Math.cos(c.a), cy: C.y + RY * f * Math.sin(c.a) }
+  }), [placed, C.x, C.y, RX, RY, hi, lo, inner])
   const rings = Array.from({ length: N_RINGS }, (_, i) => hi - ((i + 1) / N_RINGS) * (hi - lo))
-  const labelAngle = -Math.PI / 2 + Math.PI / Math.max(nodes.length, 1)
   const hovered = nodes.find((x) => x.id === hover)
 
   return (
@@ -86,14 +128,7 @@ function Constellation({ fighter, comps, families, compareId, onCompare }) {
       {w > 0 && (
       <svg width={w} height={h} className="block" role="img" aria-label={`${fighter.name}'s closest stylistic comps`}>
         {rings.map((sv) => (
-          <g key={sv}>
-            <ellipse cx={C.x} cy={C.y} rx={RX * frac(sv)} ry={RY * frac(sv)} fill="none" className="stroke-border" strokeDasharray="2 4" />
-            <text x={C.x + RX * frac(sv) * Math.cos(labelAngle)} y={C.y + RY * frac(sv) * Math.sin(labelAngle) + 3}
-              fontSize={9} fontWeight={600} textAnchor="middle" className="fill-muted-foreground"
-              paintOrder="stroke" stroke="var(--color-card)" strokeWidth={3}>
-              {sv.toFixed(2)}
-            </text>
-          </g>
+          <ellipse key={sv} cx={C.x} cy={C.y} rx={RX * frac(sv)} ry={RY * frac(sv)} fill="none" className="stroke-border" strokeDasharray="2 4" />
         ))}
         {nodes.map((n) => {
           const lit = hover === n.id || compareId === n.id
@@ -131,7 +166,7 @@ function Constellation({ fighter, comps, families, compareId, onCompare }) {
         </foreignObject>
       </svg>
       )}
-      {hovered && (
+      {tips && hovered && (
         <div className="pointer-events-none absolute left-0 top-0 max-w-[260px] rounded-md bg-foreground px-2.5 py-1.5 text-[11.5px] leading-snug text-background shadow">
           <div className="font-bold">{hovered.name} · {hovered.similarity.toFixed(2)}</div>
           <div className="opacity-80">{families[hovered.family].name} · {divisionLabel(hovered.division)}</div>
@@ -145,31 +180,14 @@ function Constellation({ fighter, comps, families, compareId, onCompare }) {
 // ---------------------------------------------------------------------------
 // Head to head
 // ---------------------------------------------------------------------------
-// Both fighters far from average in the same direction = a real shared trait; the
-// weaker of the two extremes is how strongly it is shared.
-function mostAlike(a, b) {
-  return TENDENCY_KEYS
-    .map((k) => ({ k, a: a[k], b: b[k] }))
-    .filter((t) => t.a != null && t.b != null && (t.a - 50) * (t.b - 50) > 0)
-    .sort((x, y) => Math.min(Math.abs(y.a - 50), Math.abs(y.b - 50)) - Math.min(Math.abs(x.a - 50), Math.abs(x.b - 50)))
-    .slice(0, N_COMPARE)
-}
-
-function mostDifferent(a, b) {
-  return TENDENCY_KEYS
-    .map((k) => ({ k, a: a[k], b: b[k] }))
-    .filter((t) => t.a != null && t.b != null)
-    .sort((x, y) => Math.abs(y.a - y.b) - Math.abs(x.a - x.b))
-    .slice(0, N_COMPARE)
-}
-
-function MirrorRow({ t }) {
+// `colors`: the two sides' fills (CSS colours); the explorer's series colours by default.
+export function MirrorRow({ t, colors = ['var(--color-viz-1)', 'var(--color-viz-2)'] }) {
   return (
     <div className="grid grid-cols-[34px_1fr_120px_1fr_34px] items-center gap-1.5">
       <span className="text-right text-[11px] font-extrabold tabular-nums">{ordinal(t.a)}</span>
-      <div className="flex justify-end"><div className="h-[14px] rounded-l-[4px] bg-viz-1" style={{ width: `${t.a}%` }} /></div>
+      <div className="flex justify-end"><div className="h-[14px] rounded-l-[4px]" style={{ width: `${t.a}%`, background: colors[0] }} /></div>
       <span className="truncate text-center text-[11px] font-medium text-foreground/80">{traitTitle(t.k)}</span>
-      <div><div className="h-[14px] rounded-r-[4px] bg-viz-2" style={{ width: `${t.b}%` }} /></div>
+      <div><div className="h-[14px] rounded-r-[4px]" style={{ width: `${t.b}%`, background: colors[1] }} /></div>
       <span className="text-[11px] font-extrabold tabular-nums">{ordinal(t.b)}</span>
     </div>
   )
@@ -177,7 +195,7 @@ function MirrorRow({ t }) {
 
 function SkillRadar({ fighter, other }) {
   return (
-    <div className="h-full min-h-[190px]">
+    <div className="h-full min-h-[210px]">
       <RadarChart fit series={[
         { key: 'a', label: fighter.name, color: 'var(--color-viz-1)', axes: radarAxes(fighter.profile) },
         { key: 'b', label: other.name, color: 'var(--color-viz-2)', axes: radarAxes(other.profile) },
@@ -186,19 +204,48 @@ function SkillRadar({ fighter, other }) {
   )
 }
 
-function HeadToHead({ fighter, other }) {
-  const alike = mostAlike(fighter.profile, other.profile)
-  const diff = mostDifferent(fighter.profile, other.profile)
+// The two fighters face to face, each in their series colour, with the match between.
+function Matchup({ fighter, other }) {
+  const side = (f, color, right) => (
+    <span className={cn('flex min-w-0 flex-1 items-center gap-2', right && 'flex-row-reverse text-right')}>
+      <span className="shrink-0 rounded-full p-[2px]" style={{ background: color }}>
+        <FighterImage fighter={f} className="h-9 w-9 rounded-full bg-muted" />
+      </span>
+      <span className="min-w-0 text-[13px] font-extrabold leading-tight">{f.name}</span>
+    </span>
+  )
   return (
-    <div className="flex h-full flex-col gap-1.5">
-      <Legend fighter={fighter} other={other} />
-      <div className="grid min-h-0 flex-1 items-center gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-        <SkillRadar fighter={fighter} other={other} />
-        <div className="space-y-2.5">
-          <div>
-            <SectionLabel className="mb-1.5 text-emerald-600">Most alike</SectionLabel>
-            <div className="space-y-1">{alike.map((t) => <MirrorRow key={t.k} t={t} />)}</div>
-          </div>
+    <div className="flex items-center gap-3 border-b pb-2.5">
+      {side(fighter, 'var(--color-viz-1)')}
+      <span className="shrink-0 text-center">
+        <span className="block font-display text-[26px] font-extrabold italic leading-none tabular-nums">{Math.round(other.similarity * 100)}%</span>
+        <span className="text-[9.5px] font-bold uppercase tracking-wide text-muted-foreground">match</span>
+      </span>
+      {side(other, 'var(--color-viz-2)', true)}
+    </div>
+  )
+}
+
+export function HeadToHead({ fighter, other }) {
+  const alike = mostAlike(fighter.profile, other.profile)
+  // A trait shared in direction can still be far apart in size; it belongs to one list only.
+  const shared = new Set(alike.map((t) => t.k))
+  const diff = mostDifferent(fighter.profile, other.profile, 8).filter((t) => !shared.has(t.k)).slice(0, 4)
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <Matchup fighter={fighter} other={other} />
+      <div className="grid min-h-0 flex-1 items-center gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="flex h-full flex-col">
+          <SectionLabel className="mb-1">Skills</SectionLabel>
+          <div className="min-h-0 flex-1"><SkillRadar fighter={fighter} other={other} /></div>
+        </div>
+        <div className="space-y-3">
+          {alike.length > 0 && (
+            <div>
+              <SectionLabel className="mb-1.5 text-emerald-600">Habits in common</SectionLabel>
+              <div className="space-y-1">{alike.map((t) => <MirrorRow key={t.k} t={t} />)}</div>
+            </div>
+          )}
           <div>
             <SectionLabel className="mb-1.5 text-rose-600">Biggest differences</SectionLabel>
             <div className="space-y-1">{diff.map((t) => <MirrorRow key={t.k} t={t} />)}</div>
@@ -206,16 +253,6 @@ function HeadToHead({ fighter, other }) {
         </div>
       </div>
     </div>
-  )
-}
-
-function Legend({ fighter, other }) {
-  return (
-    <span className="flex min-w-0 items-center gap-2.5 text-[11px] font-bold">
-      <span className="inline-flex min-w-0 items-center gap-1"><span className="h-2 w-2 shrink-0 rounded-full bg-viz-1" /><span className="truncate">{fighter.name}</span></span>
-      <span className="inline-flex min-w-0 items-center gap-1"><span className="h-2 w-2 shrink-0 rounded-full bg-viz-2" /><span className="truncate">{other.name}</span></span>
-      <span className="shrink-0 rounded border px-1 tabular-nums">{other.similarity.toFixed(2)}</span>
-    </span>
   )
 }
 
@@ -246,7 +283,7 @@ const PROFILE_TABS = [
   ['skills', 'Skills', SKILL_GROUPS],
 ]
 
-function StyleProfile({ fighter, className }) {
+export function StyleProfile({ fighter, className }) {
   const [view, setView] = useState('tendencies')
   const [, , groups] = PROFILE_TABS.find(([k]) => k === view)
   const tendencies = TENDENCY_KEYS.map((k) => [k, fighter.profile[k]]).filter(([, v]) => v != null)

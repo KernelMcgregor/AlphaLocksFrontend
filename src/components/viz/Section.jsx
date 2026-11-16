@@ -10,7 +10,7 @@ export default function Section({ id, title, note, children, className, register
       className={cn('flex shrink-0 flex-col', className)}
     >
       <div className="mb-3 flex shrink-0 items-baseline gap-2.5">
-        <h2 className="text-[17px] font-extrabold tracking-tight">{title}</h2>
+        <h2 className="font-display text-[22px] font-extrabold italic uppercase leading-none tracking-tight">{title}</h2>
         {note && <span className="text-[11.5px] text-muted-foreground">{note}</span>}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>

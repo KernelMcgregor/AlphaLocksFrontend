@@ -18,7 +18,7 @@ const startFmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: '
 const day = (d) => (d ? dayFmt.format(new Date(`${d}T12:00:00`)) : '')
 
 // "UFC 334: Gane vs. Hokit" -> the number in red, the rest in white.
-function EventName({ name = '', className }) {
+export function EventName({ name = '', className }) {
   const i = name.indexOf(':')
   const kicker = i < 0 ? null : name.slice(0, i).trim()
   return (
@@ -88,12 +88,12 @@ function Corner({ st, right }) {
 
 // Back to wherever the reader came from on the site; straight to the articles index when
 // they landed here directly.
-export function BackButton({ className, dark }) {
+export function BackButton({ className, dark, fallback = '/ufc/articles' }) {
   const navigate = useNavigate()
   const location = useLocation()
   return (
     <button type="button" aria-label="Back" title="Back"
-      onClick={() => (location.key !== 'default' ? navigate(-1) : navigate('/ufc/articles'))}
+      onClick={() => (location.key !== 'default' ? navigate(-1) : navigate(fallback))}
       className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white transition-colors',
         dark ? 'bg-white/10 hover:bg-white/20' : 'bg-black/45 backdrop-blur hover:bg-black/65', className)}>
       <ArrowLeft className="h-4 w-4" />

@@ -39,7 +39,9 @@ function divisionRuns(points) {
 // to the next frame followed by a block animation. The y-scale spans the entire
 // series for the same reason: a per-window scale would make points jump vertically
 // mid-slide.
-export default function BumpChart({ series, points, formatValue, yLabel, invertY = false, start = 0, size = 12, domain, ticks: tickOverride }) {
+// `log`: a log y-scale, for ranks that run from #1 to #100+ (each doubling of rank takes
+// the same room, so the top of the table isn't squeezed into a sliver).
+export default function BumpChart({ series, points, formatValue, yLabel, invertY = false, start = 0, size = 12, domain, ticks: tickOverride, log = false }) {
   const [wrapRef, { w, h }] = useElementSize()
   const [hover, setHover] = useState(null) // { si, pi } — pi indexes the full series
 
@@ -67,8 +69,9 @@ export default function BumpChart({ series, points, formatValue, yLabel, invertY
   const gap = iw / win
   const x = (i) => M.l + gap / 2 + i * gap
   const shift = -start * gap
+  const f = log ? Math.log : (v) => v
   const y = (v) => {
-    const t = (v - lo) / (hi - lo)
+    const t = (f(v) - f(lo)) / (f(hi) - f(lo))
     return M.t + (invertY ? t : 1 - t) * ih
   }
 

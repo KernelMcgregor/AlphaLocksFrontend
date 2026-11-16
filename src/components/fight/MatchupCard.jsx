@@ -115,6 +115,9 @@ function CornerHalf({ fighter, corner, ctx, rounded, weightClass, outcome, recor
 // width, because what runs out on a laptop is vertical space. Spelled out as
 // literal class strings: Tailwind scans source text, so a variant assembled at
 // runtime would never make it into the stylesheet.
+// The rows the fight cover keeps.
+const ESSENTIAL = new Set(['Age', 'Height', 'Reach', 'Leg', 'Style', 'From'])
+
 const TIER_CLASS = {
   0: 'flex',
   1: 'hidden [@media(min-height:820px)]:flex',
@@ -138,11 +141,17 @@ const finishPct = (f) => {
 }
 
 /**
+ * @param tapeOnly  the tale of the tape alone, under a slim name row: the page's hero band
+ *                  already shows both portraits.
  * @param result  completed fights only: { winnerSide: 'red'|'blue'|null, records: { red, blue },
  *                ranks: { red, blue } } — ranks are the ranking-history rows going in.
  *                Age, layoff and finish rate are today's values, so a result card drops them.
  */
-export default function MatchupCard({ red, blue, ctx, weightClass, result }) {
+// `bare`: the rows alone, larger, every row shown: the fight cover sets them between the
+// two portraits, where the header and the box would only repeat what is around them.
+// `families`: { red, blue } style-family names, the Style row's fallback when UFC.com lists
+// neither fighter's style.
+export default function MatchupCard({ red, blue, ctx, weightClass, result, tapeOnly = false, bare = false, families }) {
   const past = Boolean(result)
   const rows = [
     !past && { label: 'Age', r: ctx?.red?.age, b: ctx?.blue?.age, fmt: (v) => `${v} yrs` },
@@ -151,7 +160,9 @@ export default function MatchupCard({ red, blue, ctx, weightClass, result }) {
     { label: 'Reach', r: val(red.reach), b: val(blue.reach), cmp: reachInches },
     { label: 'Leg', r: legReach(red.leg_reach), b: legReach(blue.leg_reach), cmp: reachInches, tier: 1 },
     { label: 'Stance', r: val(red.stance), b: val(blue.stance) },
-    { label: 'Style', r: val(red.fighting_style), b: val(blue.fighting_style), tier: 1 },
+    (val(red.fighting_style) || val(blue.fighting_style))
+      ? { label: 'Style', r: val(red.fighting_style), b: val(blue.fighting_style), tier: 1 }
+      : { label: 'Style', r: families?.red || null, b: families?.blue || null, tier: 1 },
     { label: 'Team', r: val(red.trains_at), b: val(blue.trains_at), tier: 2 },
     !past && {
       label: 'Layoff',
@@ -175,6 +186,8 @@ export default function MatchupCard({ red, blue, ctx, weightClass, result }) {
     },
     // A row where neither side has a value drops out rather than showing dashes.
   ].filter((row) => row && (row.r != null || row.b != null))
+    // The cover keeps the essentials only.
+    .filter((row) => !bare || ESSENTIAL.has(row.label))
 
   const outcome = (side) => {
     if (!result?.winnerSide) return null
@@ -184,11 +197,18 @@ export default function MatchupCard({ red, blue, ctx, weightClass, result }) {
   return (
     // No padding at the top: the portraits are the card's top edge, corner to
     // corner. `overflow-hidden` lets them square off against the card's radius.
-    <div className="shrink-0 overflow-hidden rounded-lg border border-border pb-2.5">
+    <div className={cn('shrink-0 overflow-hidden', !bare && 'rounded-xl border border-border pb-2.5', tapeOnly && !bare && 'pt-2')}>
+      {tapeOnly && !bare && (
+        <div className="mx-2.5 flex items-center justify-between gap-2 text-[11px] font-extrabold">
+          <span className="truncate" style={{ color: CORNERS[0].css }}>{red.last_name}</span>
+          <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Tale of the tape</span>
+          <span className="truncate text-right" style={{ color: CORNERS[1].css }}>{blue.last_name}</span>
+        </div>
+      )}
       {/* The two portraits meet in the middle with no gap, so the red and blue
           rules butt against each other and read as one matchup rather than two
           cards. VS sits on the seam rather than between them. */}
-      <div className="relative flex items-stretch">
+      {!tapeOnly && <div className="relative flex items-stretch">
         <CornerHalf fighter={red} corner={CORNERS[0]} ctx={ctx?.red} rounded="rounded-tl-md" weightClass={weightClass}
           outcome={outcome('red')} record={result?.records?.red} rank={result ? result.ranks?.red ?? null : undefined} />
         <CornerHalf fighter={blue} corner={CORNERS[1]} ctx={ctx?.blue} rounded="rounded-tr-md" weightClass={weightClass}
@@ -196,10 +216,10 @@ export default function MatchupCard({ red, blue, ctx, weightClass, result }) {
         <span className="pointer-events-none absolute left-1/2 top-[78px] z-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border bg-background px-1.5 py-px text-[9px] font-black uppercase tracking-wider text-muted-foreground shadow-sm">
           vs
         </span>
-      </div>
+      </div>}
 
       {rows.length > 0 && (
-        <div className="mx-2.5 mt-2 border-t pt-1.5">
+        <div className={bare ? '' : 'mx-2.5 mt-2 border-t pt-1.5'}>
           {rows.map((row) => {
             // Only height and reach get an advantage mark: they have an
             // unambiguous direction. Younger is not strictly better and stance
@@ -215,7 +235,7 @@ export default function MatchupCard({ red, blue, ctx, weightClass, result }) {
                   // rather than wrapping, which would make row heights uneven.
                   title={typeof text === 'string' && text !== '—' ? text : undefined}
                   className={cn(
-                    'min-w-0 flex-1 truncate text-[11px] font-semibold tabular-nums',
+                    'min-w-0 flex-1 truncate font-semibold tabular-nums', bare ? 'text-[14px]' : 'text-[11px]',
                     which === 'r' ? 'text-right' : 'text-left',
                     edge === which ? 'font-extrabold' : 'text-foreground/75',
                   )}
@@ -226,9 +246,9 @@ export default function MatchupCard({ red, blue, ctx, weightClass, result }) {
               )
             }
             return (
-              <div key={row.label} className={cn('items-center gap-1.5 py-[1px]', TIER_CLASS[row.tier || 0])}>
+              <div key={row.label} className={cn('items-center', bare ? 'flex gap-3 py-[2px]' : cn('gap-1.5 py-[1px]', TIER_CLASS[row.tier || 0]))}>
                 {side(row.r, 'r')}
-                <span className="w-[46px] shrink-0 text-center text-[8.5px] font-bold uppercase tracking-wide text-muted-foreground">
+                <span className={cn('shrink-0 text-center font-bold uppercase tracking-wide text-muted-foreground', bare ? 'w-[72px] text-[10px]' : 'w-[46px] text-[8.5px]')}>
                   {row.label}
                 </span>
                 {side(row.b, 'b')}

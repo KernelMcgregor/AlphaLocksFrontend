@@ -16,6 +16,7 @@ import { cn } from '../../lib/utils'
 import { divisionLabel, famColor } from '../../lib/styleTraits'
 import { useElementWidth } from '../../hooks/useElementWidth'
 import { FamilyAvatar, FamilyChip, FighterList, FighterRow, Panel, SectionLabel } from './shared'
+import { ancestorsOf, buildTree } from '../../lib/lineage'
 
 const LEFT = 176 // lane labels
 const RIGHT = 20
@@ -25,32 +26,10 @@ const SLOT = 24 // vertical step between crowded nodes in one lane
 const GAP_YEARS = 6
 const N_LEGENDS = 10
 
-const ancestorsOf = (f, legends) => (legends ? f.notable_ancestors : f.ancestors) || []
-
-// Two generations back from `root`. A legend reached twice is drawn once, with both lines.
-function buildTree(root, byId, legends) {
-  const nodes = new Map([[root.id, { f: root, gen: 0, sim: 1 }]])
-  const edges = []
-  let frontier = [root]
-  for (let gen = 1; gen <= 2; gen++) {
-    const next = []
-    for (const child of frontier) {
-      for (const a of ancestorsOf(child, legends)) {
-        const f = byId.get(a.id)
-        if (!f) continue
-        edges.push({ from: a.id, to: child.id, sim: a.sim })
-        if (!nodes.has(a.id)) { nodes.set(a.id, { f, gen, sim: a.sim }); next.push(f) }
-      }
-    }
-    frontier = next
-  }
-  return { nodes: [...nodes.values()], edges }
-}
-
 // Greedy label placement: each node takes the first slot in its lane (centre, above,
 // below) where its dot and name do not collide with anything placed before it. Root
 // first, then ancestors by generation, so the important names claim the clean spots.
-function layout(tree, families, width) {
+function layout(tree, families, width, labelGen = 2) {
   const lanes = families.filter((f) => tree.nodes.some((n) => n.f.family === f.id))
   const laneOf = new Map(lanes.map((f, i) => [f.id, i]))
   const primes = tree.nodes.map((n) => n.f.prime_year)
@@ -63,7 +42,7 @@ function layout(tree, families, width) {
   for (const n of order) {
     const x = xOf(n.f.prime_year)
     const laneMid = TOP + laneOf.get(n.f.family) * LANE_H + LANE_H / 2
-    const lw = n.f.name.length * (n.gen === 0 ? 7.6 : 6.6) + 6
+    const lw = n.gen > labelGen ? 0 : n.f.name.length * (n.gen === 0 ? 7.6 : 6.6) + 6
     const leftSide = x + 14 + lw > width - RIGHT
     let best = null
     for (const dy of [0, -SLOT, SLOT]) {
@@ -79,10 +58,12 @@ function layout(tree, families, width) {
   return { lanes, pos, xOf, y0, y1, height: TOP + lanes.length * LANE_H + 10 }
 }
 
-function Timeline({ tree, families, root, focusId, onFocus }) {
+// `shade`: grey out the years too recent to hold an ancestor (the Lineage tab's reading).
+// `labelGen`: the deepest generation named on the chart; deeper ones are named on hover.
+export function Timeline({ tree, families, root, focusId, onFocus, shade = true, labelGen = 2 }) {
   const [ref, width] = useElementWidth()
   const [hover, setHover] = useState(null)
-  const L = useMemo(() => (width ? layout(tree, families, width) : null), [tree, families, width])
+  const L = useMemo(() => (width ? layout(tree, families, width, labelGen) : null), [tree, families, width, labelGen])
   const nodeById = useMemo(() => new Map(tree.nodes.map((n) => [n.f.id, n])), [tree])
   const lit = hover || focusId
 
@@ -91,11 +72,13 @@ function Timeline({ tree, families, root, focusId, onFocus }) {
       {L && (
         <svg width={width} height={L.height} viewBox={`0 0 ${width} ${L.height}`} role="img" aria-label={`${root.name}'s style lineage`}>
           {/* Too recent to be an ancestor: the six years before the fighter's prime. */}
+          {shade && <>
           <rect x={L.xOf(root.prime_year - GAP_YEARS)} y={TOP - 8} width={width - RIGHT - L.xOf(root.prime_year - GAP_YEARS)}
             height={L.height - TOP + 2} className="fill-muted/60" />
           <text x={L.xOf(root.prime_year - GAP_YEARS) + 6} y={TOP + 4} fontSize={10} fontWeight={600} className="fill-muted-foreground">
             too recent to be an ancestor
           </text>
+          </>}
 
           {L.lanes.map((f, i) => (
             <g key={f.id}>
@@ -135,12 +118,12 @@ function Timeline({ tree, families, root, focusId, onFocus }) {
                 <circle cx={p.x} cy={p.y} r={r + 8} fill="transparent" />
                 <circle cx={p.x} cy={p.y} r={r} fill={famColor(f.family)} stroke={isRoot || on ? 'var(--color-foreground)' : 'var(--color-card)'}
                   strokeWidth={isRoot || on ? 2.5 : 2} />
-                <text x={p.leftSide ? p.x - r - 6 : p.x + r + 6} y={p.y + 4} fontSize={isRoot ? 13 : 11.5}
+                {(gen <= labelGen || on) && <text x={p.leftSide ? p.x - r - 6 : p.x + r + 6} y={p.y + 4} fontSize={isRoot ? 13 : 11.5}
                   fontWeight={isRoot || on ? 800 : gen === 1 ? 700 : 600} textAnchor={p.leftSide ? 'end' : 'start'}
                   className={gen === 2 && !on ? 'fill-foreground/70' : 'fill-foreground'}
                   paintOrder="stroke" stroke="var(--color-card)" strokeWidth={3.5}>
                   {f.name}
-                </text>
+                </text>}
               </g>
             )
           })}
@@ -173,7 +156,7 @@ function ReadingKey() {
   )
 }
 
-function SimBar({ sim }) {
+export function SimBar({ sim }) {
   return (
     <span className="flex w-[74px] shrink-0 items-center gap-1.5">
       <span className="h-[6px] flex-1 overflow-hidden rounded-full bg-muted">

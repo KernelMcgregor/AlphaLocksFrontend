@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 // A window that slides by `step` items rather than jumping a whole page, so the
 // series reads as one continuous spectrum. `offset` counts items back from the
@@ -45,9 +45,17 @@ export function useElementSize() {
 // The content column is one scroll container holding every section. The tab bar is a
 // scrollspy over it: clicking scrolls, scrolling re-highlights. `lockUntil` swallows
 // the spy for the duration of a click-driven smooth scroll, otherwise the highlight
-// flickers through every section it passes on the way.
-export function useScrollSpy(sections) {
-  const scrollRef = useRef(null)
+// flickers through every section it passes on the way. `offset`: px covered by a sticky
+// header at the top of the container, so sections land below it.
+export function useScrollSpy(sections, offset = 0) {
+  // A callback ref that also exposes `.current`, so the listener re-attaches when the
+  // scroll container mounts late (a page that renders a loader first).
+  const [root, setRoot] = useState(null)
+  const scrollRef = useMemo(() => {
+    const ref = (el) => { ref.current = el; setRoot(el) }
+    ref.current = null
+    return ref
+  }, [])
   const nodes = useRef({})
   const lockUntil = useRef(0)
   const [active, setActive] = useState(sections[0]?.key)
@@ -58,7 +66,6 @@ export function useScrollSpy(sections) {
   }, [])
 
   useEffect(() => {
-    const root = scrollRef.current
     if (!root || !sections.length) return undefined
     const onScroll = () => {
       if (Date.now() < lockUntil.current) return
@@ -68,7 +75,7 @@ export function useScrollSpy(sections) {
       if (atBottom) {
         current = sections[sections.length - 1].key
       } else {
-        const line = root.scrollTop + 28
+        const line = root.scrollTop + 28 + offset
         for (const sec of sections) {
           const el = nodes.current[sec.key]
           if (el && el.offsetTop <= line) current = sec.key
@@ -78,7 +85,7 @@ export function useScrollSpy(sections) {
     }
     root.addEventListener('scroll', onScroll, { passive: true })
     return () => root.removeEventListener('scroll', onScroll)
-  }, [sections])
+  }, [root, sections, offset])
 
   const scrollTo = (id) => {
     const root = scrollRef.current
@@ -86,7 +93,7 @@ export function useScrollSpy(sections) {
     if (!root || !el) return
     lockUntil.current = Date.now() + 800
     setActive(id)
-    root.scrollTo({ top: Math.max(0, el.offsetTop - 12), behavior: 'smooth' })
+    root.scrollTo({ top: Math.max(0, el.offsetTop - 12 - offset), behavior: 'smooth' })
   }
 
   // A section list that shrinks (a fight with no odds drops `market`) can leave
