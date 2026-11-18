@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '../components/ui/card'
 import DivisionPicker from '../components/sports/DivisionPicker'
+import RankingsTimelapse from '../components/rankings/RankingsTimelapse'
+import { SlideTabs } from '../components/ui/slide-tabs'
 import CountryFlag from '../components/CountryFlag'
 import FighterImage from '../components/sports/FighterImage'
 import WavingFlag from '../components/sports/WavingFlag'
@@ -601,6 +603,11 @@ const ALT_BOARDS = [
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+const VIEWS = [
+  { key: 'current', label: 'Current' },
+  { key: 'history', label: 'Time-lapse' },
+]
+
 export default function RankingsPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -610,6 +617,9 @@ export default function RankingsPage() {
   // Men's P4P is the landing view; a division is one click (or ?div=) away.
   const activeWc = params.get('div') || 'p4p_men'
   const setActiveWc = (key) => setParams({ div: key }, { replace: true })
+  // ?view=history swaps the board for the time-lapse, which keeps its own division/step params.
+  const view = params.get('view') === 'history' ? 'history' : 'current'
+  const setView = (v) => setParams(v === 'history' ? { view: 'history' } : {}, { replace: true })
 
   useEffect(() => {
     fetchRankings()
@@ -651,18 +661,25 @@ export default function RankingsPage() {
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto lg:overflow-hidden">
       <div className="shrink-0 space-y-3">
-        <h1 className="page-title flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <TrendingUp className="h-5 w-5 text-white" />
-          </span>
-          Fighter Rankings
-        </h1>
-        <DivisionPicker weightClasses={pickerItems} active={board ? board.key : activeDiv.key} onSelect={setActiveWc} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="page-title flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+              <TrendingUp className="h-5 w-5 text-white" />
+            </span>
+            Fighter Rankings
+          </h1>
+          <SlideTabs tabs={VIEWS} value={view} onChange={setView} />
+        </div>
+        {view === 'current' && (
+          <DivisionPicker weightClasses={pickerItems} active={board ? board.key : activeDiv.key} onSelect={setActiveWc} />
+        )}
       </div>
 
-      {board
-        ? <AltBoard key={board.key} kind={board.kind} pool={board.pool} weightClasses={data.weight_classes} />
-        : <DivisionBoard key={activeDiv.key} fighters={activeDiv.fighters} label={activeDiv.label} minRounds={data.min_rounds} />}
+      {view === 'history'
+        ? <div className="min-h-0 flex-1"><RankingsTimelapse /></div>
+        : board
+          ? <AltBoard key={board.key} kind={board.kind} pool={board.pool} weightClasses={data.weight_classes} />
+          : <DivisionBoard key={activeDiv.key} fighters={activeDiv.fighters} label={activeDiv.label} minRounds={data.min_rounds} />}
     </div>
   )
 }

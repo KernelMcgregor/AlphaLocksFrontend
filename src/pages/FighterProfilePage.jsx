@@ -6,6 +6,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
 import FighterCover, { ProfileBar } from '../components/hero/FighterHero'
 import DecisionLuck from '../components/fighter/DecisionLuck'
+import AgeCurveCard from '../components/fighter/extras/AgeCurveCard'
+import CampCard from '../components/fighter/extras/CampCard'
+import FighterPercentiles from '../components/fighter/extras/FighterPercentiles'
+import RatingHistory from '../components/fighter/extras/RatingHistory'
+import SituationalSplits from '../components/fighter/extras/SituationalSplits'
+import { useExtra } from '../components/fighter/extras/useExtra'
+import { fetchFighterCamp, fetchFighterPercentiles } from '../lib/fighterExtrasApi'
 import { StyleSection, StyleStack } from '../components/styles/FighterStyle'
 import { FamilyTag } from '../components/hero/parts'
 import { useStyleDetail } from '../hooks/useStyleDetail'
@@ -25,6 +32,7 @@ import HeroTile from '../components/viz/HeroTile'
 import MirrorBars from '../components/viz/MirrorBars'
 import RadarChart from '../components/viz/RadarChart'
 import RoundPacing from '../components/viz/RoundPacing'
+import ClutchCard from '../components/fightflow/ClutchCard'
 import Section from '../components/viz/Section'
 import SkillCallout from '../components/viz/SkillCallout'
 import SlideControls from '../components/viz/SlideControls'
@@ -48,11 +56,23 @@ const NOW = Date.now()
 // Order here is the order they appear in the scrolling column.
 const SECTIONS = [
   { key: 'skills', label: 'Skills' },
+  { key: 'percentiles', label: 'Percentiles' },
   { key: 'style', label: 'Style' },
   { key: 'overview', label: 'Career Overview' },
+  { key: 'trajectory', label: 'Trajectory' },
   { key: 'career', label: 'Career Stats' },
+  { key: 'splits', label: 'Splits' },
+  { key: 'camp', label: 'Camp' },
   { key: 'fights', label: 'Fight History' },
 ]
+
+// Style needs a style row and Camp a resolved camp; without one the section has no tab.
+const sectionShown = (key, styleDetail, camp) => (key !== 'style' || styleDetail) && (key !== 'camp' || camp?.camp)
+
+// "Fighting out of": the raw ufc.com text, or the camp it resolved to when that's blank.
+function TeamLink({ team, camp }) {
+  return team || camp?.camp?.name || null
+}
 
 // UFC.com writes "--" for a missing measurement rather than leaving it blank, and a
 // truthy string sails through a plain falsy check. Reach alone has ~1,983 of them.
@@ -259,9 +279,13 @@ function ExternalCard({ r, first }) {
 
 const MOBILE_SECTIONS = [
   { key: 'skills', label: 'Skills' },
+  { key: 'percentiles', label: 'Percentiles' },
   { key: 'style', label: 'Style' },
   { key: 'overview', label: 'Overview' },
+  { key: 'trajectory', label: 'Trajectory' },
   { key: 'career', label: 'Career Stats' },
+  { key: 'splits', label: 'Splits' },
+  { key: 'camp', label: 'Camp' },
   { key: 'fights', label: 'Fights' },
 ]
 
@@ -285,9 +309,9 @@ const openSidebar = () => window.dispatchEvent(new CustomEvent('alocks:open-side
 function MobileFighterProfile({
   fighter, record, isChamp, ranked, divisionLabel, bio, profile, form, career, tiles, twoWay,
   pacing, survival, recent, oppData, statsByFight, openFight, toggleFight, upcoming, cstats,
-  eventMap, strikeMode, setStrikeMode, trend, years, styleDetail, onOpen, history,
+  eventMap, strikeMode, setStrikeMode, trend, years, styleDetail, onOpen, history, camp, pct,
 }) {
-  const sections = useMemo(() => MOBILE_SECTIONS.filter((s) => s.key !== 'style' || styleDetail), [styleDetail])
+  const sections = useMemo(() => MOBILE_SECTIONS.filter((s) => sectionShown(s.key, styleDetail, camp)), [styleDetail, camp])
   const { scrollRef, register, active, scrollTo } = useScrollSpy(sections)
   const [condensed, setCondensed] = useState(false)
 
@@ -308,7 +332,7 @@ function MobileFighterProfile({
     ['Stance', val(fighter.stance)],
   ].filter(([, v]) => v)
   const from = val(fighter.birthplace)
-  const team = val(fighter.trains_at)
+  const team = val(fighter.trains_at) || camp?.camp?.name
   const last = form?.results?.[0]
   const lastOpp = last ? oppData[String(last.oppId)] : null
   const nextOpp = upcoming ? oppData[String(upcoming.oppId)] : null
@@ -395,7 +419,7 @@ function MobileFighterProfile({
               <div className="truncate text-[11px] text-white/60">
                 {from && <><span className="font-bold text-white/85">From</span> {from}</>}
                 {from && team && ' · '}
-                {team && <><span className="font-bold text-white/85">Team</span> {team}</>}
+                {team && <><span className="font-bold text-white/85">Team</span> <TeamLink team={team} camp={camp} /></>}
               </div>
             )}
           </div>
@@ -459,6 +483,10 @@ function MobileFighterProfile({
             ) : (
               <p className="text-sm text-muted-foreground">No ranked skill decomposition for this fighter (unranked or insufficient rounds).</p>
             )}
+          </Section>
+
+          <Section id="percentiles" title="Percentiles" note={pct.data ? `vs ${pct.data.division_label}` : null} register={register}>
+            <FighterPercentiles {...pct} />
           </Section>
 
           {styleDetail && (
@@ -594,6 +622,13 @@ function MobileFighterProfile({
             )}
           </Section>
 
+          <Section id="trajectory" title="Trajectory" register={register}>
+            <div className="flex flex-col gap-3">
+              <RatingHistory fighterId={fighter.id} className="bg-card" />
+              <AgeCurveCard fighterId={fighter.id} fighterLabel={fighter.last_name} className="bg-card" />
+            </div>
+          </Section>
+
           <Section
             id="career"
             title="Career Stats"
@@ -687,11 +722,22 @@ function MobileFighterProfile({
                     <RoundPacing rounds={pacing} survival={survival} />
                   </div>
                 )}
+                <ClutchCard fighterId={fighter.id} />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No per-fight statistics recorded for this fighter.</p>
             )}
           </Section>
+
+          <Section id="splits" title="Splits" register={register}>
+            <SituationalSplits fighterId={fighter.id} />
+          </Section>
+
+          {camp?.camp && (
+            <Section id="camp" title="Camp" register={register}>
+              <CampCard data={camp} className="bg-card" />
+            </Section>
+          )}
 
           <Section id="fights" title="Fight History" note={`${history.length} fights`} register={register}>
             {history.length === 0 ? (
@@ -759,7 +805,9 @@ export default function FighterProfilePage() {
   // `families` arrived with the lineage fields: an older API leaves the section off.
   const { detail: rawStyle } = useStyleDetail(id)
   const styleDetail = rawStyle?.families ? rawStyle : null
-  const sections = useMemo(() => SECTIONS.filter((s) => s.key !== 'style' || styleDetail), [styleDetail])
+  const { data: camp } = useExtra(fetchFighterCamp, id)
+  const pct = useExtra(fetchFighterPercentiles, id)
+  const sections = useMemo(() => SECTIONS.filter((s) => sectionShown(s.key, styleDetail, camp)), [styleDetail, camp])
   // 64: the slim bar pinned over the top of the scroll once the cover has gone.
   const { scrollRef, register, active, scrollTo } = useScrollSpy(sections, 64)
   const coverRef = useRef(null)
@@ -1082,7 +1130,7 @@ export default function FighterProfilePage() {
         trend={{ data: trendData, usingRank, rankAxis, win: trendWin, size: TREND_WIN }}
         years={{ win: yearWin, size: YEAR_WIN }}
         styleDetail={styleDetail} onOpen={(fid) => navigate(`/ufc/fighters/${fid}`)}
-        history={history}
+        history={history} camp={camp} pct={pct}
       />
     )
   }
@@ -1094,7 +1142,7 @@ export default function FighterProfilePage() {
     ['Reach', val(fighter.reach)],
     ['Stance', val(fighter.stance)],
     ['Country', countryName(fighter.country_code)],
-    ['Fighting out of', val(fighter.trains_at)],
+    ['Fighting out of', (val(fighter.trains_at) || camp?.camp) && <TeamLink team={val(fighter.trains_at)} camp={camp} />],
   ].filter(([, v]) => v)
   // The cover's headline numbers; any the data can't back drop out.
   const coverStats = [
@@ -1185,6 +1233,10 @@ export default function FighterProfilePage() {
             ) : (
               <p className="text-sm text-muted-foreground">No ranked skill decomposition for this fighter (unranked or insufficient rounds).</p>
             )}
+          </Section>
+
+          <Section id="percentiles" title="Percentiles" note={pct.data ? `vs ${pct.data.division_label}` : null} register={register}>
+            <FighterPercentiles {...pct} />
           </Section>
 
           {styleDetail && (
@@ -1324,6 +1376,13 @@ export default function FighterProfilePage() {
             )}
           </Section>
 
+          <Section id="trajectory" title="Trajectory" register={register}>
+            <div className="grid gap-3 xl:grid-cols-2">
+              <RatingHistory fighterId={fighter.id} />
+              <AgeCurveCard fighterId={fighter.id} fighterLabel={fighter.last_name} />
+            </div>
+          </Section>
+
           <Section
             id="career"
             title="Career Stats"
@@ -1439,11 +1498,22 @@ export default function FighterProfilePage() {
                   <RoundPacing rounds={pacing} survival={survival} />
                 </div>
               )}
+              <ClutchCard fighterId={fighter.id} />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No per-fight statistics recorded for this fighter.</p>
             )}
           </Section>
+
+          <Section id="splits" title="Splits" register={register}>
+            <SituationalSplits fighterId={fighter.id} />
+          </Section>
+
+          {camp?.camp && (
+            <Section id="camp" title="Camp" register={register}>
+              <CampCard data={camp} />
+            </Section>
+          )}
 
           <Section id="fights" title="Fight History" note={historyNote} register={register}>
             {history.length === 0 ? (

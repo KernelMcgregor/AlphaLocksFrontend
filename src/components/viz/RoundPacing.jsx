@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SlideTabs } from '../ui/slide-tabs'
+import { Tip } from '../ui/tip'
 import { cn } from '../../lib/utils'
 
 // Pacing across rounds, as small multiples. One series each, so no legend box —
@@ -12,20 +13,23 @@ const PACE_PANELS = [
 
 // `accent` lets a caller that already encodes an entity by colour (the fight page's
 // two corners) keep the bars on that entity's hue. Single-subject callers leave it.
-export function PaceColumns({ rounds, panel, accent = 'bg-viz-1' }) {
+// A round carrying `norm` (same units as the panel) gets a reference tick across its
+// bar, e.g. the division's rate for that round; `normLabel` names it in the tooltip.
+export function PaceColumns({ rounds, panel, accent = 'bg-viz-1', normLabel = 'Norm', title }) {
   const vals = rounds.map((r) => r[panel.key]).filter((v) => v != null)
-  const max = Math.max(...vals, 0.01) * 1.12
+  const norms = rounds.map((r) => r.norm).filter((v) => v != null)
+  const max = Math.max(...vals, ...norms, 0.01) * 1.12
   const peak = Math.max(...vals, 0)
   return (
     <div className="flex flex-col rounded-lg border border-border bg-muted/20 p-2.5">
-      <div className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-wide text-foreground/70">{panel.label}</div>
+      <div className="mb-2 shrink-0 text-[10px] font-bold uppercase tracking-wide text-foreground/70">{title ?? panel.label}</div>
       {/* bars fill the box rather than sitting in a narrow centred track */}
-      <div className="flex h-[100px] flex-1 items-end gap-[4px]">
+      <div className={cn('flex h-[100px] flex-1 items-end gap-[4px]', norms.length > 0 && 'min-h-[100px]')}>
         {rounds.map((r) => {
           const v = r[panel.key]
           const isPeak = v != null && v === peak
-          return (
-            <div key={r.round} className="flex flex-1 flex-col items-center justify-end">
+          const col = (
+            <div className="relative flex h-full flex-col items-center justify-end">
               <span className={cn('mb-1 text-[10px] font-bold tabular-nums', isPeak ? 'text-foreground' : 'text-muted-foreground')}>
                 {v == null ? '—' : panel.fmt(v)}
               </span>
@@ -33,8 +37,23 @@ export function PaceColumns({ rounds, panel, accent = 'bg-viz-1' }) {
                 className={cn('w-full rounded-t-[4px]', accent, r.n < 3 && 'opacity-45')}
                 style={{ height: `${Math.max(3, ((v ?? 0) / max) * 80)}px` }}
               />
+              {r.norm != null && (
+                <span className="absolute -inset-x-[2px] h-[2px] rounded-full bg-foreground/80 ring-2 ring-card"
+                  style={{ bottom: `${(r.norm / max) * 80 - 1}px` }} />
+              )}
             </div>
           )
+          return r.norm == null
+            ? <div key={r.round} className="flex-1 self-stretch">{col}</div>
+            : (
+              <Tip key={r.round} className="flex-1 self-stretch" content={(
+                <span className="text-[11px]">
+                  R{r.round}: <strong>{v == null ? '—' : panel.fmt(v)}</strong> · {normLabel} {panel.fmt(r.norm)}
+                </span>
+              )}>
+                {col}
+              </Tip>
+            )
         })}
       </div>
       <div className="mt-1.5 flex shrink-0 gap-[4px]">

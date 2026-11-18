@@ -69,7 +69,7 @@ export function buildShapWaterfall(prediction, shapValues) {
   const calibration = prediction.va_prob_low != null && prediction.va_prob_high != null
     ? { low: prediction.va_prob_low, high: prediction.va_prob_high }
     : null
-  // Told from the favourite's side: the walk ends on the bigger number, and the
+  // Told from the favorite's side: the walk ends on the bigger number, and the
   // headline reads "why Talbott is 84%" rather than "why Figueiredo is only 16%".
   // Every probability is mirrored, so steps keep their size and flip direction.
   const side = pFinal >= 0.5 ? 'red' : 'blue'

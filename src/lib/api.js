@@ -33,7 +33,7 @@ async function request(path, options = {}) {
 // the click waits on its own duplicate request rather than the one already running.
 const inflight = new Map()
 
-function cachedRequest(path, ttl = DEFAULT_TTL) {
+export function cachedRequest(path, ttl = DEFAULT_TTL) {
   const cached = getCached(path)
   if (cached) return Promise.resolve(cached)
   const pending = inflight.get(path)

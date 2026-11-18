@@ -15,6 +15,9 @@ import PastResultsPage from './pages/PastResultsPage'
 import HomePage from './pages/HomePage'
 import UFCPage from './pages/UFCPage'
 import UpcomingPage from './pages/UpcomingPage'
+import JudgeProfilePage from './pages/JudgeProfilePage'
+import OfficialsPage from './pages/OfficialsPage'
+import RefereeProfilePage from './pages/RefereeProfilePage'
 
 export default function App() {
   return (
@@ -32,6 +35,13 @@ export default function App() {
         {/* P4P and BMF are boards inside the Rankings page, chosen in its division picker. */}
         <Route path="/ufc/rankings/bmf" element={<Navigate to="/ufc/rankings?div=bmf_men" replace />} />
         <Route path="/ufc/rankings/p4p" element={<Navigate to="/ufc/rankings?div=p4p_men" replace />} />
+        <Route path="/ufc/rankings/timelapse" element={<Navigate to="/ufc/rankings?view=history" replace />} />
+        {/* Judges and referees share one page; their profiles keep their own URLs. */}
+        <Route path="/ufc/officials" element={<OfficialsPage />} />
+        <Route path="/ufc/judges" element={<Navigate to="/ufc/officials" replace />} />
+        <Route path="/ufc/judges/:id" element={<JudgeProfilePage />} />
+        <Route path="/ufc/referees" element={<Navigate to="/ufc/officials?view=referees" replace />} />
+        <Route path="/ufc/referees/:id" element={<RefereeProfilePage />} />
         <Route path="/model/upcoming" element={<UpcomingPage />} />
         <Route path="/ufc/hypothetical" element={<HypotheticalPage />} />
         {/* The breakdown used to be its own page; it is the matchup view now. */}

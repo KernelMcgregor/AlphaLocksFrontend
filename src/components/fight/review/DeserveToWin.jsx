@@ -6,16 +6,43 @@
 // For a finish the replays run the unfought rounds from the fight's form, so the
 // number answers "who was winning, had it gone the distance" — not who deserved the
 // knockout.
+import { cardSide } from '../../../lib/fightReview'
 import { cn } from '../../../lib/utils'
 import { Tip } from '../../ui/tip'
 import { cornerOf, CORNERS } from '../corners'
 import { Box } from '../layout'
 import { DTW_TONES as TONES, pct, verdictFor } from './dtwVerdict'
 
+// Each judge's call on each round (points before deductions), from the mmadecisions
+// round cards: [[{ name, side: 'red' | 'blue' | 'even' }, ...] per round].
+function judgeVerdicts(scorecards) {
+  const judges = scorecards?.judges || []
+  if (!judges.some((j) => j.rounds?.length)) return []
+  const n = Math.max(...judges.map((j) => Math.max(0, ...j.rounds.map((r) => r.round))))
+  return Array.from({ length: n }, (_, i) => judges
+    .map((j) => ({ name: j.name, side: cardSide(j.rounds.find((r) => r.round === i + 1), { verdict: true }) }))
+    .filter((v) => v.side))
+}
+
+// A judge's verdict: a hollow dot at the outer end of the side they gave the round to
+// (10-10s at the centre line), over the model's bar.
+function JudgeDots({ calls, side }) {
+  if (!calls.length) return null
+  const css = side === 'even' ? 'var(--color-muted-foreground)' : cornerOf(side).css
+  return (
+    <span className={cn('pointer-events-none absolute top-1/2 flex -translate-y-1/2 gap-[3px]',
+      side === 'red' ? 'left-[3px]' : side === 'blue' ? 'right-[3px]' : 'left-1/2 -translate-x-1/2')}>
+      {calls.map((c) => (
+        <span key={c.name} className="h-2.5 w-2.5 rounded-full border-2 bg-card ring-1 ring-card" style={{ borderColor: css }} />
+      ))}
+    </span>
+  )
+}
+
 // One row per scheduled round: the chance a judge gives it to red, as a bar growing
-// from the centre toward whoever took it. Rounds that were never fought (a finish)
-// are drawn faint and labelled projected.
-function RoundStrip({ rounds, observed, partialSeconds, names }) {
+// from the centre toward whoever took it, with each real judge's call on it. Rounds
+// that were never fought (a finish) are drawn faint and labelled projected.
+function RoundStrip({ rounds, observed, partialSeconds, names, verdicts = [] }) {
   return (
     <div className="grid gap-1">
       {rounds.map((p, i) => {
@@ -24,6 +51,8 @@ function RoundStrip({ rounds, observed, partialSeconds, names }) {
         const partial = n === observed && partialSeconds != null
         const lead = p >= 0.5 ? 'red' : 'blue'
         const lean = Math.abs(p - 0.5) * 2
+        const calls = verdicts[i] || []
+        const on = (s) => calls.filter((c) => c.side === s)
         return (
           <Tip
             key={n}
@@ -31,6 +60,15 @@ function RoundStrip({ rounds, observed, partialSeconds, names }) {
               <span className="text-[11px]">
                 Round {n}{projected ? ' (never fought — projected from the fight\'s form)' : partial ? ` (${Math.floor(partialSeconds / 60)}:${String(partialSeconds % 60).padStart(2, '0')} fought)` : ''}:
                 a judge gives it to <strong>{names[lead]}</strong> {pct(Math.max(p, 1 - p))} of the time.
+                {calls.length > 0 && (
+                  <span className="mt-1 block border-t pt-1">
+                    {calls.map((c) => (
+                      <span key={c.name} className="block">
+                        {c.name}: <strong>{c.side === 'even' ? 'even' : names[c.side]}</strong>
+                      </span>
+                    ))}
+                  </span>
+                )}
               </span>
             )}
           >
@@ -38,11 +76,14 @@ function RoundStrip({ rounds, observed, partialSeconds, names }) {
               <span className="text-[10px] font-bold text-muted-foreground">
                 R{n}{projected ? '*' : ''}
               </span>
-              <div className="flex h-3.5 justify-end rounded-l bg-muted/50">
+              <div className="relative flex h-3.5 justify-end rounded-l bg-muted/50">
                 {lead === 'red' && <div className="h-full rounded-l" style={{ width: `${lean * 100}%`, background: CORNERS[0].css }} />}
+                <JudgeDots calls={on('red')} side="red" />
               </div>
-              <div className="flex h-3.5 rounded-r bg-muted/50">
+              <div className="relative flex h-3.5 rounded-r bg-muted/50">
                 {lead === 'blue' && <div className="h-full rounded-r" style={{ width: `${lean * 100}%`, background: CORNERS[1].css }} />}
+                <JudgeDots calls={on('blue')} side="blue" />
+                {on('even').length > 0 && <span className="absolute inset-y-0 left-0 w-0"><JudgeDots calls={on('even')} side="even" /></span>}
               </div>
               <span className="text-right text-[10px] font-bold tabular-nums" style={{ color: cornerOf(lead).css }}>
                 {pct(Math.max(p, 1 - p))}
@@ -55,8 +96,22 @@ function RoundStrip({ rounds, observed, partialSeconds, names }) {
   )
 }
 
-export default function DeserveToWin({ dtw, fight, side, finished }) {
+// Robbery index: the deserve-to-win share of the fighter the judges did NOT give the
+// decision to (decisions only). Flagged from 0.7; the number lives in the tooltip.
+function RobberyChip({ score, loser }) {
+  if (score == null || score < 0.7) return null
+  return (
+    <Tip content={<span className="text-[11px]">{loser} wins <strong>{pct(score)}</strong> of replays but lost the decision</span>}>
+      <span className="cursor-help rounded border border-rose-500/50 bg-rose-500/10 px-1.5 py-px text-[10px] font-black uppercase tracking-wide text-rose-700 dark:text-rose-400">
+        Robbery
+      </span>
+    </Tip>
+  )
+}
+
+export default function DeserveToWin({ dtw, fight, side, finished, scorecards }) {
   const names = { red: fight.red_fighter.last_name, blue: fight.blue_fighter.last_name }
+  const verdicts = judgeVerdicts(scorecards)
   const v = verdictFor(dtw, side, finished, names)
   const Icon = v.icon
   const hasPanel = dtw.panel_p_red != null
@@ -70,6 +125,7 @@ export default function DeserveToWin({ dtw, fight, side, finished }) {
         title="Deserve to win"
         tip={`The fight replayed ${dtw.n_sims.toLocaleString()} times from its round-by-round stats, each scored by three simulated judges. The share of replays each corner wins is how much the performance, not the official result, favoured them.${dtw.extrapolated ? ' This fight was finished, so rounds never fought are projected from how it was going.' : ''}`}
         note={`${dtw.n_sims.toLocaleString()} replays${dtw.extrapolated ? ' · projected to the distance' : ''}`}
+        right={side && <RobberyChip score={dtw.robbery_score} loser={names[side === 'red' ? 'blue' : 'red']} />}
       >
         <div className={cn('mb-3 flex items-start gap-2 rounded-md border px-2.5 py-2', TONES[v.tone])}>
           <Icon className="mt-[1px] h-4 w-4 shrink-0" />
@@ -139,14 +195,20 @@ export default function DeserveToWin({ dtw, fight, side, finished }) {
 
       <Box
         title="Round by round"
-        tip="The round model: the chance a judge scores each round for each corner, from that round's strikes, takedowns, control and knockdowns. Rounds marked * were never fought."
+        tip={`The round model: the chance a judge scores each round for each corner, from that round's strikes, takedowns, control and knockdowns.${verdicts.length ? ' Hollow dots are the real judges\' calls.' : ''} Rounds marked * were never fought.`}
         note="who a judge gives each round to"
+        right={verdicts.length > 0 && (
+          <span className="flex items-center gap-1 text-[9.5px] font-semibold text-muted-foreground">
+            <span className="h-2.5 w-2.5 rounded-full border-2 border-muted-foreground bg-card" />Judge
+          </span>
+        )}
       >
         <RoundStrip
           rounds={dtw.round_p_red || []}
           observed={dtw.rounds_observed}
           partialSeconds={dtw.partial_round_seconds}
           names={names}
+          verdicts={verdicts}
         />
         {dtw.extrapolated && (
           <p className="mt-2 text-[10px] italic text-muted-foreground">

@@ -1,8 +1,11 @@
 // The market around the fight: where the moneyline opened and closed (BestFightOdds
-// consensus), the exchange curves, and every prop that cashed with the price it closed
+// consensus), every book's line through fight week, the exchange curves, how the fans scored
+// it against the model and the close, and every prop that cashed with the price it closed
 // at — what the books thought of what actually happened.
 import { ArrowRight } from 'lucide-react'
 import { formatOdds } from '../../../lib/utils'
+import BookMovement from '../../markets/BookMovement'
+import CrowdModelMarket from '../../markets/CrowdModelMarket'
 import MarketMovement from '../../viz/MarketMovement'
 import { Tip } from '../../ui/tip'
 import { CORNERS } from '../corners'
@@ -134,6 +137,10 @@ export default function MarketRecap({ fight, line, side, props, marketHistory })
           )}
         </Box>
       </div>
+
+      <CrowdModelMarket fight={fight} />
+
+      <BookMovement fight={fight} modelProb={model} className="rounded-lg border border-border p-3" />
 
       {hasCurves && (
         <div className="rounded-lg border border-border p-3">

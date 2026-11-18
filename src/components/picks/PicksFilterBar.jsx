@@ -224,7 +224,7 @@ export default function PicksFilterBar({
 
         <Field label="Odds">
           <Segmented
-            label="Favourites or underdogs"
+            label="Favorites or underdogs"
             value={filters.side}
             onChange={(side) => set({ side })}
             options={[{ key: 'all', label: 'All' }, { key: 'fav', label: 'Favs' }, { key: 'dog', label: 'Dogs' }]}

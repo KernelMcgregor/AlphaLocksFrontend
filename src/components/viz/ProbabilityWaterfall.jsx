@@ -13,7 +13,7 @@ import { cn } from '../../lib/utils'
 // individual family steps — often a point or two each — were invisible next to the
 // prior, which defeated the purpose.
 //
-// Everything is stated toward `side` — the page passes the favourite — so the walk
+// Everything is stated toward `side` — the page passes the favorite — so the walk
 // ends on the bigger number. Right-growing bars favour that corner, left the other;
 // bars keep the corner colours either way, matching every other mark on the page.
 export default function ProbabilityWaterfall({

@@ -12,6 +12,7 @@ import { useSearchParams } from 'react-router-dom'
 import PageLoader from '../components/PageLoader'
 import { Card, CardContent } from '../components/ui/card'
 import { SlideTabs } from '../components/ui/slide-tabs'
+import ClvPanel from '../components/markets/ClvPanel'
 import PastEventsTab from '../components/results/PastEventsTab'
 import ResultsFilterBar from '../components/results/ResultsFilterBar'
 import TransparencyTab from '../components/results/TransparencyTab'
@@ -21,26 +22,29 @@ import { fetchPastResultsEvents, fetchPastResultsSplits, pastResultsPath, peekCa
 const TABS = [
   { key: 'events', label: 'Performance' },
   { key: 'transparency', label: 'Why trust it' },
+  { key: 'clv', label: 'Line value' },
 ]
 
 export default function PastResultsPage() {
   const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') === 'transparency' ? 'transparency' : 'events'
+  const tab = ['transparency', 'clv'].includes(params.get('tab')) ? params.get('tab') : 'events'
+  // the Line value tab fetches its own data (/ufc/model/clv); only the date range applies to it
+  const ledgerTab = tab === 'clv' ? 'transparency' : tab
   const filters = readFilters(params)
   const q = resultsQuery(filters)
-  const path = tab === 'events' ? pastResultsPath.events(q) : pastResultsPath.splits(q)
+  const path = ledgerTab === 'events' ? pastResultsPath.events(q) : pastResultsPath.splits(q)
   // answers keyed by path, plus the last answer per tab, which stays on screen (faded)
   // while a filter change loads
   const [got, setGot] = useState({})
 
   useEffect(() => {
     let live = true
-    const fetcher = tab === 'events' ? fetchPastResultsEvents : fetchPastResultsSplits
+    const fetcher = ledgerTab === 'events' ? fetchPastResultsEvents : fetchPastResultsSplits
     fetcher(q)
-      .then((d) => live && setGot((g) => ({ ...g, [path]: { data: d }, [`last:${tab}`]: d })))
+      .then((d) => live && setGot((g) => ({ ...g, [path]: { data: d }, [`last:${ledgerTab}`]: d })))
       .catch((e) => live && setGot((g) => ({ ...g, [path]: { error: e.message } })))
     return () => { live = false }
-  }, [path, q, tab])
+  }, [path, q, ledgerTab])
 
   // selecting an event swaps the detail panel in place, so it replaces the URL (no history spam)
   const go = (next) => {
@@ -51,7 +55,7 @@ export default function PastResultsPage() {
   const setFilters = (f) => go({ ...filterParams(f), event: params.get('event') })
 
   const fresh = got[path]?.data || peekCached(path)
-  const data = fresh || got[`last:${tab}`]
+  const data = fresh || got[`last:${ledgerTab}`]
   const loading = !fresh && !got[path]?.error
   const error = got[path]?.error
 
@@ -65,17 +69,21 @@ export default function PastResultsPage() {
           <div className="min-w-0">
             <h1 className="page-title">Model Results</h1>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Walk-forward backtest · flat 1u · {filters.basis === 'open' ? 'opening' : 'closing'} line{filters.top && filters.minEv !== 'pick' ? ' · one pick per market' : ''}
+              {tab === 'clv'
+                ? 'Walk-forward backtest · model side vs the opening line'
+                : <>Walk-forward backtest · flat 1u · {filters.basis === 'open' ? 'opening' : 'closing'} line{filters.top && filters.minEv !== 'pick' ? ' · one pick per market' : ''}</>}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <ResultsFilterBar filters={filters} onChange={setFilters} coverage={data?.coverage} />
+          {tab !== 'clv' && <ResultsFilterBar filters={filters} onChange={setFilters} coverage={data?.coverage} />}
           <SlideTabs tabs={TABS} value={tab} onChange={(t) => go({ tab: t === 'events' ? null : t })} />
         </div>
       </div>
 
-      {error ? (
+      {tab === 'clv' ? (
+        <ClvPanel filters={filters} />
+      ) : error ? (
         <Card><CardContent className="p-6"><p className="text-destructive">Couldn't load past results: {error}</p></CardContent></Card>
       ) : !data ? (
         <PageLoader />

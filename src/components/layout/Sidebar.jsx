@@ -1,4 +1,4 @@
-import { BarChart3, Calendar, Clock, History, Layers, Newspaper, Orbit, Shuffle, Target, TrendingUp } from 'lucide-react'
+import { BarChart3, Calendar, Clock, Gavel, History, Layers, Newspaper, Orbit, Shuffle, Target, TrendingUp } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/utils'
 import { BrandLockup } from './Brand'
@@ -21,6 +21,7 @@ const navSections = [
     items: [
       { label: 'Events & Fights', icon: Calendar, path: '/ufc/events' },
       { label: 'Articles', icon: Newspaper, path: '/ufc/articles' },
+      { label: 'Officials', icon: Gavel, path: '/ufc/officials', prefixes: ['/ufc/judges/', '/ufc/referees/'] },
     ],
   },
   {
@@ -34,7 +35,11 @@ const navSections = [
   },
 ]
 
-const isActive = (item, pathname) => item.path === pathname || (item.match?.includes(pathname) ?? false)
+// `prefixes` light an item up on detail pages under other paths (a judge's profile
+// under Officials).
+const isActive = (item, pathname) =>
+  item.path === pathname || (item.match?.includes(pathname) ?? false) ||
+  (item.prefixes?.some((p) => pathname.startsWith(p)) ?? false)
 
 export default function Sidebar({ open, onClose }) {
   // Read on every render so back/forward and in-page links keep the highlight right.

@@ -203,3 +203,29 @@ body {
   from { width: 0; }
   to { width: 100%; }
 }
+
+/* Native scrollbars drawn like the ScrollArea thumb (components/ui/scroll-area), so a
+   page that scrolls natively matches one that uses the component. Chrome and Safari
+   take the ::-webkit rules; Firefox, which has no ::-webkit-scrollbar, takes the
+   standard properties. (Setting those in Chrome would switch its ::-webkit styling off.)
+   Elements with [scrollbar-width:none] still hide theirs. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  background-clip: content-box;
+  border: 2px solid transparent;
+  border-radius: 9999px;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+}

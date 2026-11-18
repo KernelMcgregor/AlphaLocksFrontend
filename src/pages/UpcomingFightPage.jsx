@@ -34,6 +34,7 @@ import { DumbbellRow, TwoWayLegend } from '../components/viz/Dumbbell'
 import FormStrip from '../components/viz/FormStrip'
 import HeroTile from '../components/viz/HeroTile'
 import MarketMovement from '../components/viz/MarketMovement'
+import BookMovement from '../components/markets/BookMovement'
 import MirrorBars from '../components/viz/MirrorBars'
 import OutcomeGrid from '../components/viz/OutcomeGrid'
 import ProbabilityWaterfall from '../components/viz/ProbabilityWaterfall'
@@ -44,6 +45,7 @@ import Section from '../components/viz/Section'
 import SkillCallout from '../components/viz/SkillCallout'
 import SplitBar from '../components/viz/SplitBar'
 import { useScrollSpy } from '../components/viz/hooks'
+import AssignedOfficials from '../components/officials/AssignedOfficials'
 import { fetchFighter } from '../lib/api'
 import {
   AXES, DIMS, aggregateCareer, deriveForm, deriveRoundPacing, deriveRoundSurvival,
@@ -123,7 +125,7 @@ function buildVictoryKeys(ctx) {
 
   // Three per corner at most, then widest first across both. Capping per corner
   // rather than globally keeps the underdog's routes on the board — a lopsided
-  // fight would otherwise fill every slot with the favourite's.
+  // fight would otherwise fill every slot with the favorite's.
   const perSide = { red: [], blue: [] }
   for (const k of [...best.values()].sort((a, b) => b.gap - a.gap)) {
     if (perSide[k.side].length < 3) perSide[k.side].push(k)
@@ -763,9 +765,9 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                         <Tip content={(
                           <span className="text-[11px]">
                             Each row is one family of model inputs and how many points it moved{' '}
-                            {fav.last_name}&apos;s win probability (the favourite). Base rate carries the
+                            {fav.last_name}&apos;s win probability (the favorite). Base rate carries the
                             division-wide starting point and every input not listed. Market is the best
-                            available price with vig included, so it flatters the favourite slightly.
+                            available price with vig included, so it flatters the favorite slightly.
                           </span>
                         )}>
                           <Info className="h-3 w-3 cursor-help text-muted-foreground/60" />
@@ -944,6 +946,8 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
                     />
                   </div>
                 )}
+
+                <BookMovement fight={fight} modelProb={prediction?.red_prob} className="mt-3 rounded-xl border border-border p-3" />
               </Section>
             )
 
@@ -1235,6 +1239,8 @@ export default function UpcomingFightPage({ fight, matchup, flanked = false, tab
             </Section>
 
             {!flanked && modelSection}
+
+            <AssignedOfficials fightId={fight.id} />
 
           </div>
   )

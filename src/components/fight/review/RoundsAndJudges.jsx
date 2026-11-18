@@ -3,14 +3,23 @@
 // disputed round can be checked against the strikes and control that decided it.
 // Judges' career dissent rates head their columns; the fan vote sits beside.
 import { Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { cardSide, panelSummary } from '../../../lib/fightReview'
 import { clock } from '../../../lib/fightProjection'
 import { cn } from '../../../lib/utils'
 import { Tip } from '../../ui/tip'
 import { cornerOf, CORNERS } from '../corners'
 import { Box, CornerLegend, Empty } from '../layout'
+import JudgeStats from '../../officials/JudgeStats'
+import { useJudgeIndex } from '../../officials/lib'
 
 const pct = (p) => `${Math.round(p * 100)}%`
+
+// A judge's name, linked to their profile when the panel row carries an id.
+function JudgeName({ judge, children, className }) {
+  if (judge.judge_id == null) return <span className={className}>{children}</span>
+  return <Link to={`/ufc/judges/${judge.judge_id}`} className={cn(className, 'hover:text-primary hover:underline')}>{children}</Link>
+}
 
 function ScoreCell({ cell, dissent, total }) {
   if (!cell || cell.red == null) return <span className="text-center text-muted-foreground">—</span>
@@ -62,6 +71,7 @@ export default function RoundsAndJudges({ fight, rounds, total, scorecards, dtw 
   const byRound = judges.some((j) => j.rounds.length)
   const panel = judges.length ? panelSummary(scorecards) : null
   const roundModel = dtw?.round_p_red || []
+  const judgeIndex = useJudgeIndex(judges.some((j) => j.judge_id != null))
   if (!rounds.length && !judges.length) {
     return <Box title="Rounds"><Empty>No round-by-round data for this bout.</Empty></Box>
   }
@@ -101,10 +111,11 @@ export default function RoundsAndJudges({ fight, rounds, total, scorecards, dtw 
                   <span className="text-[11px]">
                     <strong>{j.name}</strong>
                     {j.career ? <> · dissented from the panel in {j.career.dissents} of {j.career.n} decisions ({pct(j.career.dissent_rate)})</> : ' · no career record'}
+                    <JudgeStats profile={judgeIndex?.get(j.judge_id)} />
                   </span>
                 )}>
                   <span className="flex flex-col items-center text-center normal-case">
-                    <span className="truncate text-[10px] font-extrabold text-foreground">{j.name.split(' ').slice(-1)[0]}</span>
+                    <JudgeName judge={j} className="truncate text-[10px] font-extrabold text-foreground">{j.name.split(' ').slice(-1)[0]}</JudgeName>
                     {j.career && <span className="text-[9px] font-semibold text-muted-foreground">{pct(j.career.dissent_rate)} dissent</span>}
                   </span>
                 </Tip>
@@ -164,7 +175,9 @@ export default function RoundsAndJudges({ fight, rounds, total, scorecards, dtw 
           <div className="mt-3 grid gap-2 border-t pt-2 sm:grid-cols-3">
             {judges.map((j) => (
               <div key={j.seq} className="flex items-center justify-between rounded-md border border-border/70 px-2 py-1">
-                <span className="truncate text-[11px] font-bold">{j.name}</span>
+                <Tip className="min-w-0" content={<span className="text-[11px]"><strong>{j.name}</strong><JudgeStats profile={judgeIndex?.get(j.judge_id)} /></span>}>
+                  <JudgeName judge={j} className="block truncate text-[11px] font-bold">{j.name}</JudgeName>
+                </Tip>
                 <ScoreCell cell={j.total} total dissent={panel?.dissenters.includes(j.seq)} />
               </div>
             ))}
