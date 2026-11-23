@@ -558,7 +558,10 @@ function AltBoard({ kind, pool, weightClasses }) {
   const rows = useMemo(() => {
     if (!data) return null
     const label = kind === 'bmf' ? 'BMF' : 'P4P'
-    const top = [...(data.pools[pool] || [])].sort((a, b) => a.default_rank - b.default_rank).slice(0, ALT_TOP)
+    // The BMF belt holder (rank 0) sits above the top 15 as champion.
+    const sorted = [...(data.pools[pool] || [])].sort((a, b) => a.default_rank - b.default_rank)
+    const holder = sorted.filter((a) => a.is_bmf_champion)
+    const top = [...holder, ...sorted.filter((a) => !a.is_bmf_champion).slice(0, ALT_TOP)]
     return withScorePct(top.map((a) => {
       // A fighter ranked in two divisions uses the one the list filed them under.
       const entries = byId[a.id] || []
@@ -572,10 +575,11 @@ function AltBoard({ kind, pool, weightClasses }) {
         profile: deriveProfile(fighter, pct),
         division: own?.wc.label || a.division_label,
         rank: a.default_rank,
-        champ: !!a.is_champion,
+        champ: !!a.is_champion || !!a.is_bmf_champion,
         score: a.default_score,
         subtitle: a.division_label,
-        boardLabel: label,
+        // No board label = drawn like a division champion (belt cell, CHAMPION badge).
+        boardLabel: a.is_bmf_champion ? null : label,
         movement: a.movement,
       }
     }))

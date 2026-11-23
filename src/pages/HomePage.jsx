@@ -432,10 +432,10 @@ function RankingsStrip({ boards }) {
             <div className="relative">
               <Avatar fighter={f} size={64} className="transition-transform group-hover:scale-105" />
               <span className={cn('absolute -left-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded px-1 font-display text-[12px] font-extrabold italic text-white',
-                f.is_champion && !cross ? 'bg-gold' : (f.rank ?? 99) <= 3 ? 'bg-primary' : 'bg-ink')}>
-                {f.is_champion && !cross ? 'C' : f.rank}
+                (f.is_champion && !cross) || f.is_bmf_champion ? 'bg-gold' : (f.rank ?? 99) <= 3 ? 'bg-primary' : 'bg-ink')}>
+                {(f.is_champion && !cross) || f.is_bmf_champion ? 'C' : f.rank}
               </span>
-              {f.is_champion && <BeltIcon className="absolute -bottom-0.5 -right-1 h-4 w-4 rounded-full bg-background p-0.5 text-gold" />}
+              {(f.is_champion || f.is_bmf_champion) && <BeltIcon className="absolute -bottom-0.5 -right-1 h-4 w-4 rounded-full bg-background p-0.5 text-gold" />}
             </div>
             <div className="mt-1.5 flex max-w-full items-center justify-center gap-1 text-[10px] text-muted-foreground">
               <CountryFlag countryCode={f.country_code} />
