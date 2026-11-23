@@ -41,7 +41,9 @@ function divisionRuns(points) {
 // mid-slide.
 // `log`: a log y-scale, for ranks that run from #1 to #100+ (each doubling of rank takes
 // the same room, so the top of the table isn't squeezed into a sliver).
-export default function BumpChart({ series, points, formatValue, yLabel, invertY = false, start = 0, size = 12, domain, ticks: tickOverride, log = false }) {
+// `glide`: the slide's CSS transition, e.g. a linear one matched to a playback tick so a
+// playing time-lapse scrolls continuously rather than bouncing at every step.
+export default function BumpChart({ series, points, formatValue, yLabel, invertY = false, start = 0, size = 12, domain, ticks: tickOverride, log = false, glide: glideTransition }) {
   const [wrapRef, { w, h }] = useElementSize()
   const [hover, setHover] = useState(null) // { si, pi } — pi indexes the full series
 
@@ -80,7 +82,7 @@ export default function BumpChart({ series, points, formatValue, yLabel, invertY
   const step = Math.max(1, Math.ceil(win / Math.max(2, Math.floor(iw / 54))))
   const clipId = `plot-clip-${(yLabel || 'v').replace(/\W/g, '')}`
   const runs = divisionRuns(points)
-  const glide = { transform: `translateX(${shift}px)`, transition: 'transform 560ms cubic-bezier(0.34, 1.42, 0.64, 1)' }
+  const glide = { transform: `translateX(${shift}px)`, transition: glideTransition || 'transform 560ms cubic-bezier(0.34, 1.42, 0.64, 1)' }
 
   // Result colour fills the dot; the ring is foreground ink rather than the series
   // colour, so the fill reads at this size without the ring competing with it.

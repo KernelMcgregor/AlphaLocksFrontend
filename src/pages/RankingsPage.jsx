@@ -1,16 +1,19 @@
-import { ChevronDown, ChevronUp, Loader2, TrendingUp } from 'lucide-react'
+import { ArrowRight, CalendarDays, ChevronDown, ChevronUp, Loader2, TrendingUp } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '../components/ui/card'
-import DivisionPicker from '../components/sports/DivisionPicker'
+import { RankTable, Split } from '../components/best/layout'
+import DivisionTabs from '../components/rankings/DivisionTabs'
+import { TIMELAPSE_DIVISIONS } from '../components/rankings/divisions'
 import RankingsTimelapse from '../components/rankings/RankingsTimelapse'
 import { SlideTabs } from '../components/ui/slide-tabs'
 import CountryFlag from '../components/CountryFlag'
 import FighterImage from '../components/sports/FighterImage'
-import WavingFlag from '../components/sports/WavingFlag'
 import BeltIcon from '../components/ui/belt-icon'
+import WavingFlag from '../components/sports/WavingFlag'
+import { HeroChip } from '../components/hero/parts'
 import { fetchAltRankings, fetchRankings } from '../lib/api'
-import { cn, formatRecord, isChampion, displayRank } from '../lib/utils'
+import { cn, displayRank, fitName, formatRecord, isChampion } from '../lib/utils'
 
 // ---------------------------------------------------------------------------
 // Dimension model
@@ -31,13 +34,6 @@ const AXES = [
 
 const STRIKING_DIMS = ['str_vol', 'str_acc', 'ko', 'kod', 'dist']
 const GRAPPLING_DIMS = ['td', 'tdd', 'ctrl', 'ctrld', 'sub', 'subd', 'gnd']
-
-function ordinal(n) {
-  const v = Math.round(n)
-  const s = ['th', 'st', 'nd', 'rd']
-  const m = v % 100
-  return v + (s[(m - 20) % 10] || s[m] || s[0])
-}
 
 function initialsOf(fighter) {
   return ((fighter.first_name?.[0] || '') + (fighter.last_name?.[0] || '')).toUpperCase()
@@ -61,14 +57,12 @@ function buildPercentile(fighters) {
 function deriveProfile(fighter, pct) {
   const dims = fighter.dimensions || {}
   const axes = AXES.map((a) => ({ ...a, value: pct(a.key, dims[a.key] ?? 0) }))
-  const sorted = [...axes].sort((a, b) => b.value - a.value)
   const avg = (keys) => Math.round(keys.reduce((s, k) => s + pct(k, dims[k] ?? 0), 0) / keys.length)
   const striking = avg(STRIKING_DIMS)
   const grappling = avg(GRAPPLING_DIMS)
   const overall = Math.round((striking + grappling) / 2)
   return {
     axes,
-    topSkills: sorted.slice(0, 2),
     groups: [
       { label: 'Striking', value: striking, cls: 'text-amber-500', bar: 'bg-amber-500', stroke: 'stroke-amber-500', fill: 'fill-amber-500' },
       { label: 'Grappling', value: grappling, cls: 'text-indigo-500', bar: 'bg-indigo-500', stroke: 'stroke-indigo-500', fill: 'fill-indigo-500' },
@@ -182,176 +176,99 @@ function FighterAvatar({ fighter, size = 'sm' }) {
 }
 
 // ---------------------------------------------------------------------------
-// Side panel: the selected fighter (the champion, or #1 on P4P/BMF, by default).
-// Sized to the viewport on desktop: the portrait takes whatever height is left
-// after the name and badges: the portrait is capped (a tall box blew it up past the
-// panel's width) and the radar takes the rest, so extra height goes to the chart. On a
-// short screen the portrait crops from the bottom before the radar shrinks.
+// Side panel: the selected fighter (the champion, or #1 on P4P/BMF, by default), in the
+// same shape as the Highlights and Officials panels: a dark stage, tiles, the radar,
+// and the way into the full profile. The stage and the radar share the height.
 // ---------------------------------------------------------------------------
-// True on a short desktop window (a laptop): there the panel goes side-by-side up top so
-// the radar can take the full width and the rest of the height.
-function useShortScreen() {
-  const q = '(min-width: 1024px) and (max-height: 819px)'
-  const [short, setShort] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches)
-  useEffect(() => {
-    const mq = window.matchMedia(q)
-    const on = () => setShort(mq.matches)
-    mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
-  }, [])
-  return short
+function Label({ children }) {
+  return <div className="text-[10.5px] font-extrabold uppercase tracking-wider text-foreground">{children}</div>
 }
 
-function PanelPortrait({ row, className, imgClassName, badgeBottom }) {
-  const { fighter, rank, champ, boardLabel } = row
+// Labels sit in a two-line box, centred, so one-line labels line up with two-line ones.
+function Tile({ label, value, cls }) {
   return (
-    <div className={cn('relative overflow-hidden rounded-xl border border-border bg-muted', className)}>
-      <WavingFlag key={fighter.country_code} countryCode={fighter.country_code} />
-      <div className="absolute inset-x-0 bottom-0 z-[5] h-1/3 bg-gradient-to-t from-black/25 to-transparent" />
-      <FighterImage
-        fighter={fighter}
-        fit="contain"
-        alt={`${fighter.first_name} ${fighter.last_name}`}
-        className="absolute inset-0 z-10 flex items-start justify-center pt-[3%]"
-        imgClassName={imgClassName}
-      />
-      {/* A narrow portrait is mostly face up top, so its badge sits at the bottom instead. */}
-      <div className={cn('absolute left-2 z-20', badgeBottom ? 'bottom-2' : 'top-2')}>
-        {champ && !boardLabel ? (
-          <span className="inline-flex items-center gap-1 rounded-md border border-gold/50 bg-background/90 px-1.5 py-0.5 text-[10px] font-bold text-gold-foreground backdrop-blur">
-            <BeltIcon className="h-3 w-3" /> CHAMPION
-          </span>
-        ) : (
-          <span className="rounded-md bg-background/90 px-1.5 py-0.5 font-display text-lg font-extrabold italic leading-none text-primary backdrop-blur">
-            #{rank}{boardLabel && <span className="ml-1 text-[11px] not-italic text-muted-foreground">{boardLabel}</span>}
-          </span>
-        )}
+    <div className="flex flex-col items-center rounded-lg border border-border bg-muted/30 px-1 py-1.5">
+      <span className={cn('text-[17px] font-extrabold leading-none tabular-nums', cls)}>{value}</span>
+      <span className="mt-1 flex h-[11px] items-center text-center text-[8.5px] font-bold uppercase leading-[11px] tracking-wide text-muted-foreground">{label}</span>
+    </div>
+  )
+}
+
+// The profile page's cover in miniature: the portrait on the waving flag to the right,
+// the name in display type down the left with the standing, record and score.
+function FighterStage({ row }) {
+  const { fighter, division, boardLabel, bmfChampion } = row
+  // The BMF holder's row has no board label (it is drawn as the board's champion).
+  const champ = bmfChampion || isChampion(fighter)
+  const belt = bmfChampion ? 'BMF champion' : `${division} champion`
+  return (
+    <div className="relative min-h-[200px] flex-[1.1] overflow-hidden rounded-lg bg-ink text-white">
+      <div className="absolute inset-y-0 right-0 w-[58%]">
+        <div className="absolute inset-0 opacity-70"><WavingFlag key={fighter.country_code} countryCode={fighter.country_code} /></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-transparent" />
+        <FighterImage key={fighter.id} fighter={fighter} fit="contain" alt={`${fighter.first_name} ${fighter.last_name}`}
+          className="absolute inset-x-0 bottom-0 top-3 z-10" />
+      </div>
+      <div className="relative z-20 flex h-full w-[62%] min-w-0 flex-col p-3">
+        <div>
+          {champ ? (
+            <HeroChip className="bg-gold text-ink"><BeltIcon className="h-3 w-3" />{belt}</HeroChip>
+          ) : (
+            <HeroChip>#{row.rank} {boardLabel || division}</HeroChip>
+          )}
+        </div>
+        <div className="mt-2 min-w-0">
+          <div className="truncate text-[13px] font-semibold leading-tight text-white/80">{fighter.first_name}</div>
+          <div className="@container w-full">
+            <div className="font-display font-extrabold italic uppercase leading-[0.9] tracking-tight"
+              style={{ fontSize: fitName(fighter.last_name, 40) }}>
+              <span className="pr-[0.12em]">{fighter.last_name}</span>
+            </div>
+          </div>
+          {fighter.nickname && <div className="mt-0.5 truncate text-[11px] italic text-white/55">"{fighter.nickname}"</div>}
+        </div>
+        <div className="mt-auto space-y-2">
+          <div>
+            <div className="font-display text-[30px] font-extrabold italic leading-none tabular-nums">{Math.round(row.display)}</div>
+            <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-white/55">{bmfChampion ? 'BMF score' : boardLabel ? `${boardLabel} score` : 'Score'}</div>
+          </div>
+          <div>
+            <div className="font-display text-[22px] font-extrabold italic leading-none tabular-nums">
+              {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
+            </div>
+            <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-white/55">Record</div>
+          </div>
+        </div>
       </div>
     </div>
-  )
-}
-
-function GroupScores({ profile, small }) {
-  return (
-    <div className={cn('flex shrink-0 gap-2 rounded-lg border border-border', small ? 'py-1.5' : 'py-2')}>
-      {profile.groups.map((g) => (
-        <div key={g.label} className="flex-1 text-center">
-          <div className={cn('font-extrabold leading-none tabular-nums', small ? 'text-[15px]' : 'text-lg', g.cls)}>{g.value}</div>
-          <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{g.label}</div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function ProfileLink({ fighter, block }) {
-  return (
-    <Link
-      to={`/ufc/fighters/${fighter.id}`}
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-md border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-foreground/80 shadow-sm transition-colors hover:border-primary/40 hover:text-primary',
-        block && 'w-full py-1.5',
-      )}
-    >
-      View full profile
-    </Link>
   )
 }
 
 function FighterPanel({ row, panelRef }) {
-  const { fighter, profile, division, score, boardLabel } = row
-  const short = useShortScreen()
-  const chip = 'shrink-0 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] font-bold tabular-nums text-foreground/80'
-  const record = <span className={chip}>{formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}</span>
-  const scoreChip = <span className={chip}>{boardLabel ? `${boardLabel} ${score.toFixed(0)}` : `Score ${score.toFixed(0)}`}</span>
-  const standing = isChampion(fighter) ? (
-    <span className="inline-flex min-w-0 items-center gap-1 rounded-md border border-gold/50 bg-gold/15 px-2 py-0.5 text-[11px] font-bold text-gold-foreground">
-      <BeltIcon className="h-3 w-3 shrink-0" /><span className="truncate">{boardLabel ? `${division} Champion` : 'Champion'}</span>
-    </span>
-  ) : (
-    <span className="min-w-0 truncate rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
-      #{displayRank(fighter)} {division}
-    </span>
-  )
-
-  if (short) {
-    // Laptop: portrait beside identity, the radar below at full width and height.
-    return (
-      <Card ref={panelRef} className="flex min-h-0 scroll-mt-3 flex-col overflow-y-auto p-3.5">
-        <div className="grid shrink-0 grid-cols-[132px_minmax(0,1fr)] gap-3">
-          <PanelPortrait row={row} badgeBottom className="h-[196px]" imgClassName="h-[115%] w-auto max-w-none object-top" />
-          {/* Plain text rather than a stack of chips: name, one meta line, the standing,
-              then the three ratings as rows (three columns didn't fit this width). */}
-          <div className="flex min-w-0 flex-col">
-            <div className="flex items-start gap-1.5">
-              <CountryFlag countryCode={fighter.country_code} />
-              <span className="line-clamp-2 text-[17px] font-extrabold leading-tight tracking-tight">{fighter.first_name} {fighter.last_name}</span>
-            </div>
-            <div className="mt-1 text-[12px] font-semibold tabular-nums text-muted-foreground">
-              {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
-              <span className="mx-1.5 text-muted-foreground/50">·</span>
-              {boardLabel ? `${boardLabel} ${score.toFixed(0)}` : `Score ${score.toFixed(0)}`}
-            </div>
-            {isChampion(fighter) ? (
-              <div className="mt-1 flex items-start gap-1 text-[12px] font-bold leading-tight text-gold-foreground">
-                <BeltIcon className="mt-px h-3.5 w-3.5 shrink-0" />{boardLabel ? `${division} Champion` : 'Champion'}
-              </div>
-            ) : (
-              <div className="mt-1 text-[12px] font-bold leading-tight text-primary">#{displayRank(fighter)} {division}</div>
-            )}
-            <div className="mt-2.5 space-y-1.5 border-t border-border pt-2.5">
-              {profile.groups.map((g) => (
-                <div key={g.label} className="grid grid-cols-[66px_minmax(0,1fr)_24px] items-center gap-1.5">
-                  <span className="text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">{g.label}</span>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div className={cn('h-full rounded-full transition-[width] duration-500', g.bar)} style={{ width: `${g.value}%` }} />
-                  </div>
-                  <span className={cn('text-right text-[13px] font-extrabold tabular-nums', g.cls)}>{g.value}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-auto pt-2"><ProfileLink fighter={fighter} block /></div>
-          </div>
-        </div>
-        <div className="mt-2.5 flex min-h-[200px] flex-1 flex-col border-t border-border pt-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/80">Skill profile</span>
-          <div className="flex min-h-0 flex-1 items-center justify-center">
-            <RadarChart axes={profile.axes} />
-          </div>
-        </div>
-      </Card>
-    )
-  }
-
+  const { fighter, profile } = row
+  const [striking, grappling, overall] = profile.groups
   return (
-    <Card ref={panelRef} className="flex min-h-0 scroll-mt-3 flex-col overflow-y-auto p-4">
-      <PanelPortrait
-        row={row}
-        className="h-[260px] shrink-0 lg:h-auto lg:max-h-[330px] lg:min-h-[110px] lg:flex-1 lg:shrink 2xl:max-h-[380px]"
-        imgClassName="h-[max(97%,300px)] w-auto max-w-none object-top"
-      />
-
-      {/* identity */}
-      <div className="mt-3 flex shrink-0 items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <CountryFlag countryCode={fighter.country_code} />
-          <span className="truncate text-xl font-extrabold leading-tight tracking-tight">{fighter.first_name} {fighter.last_name}</span>
-        </div>
-        <ProfileLink fighter={fighter} />
+    <div ref={panelRef} className="flex min-h-0 scroll-mt-3 flex-col gap-2.5 overflow-hidden rounded-xl border border-border bg-card p-3">
+      <FighterStage row={row} />
+      <div className="grid shrink-0 grid-cols-3 gap-1.5">
+        <Tile label="Striking" value={striking.value} cls={striking.cls} />
+        <Tile label="Grappling" value={grappling.value} cls={grappling.cls} />
+        <Tile label="Overall" value={overall.value} cls={overall.cls} />
       </div>
-
-      {/* record · score · standing — one line, always: the last chip truncates first */}
-      <div className="mt-2 flex shrink-0 flex-nowrap items-center gap-1.5">{record}{scoreChip}{standing}</div>
-
-      {/* skill radar + group scores */}
-      <div className="mt-3 flex shrink-0 flex-col border-t border-border pt-2.5 lg:max-h-[345px] lg:min-h-[235px] lg:flex-[1.6] lg:shrink 2xl:max-h-[390px]">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/80">Skill profile</span>
-        <div className="flex h-[240px] items-center justify-center lg:h-auto lg:min-h-0 lg:flex-1">
+      <div className="flex min-h-[150px] flex-1 flex-col">
+        <Label>Skill profile</Label>
+        <div className="flex min-h-0 flex-1 items-center justify-center">
           <RadarChart axes={profile.axes} />
         </div>
-        <GroupScores profile={profile} />
       </div>
-    </Card>
+      <Link
+        to={`/ufc/fighters/${fighter.id}`}
+        className="inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-primary/90"
+      >
+        Full profile <ArrowRight className="h-4 w-4" />
+      </Link>
+    </div>
   )
 }
 
@@ -360,9 +277,10 @@ function FighterPanel({ row, panelRef }) {
 // ---------------------------------------------------------------------------
 // The header sits inside the scroll box (sticky), so it shares the rows' width —
 // outside it, the scrollbar narrowed the rows and the columns drifted from their labels.
+// Last and Next show from xl; below that they collapse to nothing.
 const gridFor = (hasMove) => hasMove
-  ? 'grid grid-cols-[40px_40px_minmax(0,1fr)_64px_minmax(110px,150px)_48px] 2xl:grid-cols-[40px_40px_minmax(0,1fr)_64px_minmax(110px,150px)_48px_minmax(0,230px)] items-center gap-3'
-  : 'grid grid-cols-[40px_40px_minmax(0,1fr)_64px_minmax(110px,150px)] 2xl:grid-cols-[40px_40px_minmax(0,1fr)_64px_minmax(110px,150px)_minmax(0,230px)] items-center gap-3'
+  ? 'grid grid-cols-[40px_40px_minmax(0,1fr)_60px_44px_0px_40px] xl:grid-cols-[40px_40px_minmax(0,1fr)_60px_44px_236px_40px] items-center gap-3'
+  : 'grid grid-cols-[40px_40px_minmax(0,1fr)_60px_44px_0px] xl:grid-cols-[40px_40px_minmax(0,1fr)_60px_44px_236px] items-center gap-3'
 
 function RankCell({ row }) {
   if (row.champ && !row.boardLabel) {
@@ -382,6 +300,70 @@ function RankCell({ row }) {
   )
 }
 
+const METHOD_SHORT = [['Decision - Unanimous', 'UD'], ['Decision - Split', 'SD'], ['Decision - Majority', 'MD'],
+  ['Submission', 'SUB'], ['KO/TKO', 'KO'], ['TKO', 'TKO'], ['DQ', 'DQ']]
+const methodShort = (m) => (METHOD_SHORT.find(([k]) => (m || '').startsWith(k)) || [null, m ? m.split(' ')[0] : ''])[1]
+const monthDayYear = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+
+// The payload has the opponent's full name only. Everything after the first name is the
+// surname, so Saint Denis, Du Plessis and Dos Anjos stay whole.
+const surname = (name) => {
+  const w = (name || '').trim().split(/\s+/)
+  return w.length > 1 ? w.slice(1).join(' ') : w[0] || ''
+}
+
+// One half of the Activity box: opens the fight. A span with a link role rather than a
+// <Link>, since the row it sits in is itself a button.
+function ActivityPart({ to, title, children, className }) {
+  const navigate = useNavigate()
+  const go = (e) => { e.stopPropagation(); navigate(to) }
+  return (
+    <span role="link" tabIndex={0} title={title} onClick={go}
+      onKeyDown={(e) => e.key === 'Enter' && go(e)}
+      className={cn('flex min-w-0 flex-1 basis-0 cursor-pointer flex-col justify-center px-2 py-1 transition-colors hover:bg-muted', className)}>
+      {children}
+    </span>
+  )
+}
+
+// Last fight and, when one is booked, the next: one box, split in two when there is a
+// next fight. Each half opens its fight page.
+function ActivityCell({ last, next }) {
+  if (!last && !next) return <span className="hidden text-[11px] text-muted-foreground/50 xl:block">–</span>
+  const r = last && (last.drew ? 'D' : last.won ? 'W' : 'L')
+  return (
+    <span className="hidden h-9 min-w-0 overflow-hidden rounded-md border border-border bg-background xl:flex">
+      {last && (
+        <ActivityPart to={`/ufc/fights/${last.fight_id}`}
+          title={`${r === 'W' ? 'Beat' : r === 'L' ? 'Lost to' : 'Drew with'} ${last.opponent_name} · ${last.method || ''} · ${fmtDate(last.date)}`}>
+          <span className="flex min-w-0 items-center gap-1 text-[11.5px] leading-tight">
+            <span className={cn('shrink-0 text-[10px] font-extrabold', r === 'W' ? 'text-emerald-600' : r === 'L' ? 'text-rose-600' : 'text-slate-500')}>{r}</span>
+            <b className="truncate font-semibold">{surname(last.opponent_name)}</b>
+            <span className="shrink-0 text-muted-foreground">
+              {methodShort(last.method)}{!next && last.finish_round && !/^Decision/.test(last.method || '') ? ` R${last.finish_round}` : ''}
+            </span>
+          </span>
+          {/* Alone in the box there is room for the card as well as the date. */}
+          <span className="truncate text-[10px] leading-tight tabular-nums text-muted-foreground">
+            {monthDayYear(last.date)}{!next && last.event_name ? ` · ${last.event_name.split(':')[0]}` : ''}
+          </span>
+        </ActivityPart>
+      )}
+      {next && (
+        <ActivityPart to={`/ufc/fights/${next.fight_id}`} title={`${next.event_name} · ${fmtDate(next.event_date)}`}
+          className={cn('bg-muted/40', last && 'border-l border-border')}>
+          {/* Neutral, so a booking never reads as a second result. */}
+          <span className="flex min-w-0 items-center gap-1 text-[11.5px] leading-tight">
+            <CalendarDays className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <b className="truncate font-semibold">{surname(next.opponent_name)}</b>
+          </span>
+          <span className="text-[10px] leading-tight tabular-nums text-muted-foreground">{monthDayYear(next.event_date)}</span>
+        </ActivityPart>
+      )}
+    </span>
+  )
+}
+
 // Places gained (▲) or lost (▼) against the baseline snapshot; NEW = unranked then.
 function MoveCell({ movement }) {
   if (!movement?.as_of) return <span className="text-[11px] text-muted-foreground/50">–</span>
@@ -395,63 +377,51 @@ function MoveCell({ movement }) {
   )
 }
 
-function RankRow({ row, grid, hasMove, selected, onSelect }) {
-  const { fighter, profile } = row
+// One row's cells; RankTable supplies the button, grid and selection.
+function RankCells({ row, hasMove }) {
+  const { fighter } = row
   const aside = row.subtitle ?? (fighter.nickname ? `"${fighter.nickname}"` : null)
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        grid,
-        'h-14 w-full border-b border-border/70 px-4 text-left transition-colors last:border-b-0',
-        selected ? 'bg-primary/[0.05] shadow-[inset_3px_0_0_var(--color-primary)]' : 'hover:bg-muted/50',
-      )}
-    >
+    <>
       <div className="flex justify-center"><RankCell row={row} /></div>
       <FighterAvatar fighter={fighter} />
       {/* Name and nickname share one line, so a fighter without a nickname is not
           a row with a hole under the name. */}
       <div className="flex min-w-0 items-center gap-1.5">
         <CountryFlag countryCode={fighter.country_code} />
-        <span className="min-w-0 truncate text-[14.5px] font-bold tracking-tight">{fighter.first_name} {fighter.last_name}</span>
+        {/* The full name always shows; the nickname or division after it gives way first. */}
+        <span className="shrink-0 whitespace-nowrap text-[14px] font-bold tracking-tight">{fighter.first_name} {fighter.last_name}</span>
         {row.champ && row.boardLabel && <BeltIcon className="h-3.5 w-3.5 shrink-0 text-gold" />}
-        {aside && <span className="min-w-0 shrink-[4] truncate text-[12px] text-muted-foreground">{aside}</span>}
+        {aside && <span className="min-w-0 truncate text-[12px] text-muted-foreground">{aside}</span>}
       </div>
       <span className="text-[12.5px] font-semibold tabular-nums text-muted-foreground">
         {formatRecord(fighter.wins, fighter.losses, fighter.draws || undefined)}
       </span>
-      <div className="flex items-center gap-2">
-        <span className="w-9 text-sm font-extrabold tabular-nums">{row.score.toFixed(0)}</span>
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn('h-full rounded-full', row.champ && !row.boardLabel ? 'bg-gold' : row.rank <= 5 ? 'bg-primary' : 'bg-muted-foreground/45')}
-            style={{ width: `${row.scorePct}%` }}
-          />
-        </div>
-      </div>
+      <span className="text-sm font-extrabold tabular-nums">{Math.round(row.display)}</span>
+      <ActivityCell last={fighter.last_fight} next={fighter.next_fight} />
       {hasMove && <div><MoveCell movement={row.movement} /></div>}
-      <div className="hidden truncate text-[11.5px] text-muted-foreground 2xl:block">
-        {profile.topSkills.map((s, i) => (
-          <span key={s.key}>
-            {i > 0 && <span className="mx-1.5 text-muted-foreground/40">·</span>}
-            {s.label} <b className="font-semibold tabular-nums text-foreground/80">{ordinal(s.value)}</b>
-          </span>
-        ))}
-      </div>
-    </button>
+    </>
   )
 }
 
-// Bar length: score scaled within the board, floored so the last row still shows.
-function withScorePct(rows) {
-  const vals = rows.map((r) => r.score)
-  const min = Math.min(...vals, 0)
-  const max = Math.max(...vals, 1)
-  return rows.map((r) => ({ ...r, scorePct: Math.max(8, Math.round(((r.score - min) / Math.max(max - min, 1)) * 92) + 8) }))
+// Scores out of 100, the top of the board = 100. A pinned champion (a division's, or
+// the BMF holder) is the top of the board whatever their points: they show 100 and
+// everyone else is scaled to the best contender at 99, so a contender who outscores
+// the champion still reads below them, as their rank does.
+function withDisplay(rows) {
+  const pinned = (r) => r.champ && !r.boardLabel
+  const champ = rows.find(pinned)
+  const others = rows.filter((r) => r !== champ)
+  const top = Math.max(1e-9, ...others.map((r) => r.score))
+  const scale = !champ ? 100 / top : champ.score >= top ? 100 / champ.score : 99 / top
+  return rows.map((r) => {
+    const display = r === champ ? 100 : Math.max(0, Math.min(100, r.score * scale))
+    return { ...r, display }
+  })
 }
 
-function RankingsBoard({ rows, scoreLabel, footer }) {
+// The selected fighter's panel beside the ranked table: the Highlights pages' layout.
+function RankingsBoard({ rows, scoreLabel }) {
   const [selectedId, setSelectedId] = useState(rows[0]?.fighter.id)
   const panelRef = useRef(null)
   // Stacked (below lg) the panel sits above the table, so bring it into view on a pick.
@@ -467,33 +437,29 @@ function RankingsBoard({ rows, scoreLabel, footer }) {
   const grid = gridFor(hasMove)
   const asOf = rows.find((r) => r.movement?.as_of)?.movement.as_of
   return (
-    <div className="grid grid-cols-1 gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[390px_minmax(0,1fr)]">
-      <FighterPanel row={selected} panelRef={panelRef} />
-      <Card className="flex min-h-0 flex-col overflow-hidden p-0">
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className={cn(grid, 'sticky top-0 z-10 border-b border-border bg-muted px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground')}>
+    <Split panel={<FighterPanel row={selected} panelRef={panelRef} />}>
+      <RankTable
+        grid={grid}
+        minW="min-w-[600px]"
+        head={(
+          <>
             <span className="text-center">Rank</span>
             <span />
             <span>Fighter</span>
             <span>Record</span>
             <span>{scoreLabel}</span>
+            <span className="hidden xl:block">Activity</span>
             {hasMove && <span title={asOf ? `Change in rank since the ${fmtDate(asOf)} card` : undefined}>Move</span>}
-            <span className="hidden 2xl:block">Top skills</span>
-          </div>
-          {rows.map((row) => (
-            <RankRow
-              key={row.fighter.id}
-              row={row}
-              grid={grid}
-              hasMove={hasMove}
-              selected={row.fighter.id === selected.fighter.id}
-              onSelect={() => select(row.fighter.id)}
-            />
-          ))}
-          {footer?.(asOf)}
-        </div>
-      </Card>
-    </div>
+          </>
+        )}
+        rows={rows}
+        rowKey={(r) => r.fighter.id}
+        selected={selected.fighter.id}
+        onSelect={select}
+        renderRow={(r) => <RankCells row={r} hasMove={hasMove} />}
+        empty="No fighters ranked here yet."
+      />
+    </Split>
   )
 }
 
@@ -502,10 +468,10 @@ const fmtDate = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US',
 // ---------------------------------------------------------------------------
 // Division board
 // ---------------------------------------------------------------------------
-function DivisionBoard({ fighters, label, minRounds }) {
+function DivisionBoard({ fighters, label }) {
   const rows = useMemo(() => {
     const pct = buildPercentile(fighters)
-    return withScorePct(fighters.map((f) => ({
+    return withDisplay(fighters.map((f) => ({
       fighter: f,
       profile: deriveProfile(f, pct),
       division: label,
@@ -516,16 +482,7 @@ function DivisionBoard({ fighters, label, minRounds }) {
     })))
   }, [fighters, label])
 
-  const footer = () => (
-    <div className="space-y-1 border-t border-border bg-muted/30 px-4 py-3 text-[11px] text-muted-foreground">
-      <p>
-        Every round in UFC history is processed to build <strong>13 skill dimensions</strong> per fighter — capturing{' '}
-        <em>how</em> fighters win, not just <em>that</em> they win. Skills are <strong>percentiles within each division</strong>.
-      </p>
-      <p>Minimum {minRounds || 10} rounds fought to be ranked, active within last 3 years. Ratings decay after 6 months of inactivity.</p>
-    </div>
-  )
-  return <RankingsBoard rows={rows} scoreLabel="Score" footer={footer} />
+  return <RankingsBoard rows={rows} scoreLabel="Score" />
 }
 // ---------------------------------------------------------------------------
 // P4P / BMF board — the published top 15
@@ -562,7 +519,7 @@ function AltBoard({ kind, pool, weightClasses }) {
     const sorted = [...(data.pools[pool] || [])].sort((a, b) => a.default_rank - b.default_rank)
     const holder = sorted.filter((a) => a.is_bmf_champion)
     const top = [...holder, ...sorted.filter((a) => !a.is_bmf_champion).slice(0, ALT_TOP)]
-    return withScorePct(top.map((a) => {
+    return withDisplay(top.map((a) => {
       // A fighter ranked in two divisions uses the one the list filed them under.
       const entries = byId[a.id] || []
       const own = entries.find((e) => e.wc.key === a.division) || entries[0]
@@ -576,6 +533,7 @@ function AltBoard({ kind, pool, weightClasses }) {
         division: own?.wc.label || a.division_label,
         rank: a.default_rank,
         champ: !!a.is_champion || !!a.is_bmf_champion,
+        bmfChampion: !!a.is_bmf_champion,
         score: a.default_score,
         subtitle: a.division_label,
         // No board label = drawn like a division champion (belt cell, CHAMPION badge).
@@ -620,10 +578,26 @@ export default function RankingsPage() {
   const [params, setParams] = useSearchParams()
   // Men's P4P is the landing view; a division is one click (or ?div=) away.
   const activeWc = params.get('div') || 'p4p_men'
-  const setActiveWc = (key) => setParams({ div: key }, { replace: true })
-  // ?view=history swaps the board for the time-lapse, which keeps its own division/step params.
+  // ?view=history swaps the board for the time-lapse, which has its own ?division= (a
+  // real division: there is no P4P or BMF history) and ?step=.
   const view = params.get('view') === 'history' ? 'history' : 'current'
-  const setView = (v) => setParams(v === 'history' ? { view: 'history' } : {}, { replace: true })
+  const historyDiv = params.get('division') || 'lightweight'
+  const setActiveWc = (key) => setParams({ div: key }, { replace: true })
+  const setHistoryDiv = (key) => {
+    const p = new URLSearchParams(params)
+    p.set('division', key)
+    p.delete('on')
+    setParams(p, { replace: true })
+  }
+  // Switching views carries the division across when the other view has it.
+  const setView = (v) => {
+    if (v === 'history') {
+      const carry = TIMELAPSE_DIVISIONS.some((d) => d.key === activeWc) ? activeWc : historyDiv
+      setParams({ view: 'history', division: carry }, { replace: true })
+    } else {
+      setParams(params.get('division') ? { div: params.get('division') } : {}, { replace: true })
+    }
+  }
 
   useEffect(() => {
     fetchRankings()
@@ -663,27 +637,27 @@ export default function RankingsPage() {
   // Desktop: the page fits the viewport and the panel and table scroll on their own.
   // Narrower: everything stacks and the page scrolls as one.
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto lg:overflow-hidden">
-      <div className="shrink-0 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="page-title flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <TrendingUp className="h-5 w-5 text-white" />
-            </span>
-            Fighter Rankings
-          </h1>
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 pb-3">
+        <h1 className="page-title mr-2 flex items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
+            <TrendingUp className="h-5 w-5 text-white" />
+          </span>
+          Fighter Rankings
+        </h1>
+        {view === 'current'
+          ? <DivisionTabs items={pickerItems} value={board ? board.key : activeDiv.key} onChange={setActiveWc} />
+          : <DivisionTabs items={TIMELAPSE_DIVISIONS} value={historyDiv} onChange={setHistoryDiv} />}
+        <div className="ml-auto">
           <SlideTabs tabs={VIEWS} value={view} onChange={setView} />
         </div>
-        {view === 'current' && (
-          <DivisionPicker weightClasses={pickerItems} active={board ? board.key : activeDiv.key} onSelect={setActiveWc} />
-        )}
       </div>
 
       {view === 'history'
-        ? <div className="min-h-0 flex-1"><RankingsTimelapse /></div>
+        ? <RankingsTimelapse />
         : board
           ? <AltBoard key={board.key} kind={board.kind} pool={board.pool} weightClasses={data.weight_classes} />
-          : <DivisionBoard key={activeDiv.key} fighters={activeDiv.fighters} label={activeDiv.label} minRounds={data.min_rounds} />}
+          : <DivisionBoard key={activeDiv.key} fighters={activeDiv.fighters} label={activeDiv.label} />}
     </div>
   )
 }
