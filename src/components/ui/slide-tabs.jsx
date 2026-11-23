@@ -29,7 +29,11 @@ export function SlideTabs({ tabs, value, onChange, size = 'default', className, 
 
   const measure = useCallback(() => {
     const el = tabRefs.current[value]
-    if (!el) return
+    // No tab matches (the value is chosen elsewhere, e.g. a year list): hide the pill.
+    if (!el) {
+      setPill((p) => (p.width ? { ...p, width: 0 } : p))
+      return
+    }
     setPill({ left: el.offsetLeft, width: el.offsetWidth, ready: true })
   }, [value])
 

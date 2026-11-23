@@ -16,6 +16,7 @@ import HomePage from './pages/HomePage'
 import UFCPage from './pages/UFCPage'
 import UpcomingPage from './pages/UpcomingPage'
 import JudgeProfilePage from './pages/JudgeProfilePage'
+import HighlightsPage from './pages/HighlightsPage'
 import OfficialsPage from './pages/OfficialsPage'
 import RefereeProfilePage from './pages/RefereeProfilePage'
 
@@ -38,6 +39,8 @@ export default function App() {
         <Route path="/ufc/rankings/timelapse" element={<Navigate to="/ufc/rankings?view=history" replace />} />
         {/* Judges and referees share one page; their profiles keep their own URLs. */}
         <Route path="/ufc/officials" element={<OfficialsPage />} />
+        <Route path="/ufc/highlights" element={<HighlightsPage />} />
+        <Route path="/ufc/best" element={<Navigate to="/ufc/highlights" replace />} />
         <Route path="/ufc/judges" element={<Navigate to="/ufc/officials" replace />} />
         <Route path="/ufc/judges/:id" element={<JudgeProfilePage />} />
         <Route path="/ufc/referees" element={<Navigate to="/ufc/officials?view=referees" replace />} />

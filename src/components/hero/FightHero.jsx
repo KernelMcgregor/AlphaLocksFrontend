@@ -30,7 +30,7 @@ const recordText = (f) => `${f.wins ?? 0}-${f.losses ?? 0}${f.draws > 0 ? `-${f.
 
 // A corner's portrait over its flag, flush to the cover's edge, fading into the ink
 // toward the middle so the names run over clean ground.
-function Portrait({ fighter, right, lost, won }) {
+function Portrait({ fighter, right, won }) {
   return (
     <div className={cn('absolute inset-y-0 hidden w-[27%] md:block', right ? 'right-0' : 'left-0')}>
       <div className="absolute inset-0 opacity-70"><WavingFlag countryCode={fighter.country_code} /></div>
@@ -40,7 +40,7 @@ function Portrait({ fighter, right, lost, won }) {
           thighs: drawn 1.85x tall from the top so both corners are framed alike. */}
       <FighterImage fighter={fighter} fit="contain" pose={right ? 'right' : undefined} alt={`${fighter.first_name} ${fighter.last_name}`}
         imgClassName={right && fighter.has_right_image ? '!h-[185%] !object-top' : undefined}
-        className={cn('absolute inset-x-0 bottom-0 top-4 z-10', lost && 'opacity-55 grayscale')} />
+        className="absolute inset-x-0 bottom-0 top-4 z-10" />
       {won && (
         <span className={cn('absolute top-4 z-20 rounded bg-emerald-600 px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-white',
           right ? 'left-4' : 'right-4')}>Win</span>
@@ -123,8 +123,8 @@ export default function FightCover({ fight, ctx, styles, result, rounds, coverRe
   return (
     <header ref={coverRef} className="relative shrink-0 overflow-hidden rounded-xl bg-ink text-white">
       <div className="relative">
-        <Portrait fighter={red} lost={side === 'blue'} won={side === 'red'} />
-        <Portrait fighter={blue} right lost={side === 'red'} won={side === 'blue'} />
+        <Portrait fighter={red} won={side === 'red'} />
+        <Portrait fighter={blue} right won={side === 'blue'} />
         <BackButton fallback="/ufc/events" className="absolute left-4 top-4 z-30 h-8 w-8" />
 
         <div className="relative z-20 flex flex-col items-center px-4 pb-4 pt-4 md:mx-[21%]">

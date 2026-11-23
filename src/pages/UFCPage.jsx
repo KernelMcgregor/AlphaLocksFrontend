@@ -1,5 +1,5 @@
 import { Calendar, Check, ChevronDown, Info, Loader2, MapPin, Search, SlidersHorizontal, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import CountryFlag from '../components/CountryFlag'
 import { Card } from '../components/ui/card'
@@ -7,6 +7,8 @@ import BeltIcon from '../components/ui/belt-icon'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { Tip } from '../components/ui/tip'
 import PageLoader from '../components/PageLoader'
+import BonusBadge from '../components/best/BonusBadge'
+import DtwGauge from '../components/fight/review/DtwGauge'
 import FighterImage from '../components/sports/FighterImage'
 import WavingFlag from '../components/sports/WavingFlag'
 import { fetchEventDetail, fetchEvents, peekCached, searchFights } from '../lib/api'
@@ -46,18 +48,29 @@ function EventName({ name, className, kickerClass }) {
 function weightOf(wc = '') {
   const title = /title/i.test(wc)
   const label = wc.replace(/^UFC\s+/i, '').replace(/\s*(Title\s*)?Bout$/i, '').replace(/\s*Title$/i, '').trim()
-  return { label: label || 'Catchweight', title }
+  return { label: label || 'Catchweight', short: shortWeight(label || 'Catchweight'), title }
+}
+
+// "Women's Bantamweight" -> "W. Bantam", "Light Heavyweight" -> "Lt. Heavy": for the
+// hero's one-line header when it's narrow.
+function shortWeight(label) {
+  return label
+    .replace(/^Women'?s\s+/i, 'W. ')
+    .replace(/^Interim\s+/i, 'Int. ')
+    .replace(/Light Heavyweight/i, 'Lt. Heavy')
+    .replace(/(Straw|Fly|Bantam|Feather|Light|Welter|Middle|Heavy|Catch)\s*weight/i, '$1')
 }
 
 // Finish method, shortened, with the token key that colours it everywhere on the site.
 function methodOf(method) {
   if (!method) return null
-  if (/^KO|TKO/i.test(method)) return { key: 'ko', label: 'KO/TKO' }
-  if (/^Sub/i.test(method)) return { key: 'sub', label: 'Submission' }
+  if (/^KO|TKO/i.test(method)) return { key: 'ko', label: 'KO/TKO', short: 'KO/TKO' }
+  if (/^Sub/i.test(method)) return { key: 'sub', label: 'Submission', short: 'Sub' }
   const dec = method.match(/^Decision\s*-\s*(\w)/i)
-  if (dec) return { key: 'dec', label: `Decision (${dec[1].toUpperCase()})` }
-  if (/^Decision/i.test(method)) return { key: 'dec', label: 'Decision' }
-  return { key: null, label: method }
+  if (dec) return { key: 'dec', label: `Decision (${dec[1].toUpperCase()})`, short: `Dec (${dec[1].toUpperCase()})` }
+  if (/^Decision/i.test(method)) return { key: 'dec', label: 'Decision', short: 'Dec' }
+  // Rare endings ("Could Not Continue", "Overturned", "DQ"): the first word.
+  return { key: null, label: method, short: method.split(/[\s-]+/)[0] }
 }
 
 const lastName = (f) => f?.last_name || f?.first_name || 'TBA'
@@ -84,6 +97,7 @@ function describe(fight, index) {
     // Upcoming bouts ship zero-filled placeholder rows, so stats count only once fought.
     stats: done && tot.red && tot.blue ? tot : null,
     dtw: fight.deserve_to_win || null,
+    excite: fight.excitement || null,
   }
 }
 
@@ -252,23 +266,24 @@ function SectionLabel({ children }) {
 // ---------------------------------------------------------------------------
 // Pieces shared by the hero and the rows
 // ---------------------------------------------------------------------------
-function WeightTag({ weight, rounds, className }) {
+// `short`: abbreviated weight and an icon-only title badge (the hero's narrow header).
+function WeightTag({ weight, rounds, className, short }) {
   return (
-    <div className={cn('flex items-center gap-1.5', className)}>
-      <span className="text-[10px] font-extrabold uppercase tracking-wider text-foreground/80">{weight.label}</span>
+    <div className={cn('flex items-center gap-1.5 whitespace-nowrap', className)}>
+      <span className="text-[10px] font-extrabold uppercase tracking-wider text-foreground/80">{short ? weight.short : weight.label}</span>
       {rounds && <span className="text-[10px] text-muted-foreground">· {rounds} rds</span>}
       {weight.title && (
         <span className="inline-flex items-center gap-0.5 rounded border border-gold/60 bg-gold/15 px-1 text-[9px] font-extrabold uppercase tracking-wide text-gold-foreground">
-          <BeltIcon className="h-2.5 w-2.5" /> Title
+          <BeltIcon className="h-2.5 w-2.5" />{!short && ' Title'}
         </span>
       )}
     </div>
   )
 }
 
-function ResultChip({ d, size = 'sm' }) {
+function ResultChip({ d, size = 'sm', short }) {
   if (!d.done) return null
-  const text = d.outcome || d.method?.label
+  const text = d.outcome || (short ? d.method?.short : d.method?.label)
   // A decision always goes the distance, so its round and time say nothing.
   const when = d.method?.key !== 'dec' && d.fight.finish_round ? `R${d.fight.finish_round}${d.fight.finish_time ? ` ${d.fight.finish_time}` : ''}` : null
   return (
@@ -311,42 +326,8 @@ function Duel({ label, r, b, fmt = (v) => v, rl, bl, compact, wideNums }) {
 const DTW_EXPLAINER = 'The fight replayed 10,000 times to the final bell and scored by three judges. '
   + 'The gauge shows who wins more of them. For finishes, the rounds never fought are projected.'
 
-// Eases a number toward `target` (from wherever it currently is), so arc and needle
-// sweep together when a different fight is picked. Instant under reduced motion.
-function useTweened(target, ms = 650) {
-  const [cur, setCur] = useState(target)
-  const curRef = useRef(target)
-  useEffect(() => {
-    const from = curRef.current
-    const dur = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : ms
-    let raf, t0
-    const step = (t) => {
-      t0 ??= t
-      const k = dur ? Math.min(1, (t - t0) / dur) : 1
-      const e = 1 - (1 - k) ** 3
-      curRef.current = from + (target - from) * e
-      setCur(curRef.current)
-      if (k < 1) raf = requestAnimationFrame(step)
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [target, ms])
-  return cur
-}
-
-// Point on the gauge's semicircle, `t` of the way from the left end (0) to the right (1).
-const arcPoint = (t) => [100 - 84 * Math.cos(Math.PI * t), 100 - 84 * Math.sin(Math.PI * t)]
-
 function DeserveGauge({ d }) {
   const dtw = d.dtw
-  const decisive = dtw ? dtw.p_red + dtw.p_blue : 0
-  const r = dtw && decisive > 0 ? Math.round((dtw.p_red / decisive) * 100) : 50
-  const b = 100 - r
-  // Red fills its share of the arc from the left, blue the rest; the needle sits on
-  // the boundary, so it leans toward blue's end when red deserved it.
-  const shown = useTweened(r / 100)
-  const [x, y] = arcPoint(shown)
-  const deg = shown * 180 - 90
   const header = (
     <div className="flex items-center justify-center gap-1">
       <span className="text-[10px] font-extrabold uppercase tracking-wider text-foreground/80">Deserve to Win</span>
@@ -355,30 +336,12 @@ function DeserveGauge({ d }) {
       </Tip>
     </div>
   )
-  if (!dtw) {
-    return (
-      <div>
-        {header}
-        <p className="mt-3 text-center text-[11px] text-muted-foreground">Not scored for this fight yet.</p>
-      </div>
-    )
-  }
-  const lead = r >= b ? 'red' : 'blue'
   return (
     <div>
       {header}
-      <div className="mt-1 flex items-end justify-center gap-2">
-        <span className={cn('w-11 pb-0.5 text-right text-[17px] font-extrabold leading-none tabular-nums', lead === 'red' ? 'text-corner-red' : 'text-muted-foreground/70')}>{r}%</span>
-        <svg viewBox="0 0 200 106" className="w-[132px]">
-          {shown > 0.001 && <path d={`M 16 100 A 84 84 0 0 1 ${x} ${y}`} fill="none" strokeWidth="14" className="stroke-corner-red" />}
-          {shown < 0.999 && <path d={`M ${x} ${y} A 84 84 0 0 1 184 100`} fill="none" strokeWidth="14" className="stroke-corner-blue" />}
-          <line x1="100" y1="100" x2="100" y2="34" strokeWidth="4" strokeLinecap="round" className="stroke-foreground"
-            transform={`rotate(${deg} 100 100)`} />
-          <circle cx="100" cy="100" r="8" className="fill-foreground" />
-          <circle cx="100" cy="100" r="3" className="fill-background" />
-        </svg>
-        <span className={cn('w-11 pb-0.5 text-left text-[17px] font-extrabold leading-none tabular-nums', lead === 'blue' ? 'text-corner-blue' : 'text-muted-foreground/70')}>{b}%</span>
-      </div>
+      {dtw
+        ? <div className="mt-1"><DtwGauge pRed={dtw.p_red} pBlue={dtw.p_blue} /></div>
+        : <p className="mt-3 text-center text-[11px] text-muted-foreground">Not scored for this fight yet.</p>}
     </div>
   )
 }
@@ -415,7 +378,9 @@ function ResultStrip({ result, big, side }) {
       'absolute inset-x-0 bottom-0 z-20 text-center font-extrabold uppercase tracking-wider text-white',
       // On the dark hero the strip fades up out of the bottom like the flag does.
       big ? cn('bg-gradient-to-t to-transparent pb-2 pt-10 text-[11px]', draw ? 'from-slate-500' : 'from-emerald-600 via-emerald-600/85')
-        : cn('py-px text-[9px]', draw ? 'bg-slate-500' : 'bg-emerald-600'),
+        : cn('py-px text-[9px]', draw ? 'bg-slate-500' : 'bg-emerald-600',
+          // A tab: the row rounds the outer corner, so round the inner top one.
+          side === 'red' && 'rounded-tr-md', side === 'blue' && 'rounded-tl-md'),
     )}>
       {draw ? 'Draw' : big ? 'Winner' : 'Win'}
     </span>
@@ -425,10 +390,17 @@ function ResultStrip({ result, big, side }) {
 // ---------------------------------------------------------------------------
 // Hero: the selected fight (the main event by default)
 // ---------------------------------------------------------------------------
+// The flag fades out on its own toward the middle and the bottom (a mask, so it ends in
+// the hero's dark whatever the overlays above it do).
+const flagFade = (side) => {
+  const m = `linear-gradient(to ${side === 'red' ? 'right' : 'left'}, #000 25%, transparent 92%), linear-gradient(to top, transparent 0%, #000 40%)`
+  return { WebkitMaskImage: m, maskImage: m, WebkitMaskComposite: 'source-in', maskComposite: 'intersect' }
+}
+
 function HeroPortrait({ fighter, result, side }) {
   return (
     <div className="relative hidden w-[110px] shrink-0 overflow-hidden @min-[600px]/hero:block @min-[760px]/hero:w-[170px] @min-[1000px]/hero:w-[240px]">
-      <div className="absolute inset-0 opacity-70"><WavingFlag key={fighter?.country_code} countryCode={fighter?.country_code} /></div>
+      <div className="absolute inset-0 opacity-70" style={flagFade(side)}><WavingFlag key={fighter?.country_code} countryCode={fighter?.country_code} /></div>
       <div className={cn('absolute inset-0 z-[5] from-ink via-ink/30 to-transparent', side === 'blue' ? 'bg-gradient-to-r' : 'bg-gradient-to-l')} />
       <div className="absolute inset-x-0 bottom-0 z-[5] h-1/3 bg-gradient-to-t from-ink to-transparent" />
       <FighterImage
@@ -460,7 +432,11 @@ function HeroName({ fighter, side, d, narrow }) {
       )}>
         <span className="pr-[0.1em]">{name}</span>
       </div>
-      <div className="mt-1 text-[11px] tabular-nums text-muted-foreground">{record(fighter)}</div>
+      {/* Red's block is right-aligned toward the gauge, so its badge leads the record. */}
+      <div className={cn('mt-1 flex items-center gap-1.5 whitespace-nowrap text-[11px] tabular-nums text-muted-foreground', side === 'red' && 'flex-row-reverse justify-start')}>
+        <span>{record(fighter)}</span>
+        <BonusBadge kind="perf" state={perfState(d, side)} />
+      </div>
     </div>
   )
 }
@@ -499,8 +475,84 @@ const INK = '[--color-foreground:#fff] [--color-muted-foreground:rgba(255,255,25
   + '[--color-muted:rgba(255,255,255,.12)] [--color-background:#2d2d2d] [--color-card:transparent] [--color-gold-foreground:#c1a14f] '
   + '[--color-corner-red:#ff4d4d] [--color-corner-blue:#5b9bff] bg-ink text-white'
 
-function FightHero({ d }) {
+// Weight · result · button on one line. Decisions' `details` are the judges' cards: left
+// to the fight page; a finish's details ("Punch to Head") stay when there's room. Narrow,
+// "X wins" goes (the WINNER tab already says it). Labels shorten only as far as they must
+// to fit: first the method, then the weight and title, then the rounds.
+const TOP_LEVELS = [
+  { method: false, weight: false, rounds: true },
+  { method: true, weight: false, rounds: true },
+  { method: true, weight: true, rounds: true },
+  { method: true, weight: true, rounds: false },
+]
+
+function HeroTopLine({ d, narrow }) {
   const { fight } = d
+  const box = useRef(null)
+  const btn = useRef(null)
+  const probe = useRef(null)
+  const [level, setLevel] = useState(0)
+
+  const left = (lv) => (
+    <>
+      <WeightTag weight={d.weight} rounds={lv.rounds ? d.rounds : null} short={lv.weight} className="shrink-0" />
+      {d.done && (
+        <span className="flex shrink-0 items-center gap-2">
+          {(!narrow || !d.winner) && (
+            <span className="whitespace-nowrap text-[12.5px] font-bold">
+              {d.winner ? `${lastName(d.winner === 'red' ? d.red : d.blue)} wins` : d.outcome}
+            </span>
+          )}
+          <ResultChip d={d} size="md" short={lv.method} />
+          <BonusBadge kind="fotn" state={fotnState(d)} />
+        </span>
+      )}
+    </>
+  )
+
+  useLayoutEffect(() => {
+    const el = box.current
+    if (!el) return undefined
+    const fit = () => {
+      const avail = el.clientWidth - (btn.current?.offsetWidth ?? 0) - 24
+      const widths = [...(probe.current?.children ?? [])].map((c) => c.scrollWidth)
+      const i = widths.findIndex((w) => w <= avail)
+      setLevel(i === -1 ? TOP_LEVELS.length - 1 : i)
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [d, narrow])
+
+  const lv = TOP_LEVELS[level]
+  return (
+    <div ref={box} className="relative flex h-7 items-center gap-3">
+      {/* Each level laid out off-screen, to measure which is the fullest that fits. */}
+      <div ref={probe} aria-hidden className="pointer-events-none invisible absolute left-0 top-0 h-0 overflow-hidden">
+        {TOP_LEVELS.map((x, i) => <div key={i} className="flex w-max items-center gap-3">{left(x)}</div>)}
+      </div>
+      <WeightTag weight={d.weight} rounds={lv.rounds ? d.rounds : null} short={lv.weight} className="shrink-0" />
+      {d.done && (
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2 overflow-hidden">
+          {(!narrow || !d.winner) && (
+            <span className="whitespace-nowrap text-[12.5px] font-bold">
+              {d.winner ? `${lastName(d.winner === 'red' ? d.red : d.blue)} wins` : d.outcome}
+            </span>
+          )}
+          <ResultChip d={d} size="md" short={lv.method} />
+          <BonusBadge kind="fotn" state={fotnState(d)} />
+          {fight.details && d.method?.key !== 'dec' && !narrow && (
+            <span className="truncate text-[11px] text-muted-foreground">{fight.details}</span>
+          )}
+        </div>
+      )}
+      <span ref={btn} className="ml-auto shrink-0"><FightLink id={fight.id} primary /></span>
+    </div>
+  )
+}
+
+function FightHero({ d }) {
   const r = d.stats?.red
   const b = d.stats?.blue
   const v = (s, k) => s?.[k] ?? 0
@@ -516,24 +568,7 @@ function FightHero({ d }) {
       <HeroPortrait fighter={d.red} result={stripOf(d, 'red')} side="red" />
 
       <div ref={centerRef} className="mx-auto flex w-full min-w-0 max-w-[920px] flex-1 flex-col gap-2 px-4 py-3">
-        {/* weight · result · button, one line. Decisions' `details` are the judges'
-            cards: left to the fight page. A finish's details ("Punch to Head") stay. */}
-        {/* Narrow, the result goes under the weight class instead of beside it. */}
-        <div className={cn('flex items-center gap-3', narrow ? 'min-h-7 flex-wrap gap-y-1' : 'h-7')}>
-          <WeightTag weight={d.weight} rounds={d.rounds} className="shrink-0" />
-          {d.done && (
-            <div className={cn('flex items-center gap-2', narrow ? 'order-last basis-full' : 'min-w-0 flex-1 justify-end')}>
-              <span className="whitespace-nowrap text-[12.5px] font-bold">
-                {d.winner ? `${lastName(d.winner === 'red' ? d.red : d.blue)} wins` : d.outcome}
-              </span>
-              <ResultChip d={d} size="md" />
-              {fight.details && d.method?.key !== 'dec' && !narrow && (
-                <span className="truncate text-[11px] text-muted-foreground">{fight.details}</span>
-              )}
-            </div>
-          )}
-          <span className="ml-auto shrink-0"><FightLink id={fight.id} primary /></span>
-        </div>
+        <HeroTopLine d={d} narrow={narrow} />
 
         {/* names, with the model's split between them */}
         <div className={cn(
@@ -581,11 +616,35 @@ function FightHero({ d }) {
 // ---------------------------------------------------------------------------
 // Card rows
 // ---------------------------------------------------------------------------
-function RowTile({ fighter, result }) {
+// Bonuses on the card: what UFC gave (from the scorer's labels) and what we'd give. Our
+// Fight of the Night is the likeliest bout; our Performances are the likeliest winners, as
+// many as UFC gave (2 when it gave none).
+function markBonuses(rows) {
+  const scored = rows.filter((r) => r.excite)
+  if (!scored.length) return
+  const byFotn = [...scored].sort((a, b) => b.excite.p_fotn - a.excite.p_fotn)
+  const byPerf = scored.filter((r) => r.winner && r.excite.p_perf != null).sort((a, b) => b.excite.p_perf - a.excite.p_perf)
+  const nPerf = scored.filter((r) => r.excite.perf).length || 2
+  const perfPicks = new Set(byPerf.slice(0, nPerf))
+  for (const r of scored) {
+    r.bonus = {
+      fotn: r.excite.fotn,
+      fotnDeserved: r === byFotn[0],
+      perf: r.excite.perf && r.winner ? r.winner : null,
+      perfDeserved: perfPicks.has(r) ? r.winner : null,
+    }
+  }
+}
+
+const bonusState = (earned, deserved) => (earned ? (deserved ? 'both' : 'earned') : deserved ? 'deserved' : null)
+const fotnState = (d) => (d.bonus ? bonusState(d.bonus.fotn, d.bonus.fotnDeserved) : null)
+const perfState = (d, side) => (d.bonus ? bonusState(d.bonus.perf === side, d.bonus.perfDeserved === side) : null)
+
+function RowTile({ fighter, result, side }) {
   return (
     <div className="relative hidden w-[70px] shrink-0 self-stretch overflow-hidden bg-card sm:block xl:w-[84px]">
       <FighterImage fighter={fighter} className="absolute inset-0" imgClassName="object-top" />
-      <ResultStrip result={result} />
+      <ResultStrip result={result} side={side} />
     </div>
   )
 }
@@ -607,7 +666,10 @@ function RowName({ fighter, side, d, odds }) {
       <div style={{ fontSize }} className={cn('whitespace-nowrap font-extrabold uppercase leading-[1.1] tracking-tight', lost ? 'text-muted-foreground/60' : 'text-foreground')}>
         {name}
       </div>
-      <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{record(fighter)}</div>
+      <div className={cn('mt-0.5 flex items-center gap-1.5 whitespace-nowrap text-[11px] tabular-nums text-muted-foreground', side === 'blue' && 'flex-row-reverse')}>
+        <span>{record(fighter)}</span>
+        <BonusBadge kind="perf" state={perfState(d, side)} />
+      </div>
       {odds != null && (
         <div className={cn('text-[12.5px] tabular-nums', odds < 0 ? 'font-extrabold text-foreground' : 'font-semibold text-muted-foreground')}>
           {formatOdds(odds)}
@@ -630,7 +692,7 @@ function FightRow({ d, selected, onSelect }) {
         selected ? 'border-foreground/70 ring-1 ring-foreground/70' : 'border-border hover:bg-muted/40',
       )}
     >
-      <RowTile fighter={d.red} result={stripOf(d, 'red')} />
+      <RowTile fighter={d.red} result={stripOf(d, 'red')} side="red" />
       <div className="grid min-w-0 flex-1 grid-cols-[minmax(84px,1fr)_minmax(150px,2fr)_minmax(84px,1fr)] items-center gap-4 px-3">
         <RowName fighter={d.red} side="red" d={d} odds={fight.red_odds} />
 
@@ -646,13 +708,14 @@ function FightRow({ d, selected, onSelect }) {
           )}
           <div className="mt-0.5 flex items-center justify-center gap-2.5">
             {d.done ? <ResultChip d={d} /> : <span className="text-[10.5px] text-muted-foreground">{d.rounds} rounds</span>}
+            <BonusBadge kind="fotn" state={fotnState(d)} />
             <FightLink id={fight.id} />
           </div>
         </div>
 
         <RowName fighter={d.blue} side="blue" d={d} odds={fight.blue_odds} />
       </div>
-      <RowTile fighter={d.blue} result={stripOf(d, 'blue')} />
+      <RowTile fighter={d.blue} result={stripOf(d, 'blue')} side="blue" />
     </div>
   )
 }
@@ -736,6 +799,7 @@ export default function UFCPage() {
   const eventLoading = loaded.id !== selectedEventId
   const fights = eventDetail?.fights || []
   const rows = fights.map((f, i) => describe(f, i))
+  markBonuses(rows)
   // The main event (first on the card) unless a row has been picked.
   const hero = rows.find((r) => String(r.fight.id) === selectedFightId) || rows[0]
   const pickFight = (id) => {

@@ -9,13 +9,13 @@ import { blendOf, famColor, familyName } from '../../lib/styleTraits'
 import { cn, fitName } from '../../lib/utils'
 
 // Full height of the band. Cover-cropped from the top, so the head and shoulders survive.
-export function HeroPortrait({ fighter, className, lost, border, children }) {
+export function HeroPortrait({ fighter, className, border, children }) {
   return (
     <div className={cn('relative shrink-0 self-stretch overflow-hidden', border && 'border-b-[3px]', className)}
       style={border ? { borderColor: border } : undefined}>
       <WavingFlag countryCode={fighter?.country_code} />
       <FighterImage fighter={fighter} alt={`${fighter?.first_name} ${fighter?.last_name}`}
-        className={cn('absolute inset-x-0 bottom-0 top-2 z-10', lost && 'opacity-55 grayscale')} />
+        className="absolute inset-x-0 bottom-0 top-2 z-10" />
       {children}
     </div>
   )

@@ -64,7 +64,7 @@ function CornerHalf({ fighter, corner, ctx, rounded, weightClass, outcome, recor
           fighter={fighter}
           fit="contain"
           alt={fullName(fighter)}
-          className={cn('relative z-10 h-full w-full', lost && 'opacity-55 grayscale')}
+          className="relative z-10 h-full w-full"
           imgClassName="origin-top scale-[1.2]"
         />
         {outcome === 'win' && (

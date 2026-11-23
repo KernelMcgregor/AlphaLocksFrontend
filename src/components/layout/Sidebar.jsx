@@ -1,4 +1,4 @@
-import { BarChart3, Calendar, Clock, Gavel, History, Layers, Newspaper, Orbit, Shuffle, Target, TrendingUp } from 'lucide-react'
+import { BarChart3, Calendar, Clock, Flame, Gavel, History, Layers, Newspaper, Orbit, Shuffle, Target, TrendingUp } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '../../lib/utils'
 import { BrandLockup } from './Brand'
@@ -21,6 +21,7 @@ const navSections = [
     items: [
       { label: 'Events & Fights', icon: Calendar, path: '/ufc/events' },
       { label: 'Articles', icon: Newspaper, path: '/ufc/articles' },
+      { label: 'Highlights', icon: Flame, path: '/ufc/highlights', match: ['/ufc/best'] },
       { label: 'Officials', icon: Gavel, path: '/ufc/officials', prefixes: ['/ufc/judges/', '/ufc/referees/'] },
     ],
   },
